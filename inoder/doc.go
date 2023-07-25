@@ -12,29 +12,40 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package proto
+/*
 
-import (
-	"fmt"
-	"runtime"
-)
+Core data structures:
 
-var (
-	Version    string
-	CommitID   string
-	BranchName string
-	BuildTime  string
-)
+InodeServer
 
-func DumpVersion(role string) string {
-	return fmt.Sprintf("InodeDB %s\n"+
-		"Version : %s\n"+
-		"Branch  : %s\n"+
-		"Commit  : %s\n"+
-		"Build   : %s %s %s %s\n",
-		role,
-		Version,
-		BranchName,
-		CommitID,
-		runtime.Version(), runtime.GOOS, runtime.GOARCH, BuildTime)
-}
+InodeRange
+
+InodeStore
+
+ScalarIndex
+
+VectorIndex
+
+WAL - the write-ahead log
+
+Core operations:
+
+CreateInodeRange()
+
+GetInode()
+
+Link(), Unlink()
+
+List()
+
+NewInode()
+
+UpdateInode()
+
+RemoveInode()
+
+Search()
+
+*/
+
+package inoder

@@ -12,29 +12,27 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package proto
+package router
 
 import (
+	"context"
 	"fmt"
-	"runtime"
+	"io"
+	"net"
+	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
+
+	"github.com/cbbefs/inodedb/inoder"
+	"github.com/cubefs/inodedb/master"
 )
 
-var (
-	Version    string
-	CommitID   string
-	BranchName string
-	BuildTime  string
-)
-
-func DumpVersion(role string) string {
-	return fmt.Sprintf("InodeDB %s\n"+
-		"Version : %s\n"+
-		"Branch  : %s\n"+
-		"Commit  : %s\n"+
-		"Build   : %s %s %s %s\n",
-		role,
-		Version,
-		BranchName,
-		CommitID,
-		runtime.Version(), runtime.GOOS, runtime.GOARCH, BuildTime)
+type Server struct {
+	ctx       context.Context
+	rpcServer *grpc.Server
+	master    *master.Client
+	inoders   map[int]*inoder.Client
 }

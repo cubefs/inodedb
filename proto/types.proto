@@ -1,0 +1,30 @@
+syntax = "proto3"
+
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+
+enum FieldType {
+	BOOL = 0;
+	INT = 1;
+	FLOAT = 2;
+	STRING = 3;
+	EMBEDDING = 4;
+}
+
+message Embedding {
+	repeated float elements = 1;
+	string source = 2;
+}
+
+message Field {
+	string name = 1;
+	FieldType type = 2;
+	bytes value = 3;
+	bool indexed = 4;
+}
+
+message Inode {
+	int64 ino = 1;
+	repeated Field document = 2;
+}
+
+

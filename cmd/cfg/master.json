@@ -1,0 +1,13 @@
+{
+  "role": "master",
+  "ip": "192.168.31.173",
+  "port": "80",
+  "prof":"10088",
+  "id":"1",
+  "peers": "1:192.168.31.173:80,2:192.168.31.141:80,3:192.168.30.200:80",
+  "retainLogs":"20000",
+  "logDir": "/export/Logs/master",
+  "logLevel":"info",
+  "walDir":"/export/Data/master/raft",
+  "storeDir":"/export/Data/master/rocksdbstore"
+}

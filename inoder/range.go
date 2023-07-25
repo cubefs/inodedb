@@ -12,29 +12,11 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package proto
+package inoder
 
-import (
-	"fmt"
-	"runtime"
-)
-
-var (
-	Version    string
-	CommitID   string
-	BranchName string
-	BuildTime  string
-)
-
-func DumpVersion(role string) string {
-	return fmt.Sprintf("InodeDB %s\n"+
-		"Version : %s\n"+
-		"Branch  : %s\n"+
-		"Commit  : %s\n"+
-		"Build   : %s %s %s %s\n",
-		role,
-		Version,
-		BranchName,
-		CommitID,
-		runtime.Version(), runtime.GOOS, runtime.GOARCH, BuildTime)
+type Range struct {
+	namespace        uint32
+	no               uint32
+	startIno, endIno uint64
+	store            *Store
 }

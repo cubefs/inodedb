@@ -12,29 +12,25 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package proto
+/*
 
-import (
-	"fmt"
-	"runtime"
-)
+Core data structures of Router
 
-var (
-	Version    string
-	CommitID   string
-	BranchName string
-	BuildTime  string
-)
+* master.Client
+* map[int]*inoder.Client
 
-func DumpVersion(role string) string {
-	return fmt.Sprintf("InodeDB %s\n"+
-		"Version : %s\n"+
-		"Branch  : %s\n"+
-		"Commit  : %s\n"+
-		"Build   : %s %s %s %s\n",
-		role,
-		Version,
-		BranchName,
-		CommitID,
-		runtime.Version(), runtime.GOOS, runtime.GOARCH, BuildTime)
-}
+Firstly, the write operations,
+
+* Add
+* Update
+* Delete
+
+Then the read operations,
+
+* Get
+* List
+* Search
+
+*/
+
+package router

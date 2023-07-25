@@ -12,22 +12,8 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-/*
+//the RPC client of Inodeserver
 
-Core data structures:
+package inoder
 
-Inoder
-
-InodeRange
-
-InodeStore
-
-ScalarIndex
-
-VectorIndex
-
-
-*/
-
-package inodeserver
-
+type Client struct{}

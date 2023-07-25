@@ -1,0 +1,10 @@
+{
+    "role": "router",
+    "listen": "9088",
+    "prof": "9089",
+    "logLevel": "info",
+    "logDir": "/export/Logs/inoder",
+    "masterAddr": [
+        "192.168.30.200:80"
+    ]
+}

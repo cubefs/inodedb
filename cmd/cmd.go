@@ -28,16 +28,17 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/jacobsa/daemonize"
-	"github.com/cubefs/cubefs/util/errors"
-	sysutil "github.com/cubefs/cubefs/util/sys"
 	"github.com/cubefs/cubefs/cmd/common"
 	"github.com/cubefs/cubefs/util/config"
+	"github.com/cubefs/cubefs/util/errors"
 	"github.com/cubefs/cubefs/util/log"
+	sysutil "github.com/cubefs/cubefs/util/sys"
 	"github.com/cubefs/cubefs/util/ump"
+	"github.com/cubefs/inodedb/inoder"
 	"github.com/cubefs/inodedb/master"
-	"github.com/cubefs/inodedb/inodeserver"
 	"github.com/cubefs/inodedb/proto"
+	"github.com/cubefs/inodedb/router"
+	"github.com/jacobsa/daemonize"
 )
 
 const (
@@ -50,13 +51,15 @@ const (
 )
 
 const (
-	RoleMaster  = "master"
-	RoleInoder  = "Inoder"
+	RoleMaster = "master"
+	RoleInoder = "Inoder"
+	RoleRouter = "Router"
 )
 
 const (
 	ModuleMaster = "master"
-	ModuleInoder = "inodeserver"
+	ModuleInoder = "inoder"
+	ModuleRouter = "router"
 )
 
 const (
@@ -150,11 +153,14 @@ func main() {
 	)
 	switch role {
 	case RoleInoder:
-		server = inodeserver.NewServer()
+		server = inoder.NewServer()
 		module = ModuleInoder
 	case RoleMaster:
 		server = master.NewServer()
 		module = ModuleMaster
+	case RoleRouter:
+		server = router.NewServer()
+		module = ModuleRouter
 	default:
 		err = errors.NewErrorf("Fatal: role mismatch: %s", role)
 		fmt.Println(err)

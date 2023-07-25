@@ -14,27 +14,30 @@
 
 package proto
 
-import (
-	"fmt"
-	"runtime"
+type (
+	Ino         = uint64
+	DocID       = uint64
+	NamespaceID = uint32
+	RangeID     = uint32
+	ServerID    = uint32
 )
 
-var (
-	Version    string
-	CommitID   string
-	BranchName string
-	BuildTime  string
-)
+// field types include integer, float, string, bool, embedding, et al.
+type Field struct {
+	Name    string
+	Type    string
+	Indexed bool
+	Value   []byte
+}
 
-func DumpVersion(role string) string {
-	return fmt.Sprintf("InodeDB %s\n"+
-		"Version : %s\n"+
-		"Branch  : %s\n"+
-		"Commit  : %s\n"+
-		"Build   : %s %s %s %s\n",
-		role,
-		Version,
-		BranchName,
-		CommitID,
-		runtime.Version(), runtime.GOOS, runtime.GOARCH, BuildTime)
+type Inode struct {
+	Ino    uint64
+	Fields []*Field
+}
+
+type Document = Inode
+
+type Embedding struct {
+	Elements []float32
+	Source   string
 }
