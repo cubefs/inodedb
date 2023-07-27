@@ -36,9 +36,9 @@
 
 * Link, <parent ino, name> --> <child ino, timestmap>
 
-* Collection, schemaless by design, all documents of a collection typically have a similar structure (although they can have different fields) and work for the same application.
+* Collection, the logical 'type' of inodes/documents. While InodeDB is schemaless by design, all documents of a collection typically have a similar structure (although they can have different fields) and work for the same application.
 
-* Volume, the partition & replication unit of inodes
+* Volume, the physical 'container' of inodes, i.e., the partition, replication, and storage unit. Note volumes are created explicitly by the client.
 
 * Scalar Index, the index of scalar fields
 
