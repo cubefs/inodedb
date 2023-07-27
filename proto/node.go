@@ -10,7 +10,6 @@ const (
 	NodeRoleUnknown NodeRole = iota
 	NodeRoleMaster
 	NodeRoleInoder
-	NodeRoleMerger
 )
 
 type NodeInfo struct {

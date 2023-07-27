@@ -17,6 +17,6 @@ package master
 type Cluster struct {
 	Name       string
 	CreateTime int64
-	spaces     map[string]*Space
+	volumes    map[string]*Volume
 	inoders    sync.Map
 }

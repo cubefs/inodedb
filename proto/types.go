@@ -14,14 +14,6 @@
 
 package proto
 
-type (
-	Ino         = uint64
-	DocID       = uint64
-	NamespaceID = uint32
-	RangeID     = uint32
-	ServerID    = uint32
-)
-
 // field types include integer, float, string, bool, embedding, et al.
 type Field struct {
 	Name    string

@@ -28,44 +28,53 @@
 
 3, native file/object search - by name/tag/embedding etc.
 
-## Concepts
+## Data Model
+
+* Collections, Volumes, and Inodes.
 
 * Inode, inode number(ino) --> inode fields, an inode is represented as a document
 
 * Link, <parent ino, name> --> <child ino, timestmap>
 
-* Space, a namespace of inodes & links
+* Collection, schemaless by design, all documents of a collection typically have a similar structure (although they can have different fields) and work for the same application.
 
-* Shard, partitioned by ino ranges (say 100 millions)
+* Volume, the partition & replication unit of inodes
 
-* InodeStore, the storage engine of inode shards
+* Scalar Index, the index of scalar fields
 
-* ScalarIndex, the index of scalar fields
-
-* VectorIndex, the index of embeddings
+* Vector Index, the index of embeddings
 
 
 ## Architecture
 
-An InodeDB cluster has three server roles:
+An InodeDB cluster has two server roles:
 
-* Inoder - InodeServer, indexing & serving the inode shards
+* Inoder - InodeServer, serving the inode volumes
 
-* Master, in charge of all the metadata - namespaces, inodeservers, inoderanges, et al.
-
-* Merger, routing requests and merging responses from multiple shards
+* Master, in charge of all the cluster-level metadata
 
 Every server provids endpoints via gRPC & RESTful API.
 
-We define InodeDB as a specialized distributed document database, rather than a general-purpose key-value or relational database.
+We define InodeDB as a specialized distributed document database used as the metadata subsystem of cloud data lake and file or object storage, rather than a general-purpose key-value or relational database.
+
+### Replication
+
+multi-raft
+
+### Storage
+
+a volume has a single rocksdb instance
+
+### CDC
+
+the Change Data Capture
+
 
 ## Building Blocks
 
 * Bluge
-* Etcd
 * Faiss
 * gRPC
-* Multiraft
 * Rocksdb
 * Prometheus
 

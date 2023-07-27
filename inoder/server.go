@@ -21,10 +21,10 @@ import (
 
 type Server struct{}
 
-func (s *Server) CreateShard(ctx *context.Context, req *proto.CreateShardRequest) (*proto.CreateShardResponse, error) {
+func (s *Server) CreateVolume(ctx *context.Context, req *proto.CreateVolumeRequest) (*proto.CreateVolumeResponse, error) {
 }
 
-func (s *Server) DeleteShard(ctx *context.Context, req *proto.DeleteShardRequest) (*proto.DeleteShardResponse, error) {
+func (s *Server) DeleteVolume(ctx *context.Context, req *proto.DeleteVolumeRequest) (*proto.DeleteVolumeResponse, error) {
 }
 
 func (s *Server) UpsertInode(ctx *context.Context, req *proto.UpsertRequest) (*proto.UpsertResponse, error) {
