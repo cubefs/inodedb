@@ -13,10 +13,3 @@
 // permissions and limitations under the License.
 
 package inoder
-
-type Range struct {
-	namespace        uint32
-	no               uint32
-	startIno, endIno uint64
-	store            *Store
-}

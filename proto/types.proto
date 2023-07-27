@@ -24,7 +24,7 @@ message Field {
 
 message Inode {
 	int64 ino = 1;
-	repeated Field document = 2;
+	repeated Field fields = 2;
 }
 
 

@@ -17,3 +17,6 @@
 package inoder
 
 type Client struct{}
+
+func (c *Client) AddInode()    {}
+func (c *Client) UpdateInode() {}

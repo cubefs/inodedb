@@ -12,23 +12,13 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package inoder
+/*
 
-import (
-	"context"
-	"github.com/cubefs/inodedb/proto"
-)
+Core data structures of Router
 
-type Server struct{}
+* master.Client
+* map[int]*inoder.Client
 
-func (s *Server) CreateShard(ctx *context.Context, req *proto.CreateShardRequest) (*proto.CreateShardResponse, error) {
-}
+*/
 
-func (s *Server) DeleteShard(ctx *context.Context, req *proto.DeleteShardRequest) (*proto.DeleteShardResponse, error) {
-}
-
-func (s *Server) UpsertInode(ctx *context.Context, req *proto.UpsertRequest) (*proto.UpsertResponse, error) {
-}
-
-func (s *Server) DeleteInode(ctx *context.Context, req *proto.DeleteRequest) (*proto.DeleteResponse, error) {
-}
+package merger

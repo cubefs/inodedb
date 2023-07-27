@@ -36,8 +36,8 @@ import (
 	"github.com/cubefs/cubefs/util/ump"
 	"github.com/cubefs/inodedb/inoder"
 	"github.com/cubefs/inodedb/master"
+	"github.com/cubefs/inodedb/merger"
 	"github.com/cubefs/inodedb/proto"
-	"github.com/cubefs/inodedb/router"
 	"github.com/jacobsa/daemonize"
 )
 
@@ -59,7 +59,7 @@ const (
 const (
 	ModuleMaster = "master"
 	ModuleInoder = "inoder"
-	ModuleRouter = "router"
+	ModuleRouter = "merger"
 )
 
 const (
@@ -158,9 +158,9 @@ func main() {
 	case RoleMaster:
 		server = master.NewServer()
 		module = ModuleMaster
-	case RoleRouter:
-		server = router.NewServer()
-		module = ModuleRouter
+	case RoleMerger:
+		server = Merger.NewServer()
+		module = ModuleMerger
 	default:
 		err = errors.NewErrorf("Fatal: role mismatch: %s", role)
 		fmt.Println(err)

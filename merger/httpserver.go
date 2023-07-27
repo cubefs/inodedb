@@ -12,25 +12,4 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-/*
-
-Core data structures of Router
-
-* master.Client
-* map[int]*inoder.Client
-
-Firstly, the write operations,
-
-* Add
-* Update
-* Delete
-
-Then the read operations,
-
-* Get
-* List
-* Search
-
-*/
-
-package router
+package merger

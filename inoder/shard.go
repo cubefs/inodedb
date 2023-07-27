@@ -14,21 +14,9 @@
 
 package inoder
 
-import (
-	"context"
-	"github.com/cubefs/inodedb/proto"
-)
-
-type Server struct{}
-
-func (s *Server) CreateShard(ctx *context.Context, req *proto.CreateShardRequest) (*proto.CreateShardResponse, error) {
-}
-
-func (s *Server) DeleteShard(ctx *context.Context, req *proto.DeleteShardRequest) (*proto.DeleteShardResponse, error) {
-}
-
-func (s *Server) UpsertInode(ctx *context.Context, req *proto.UpsertRequest) (*proto.UpsertResponse, error) {
-}
-
-func (s *Server) DeleteInode(ctx *context.Context, req *proto.DeleteRequest) (*proto.DeleteResponse, error) {
+type Shard struct {
+	namespace        uint32
+	no               uint32
+	startIno, endIno uint64
+	store            *Store
 }

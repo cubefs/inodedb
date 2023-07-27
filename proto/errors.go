@@ -12,23 +12,20 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package inoder
+package proto
 
-import (
-	"context"
-	"github.com/cubefs/inodedb/proto"
+import "errors"
+
+var (
+	ErrSpaceDoesNotExist = errors.New("space does not exist")
+
+	ErrShardDoesNotExist = errors.New("shard does not exist")
+
+	ErrInoDoesNotExist = errors.New("ino does not exist")
+
+	ErrNodeDoesNotFound = errors.New("node not found")
+
+	ErrUnknownQueryType   = errors.New("unknown query type")
+	ErrInvalidData        = errors.New("invalid data")
+	ErrInvalidCredentials = errors.New("invalid credentials")
 )
-
-type Server struct{}
-
-func (s *Server) CreateShard(ctx *context.Context, req *proto.CreateShardRequest) (*proto.CreateShardResponse, error) {
-}
-
-func (s *Server) DeleteShard(ctx *context.Context, req *proto.DeleteShardRequest) (*proto.DeleteShardResponse, error) {
-}
-
-func (s *Server) UpsertInode(ctx *context.Context, req *proto.UpsertRequest) (*proto.UpsertResponse, error) {
-}
-
-func (s *Server) DeleteInode(ctx *context.Context, req *proto.DeleteRequest) (*proto.DeleteResponse, error) {
-}

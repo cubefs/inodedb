@@ -12,23 +12,11 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package inoder
+package master
 
-import (
-	"context"
-	"github.com/cubefs/inodedb/proto"
-)
-
-type Server struct{}
-
-func (s *Server) CreateShard(ctx *context.Context, req *proto.CreateShardRequest) (*proto.CreateShardResponse, error) {
-}
-
-func (s *Server) DeleteShard(ctx *context.Context, req *proto.DeleteShardRequest) (*proto.DeleteShardResponse, error) {
-}
-
-func (s *Server) UpsertInode(ctx *context.Context, req *proto.UpsertRequest) (*proto.UpsertResponse, error) {
-}
-
-func (s *Server) DeleteInode(ctx *context.Context, req *proto.DeleteRequest) (*proto.DeleteResponse, error) {
+type Cluster struct {
+	Name       string
+	CreateTime int64
+	spaces     map[string]*Space
+	inoders    sync.Map
 }

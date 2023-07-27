@@ -34,28 +34,40 @@
 
 * Link, <parent ino, name> --> <child ino, timestmap>
 
-* Namespace, a set of inodes & links
+* Space, a namespace of inodes & links
 
-* InodeRange, partitioned by ino ranges (say 100 millions) and distributed among a list of InodeServers
+* Shard, partitioned by ino ranges (say 100 millions)
 
-* InodeStore, the storage engine of InodeRanges
+* InodeStore, the storage engine of inode shards
 
 * ScalarIndex, the index of scalar fields
 
 * VectorIndex, the index of embeddings
 
-* Inoder - InodeServer, serving the inode ranges
+
+## Architecture
+
+An InodeDB cluster has three server roles:
+
+* Inoder - InodeServer, indexing & serving the inode shards
 
 * Master, in charge of all the metadata - namespaces, inodeservers, inoderanges, et al.
 
-* Router, routing requests & merging responses.
+* Merger, routing requests and merging responses from multiple shards
 
+Every server provids endpoints via gRPC & RESTful API.
 
 We define InodeDB as a specialized distributed document database, rather than a general-purpose key-value or relational database.
 
 ## Building Blocks
 
-Etcd, Faiss, Multi-raft, Rocksdb, et al.
+* Bluge
+* Etcd
+* Faiss
+* gRPC
+* Multiraft
+* Rocksdb
+* Prometheus
 
 */
 

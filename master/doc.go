@@ -14,15 +14,7 @@
 
 /*
 
-Core Data Structures:
-
-Master
-
-Namespace
-
-InodeRangeInfo
-
-InodeServerInfo
+The master oversees all the cluster-level metadata and schedules all the shards among the inode servers.
 
 */
 

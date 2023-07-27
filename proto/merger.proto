@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package merger
+
+option go_package = "github.com/cubefs/inodedb/proto";
+
+service Merger {
+	rpc Merge(SearchRequest) returns (SearchResponse) {}
+}
+
