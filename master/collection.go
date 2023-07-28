@@ -12,6 +12,11 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package inoder
+package master
 
-type VectorIndex struct{}
+type Collection struct {
+	name string
+	id   uint64
+
+	shards map[uint64]*Shard
+}

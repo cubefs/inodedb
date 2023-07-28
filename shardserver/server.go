@@ -12,9 +12,17 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package master
+package shardserver
 
-type Volume struct {
-	name string
-	id   int64
+import (
+	"context"
+	"github.com/cubefs/inodedb/proto"
+)
+
+type Server struct{}
+
+func (s *Server) CreateShard(ctx *context.Context, req *proto.CreateShardRequest) (*proto.CreateShardResponse, error) {
+}
+
+func (s *Server) DeleteShard(ctx *context.Context, req *proto.DeleteShardRequest) (*proto.DeleteShardResponse, error) {
 }

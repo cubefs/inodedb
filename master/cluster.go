@@ -15,8 +15,8 @@
 package master
 
 type Cluster struct {
-	Name       string
-	CreateTime int64
-	volumes    map[string]*Volume
-	inoders    sync.Map
+	Name         string
+	CreateTime   int64
+	collections  map[string]*Collection
+	shardservers sync.Map
 }

@@ -12,23 +12,10 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package inoder
+package proto
 
-import (
-	"context"
-	"github.com/cubefs/inodedb/proto"
-)
+// the shard info
+type Shard struct{}
 
-type Server struct{}
-
-func (s *Server) CreateVolume(ctx *context.Context, req *proto.CreateVolumeRequest) (*proto.CreateVolumeResponse, error) {
-}
-
-func (s *Server) DeleteVolume(ctx *context.Context, req *proto.DeleteVolumeRequest) (*proto.DeleteVolumeResponse, error) {
-}
-
-func (s *Server) UpsertInode(ctx *context.Context, req *proto.UpsertRequest) (*proto.UpsertResponse, error) {
-}
-
-func (s *Server) DeleteInode(ctx *context.Context, req *proto.DeleteRequest) (*proto.DeleteResponse, error) {
-}
+// the shardserver metadata
+type ShardServer struct{}

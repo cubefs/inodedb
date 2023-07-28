@@ -9,7 +9,8 @@ type NodeRole int
 const (
 	NodeRoleUnknown NodeRole = iota
 	NodeRoleMaster
-	NodeRoleInoder
+	NodeRoleRouter
+	NodeRoleShardServer
 )
 
 type NodeInfo struct {

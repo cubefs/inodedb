@@ -12,21 +12,10 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package inoder
+/*
 
-import (
-	"context"
-	"github.com/cubefs/inodedb/proto"
-)
+This is the native Go client library for the shardserver + master, called by the router and the Cubefs API nodes.
 
-type VolumeService struct{}
+*/
 
-func (s *VolumeService) CreateVolume(ctx *context.Context, req *proto.CreateVolumeRequest) (*proto.CreateVolumeResponse, error) {
-}
-
-func (s *VolumeService) DeleteVolume(ctx *context.Context, req *proto.DeleteVolumeRequest) (*proto.DeleteVolumeResponse, error) {
-}
-
-func (s *VolumeService) Write()
-
-func (s *VolumeService) Search()
+package client

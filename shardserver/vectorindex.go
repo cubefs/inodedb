@@ -12,6 +12,6 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package inoder
+package shardserver
 
-type Store struct{}
+type VectorIndex struct{}

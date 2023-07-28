@@ -26,7 +26,7 @@ var (
 	BuildTime  string
 )
 
-func DumpVersion(role string) string {
+func VersionInfo(role string) string {
 	return fmt.Sprintf("InodeDB %s\n"+
 		"Version : %s\n"+
 		"Branch  : %s\n"+

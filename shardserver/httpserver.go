@@ -12,11 +12,4 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-//the RPC client of Inodeserver
-
-package inoder
-
-type Client struct{}
-
-func (c *Client) AddInode()    {}
-func (c *Client) UpdateInode() {}
+package shardserver

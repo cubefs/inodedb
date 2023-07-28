@@ -16,11 +16,7 @@
 
 Core data structures:
 
-InodeServer
-
-InodeRange
-
-InodeStore
+ShardStore
 
 ScalarIndex
 
@@ -30,22 +26,9 @@ WAL - the write-ahead log
 
 Core operations:
 
-CreateInodeRange()
+## the write I/O path
 
-GetInode()
-
-Link(), Unlink()
-
-List()
-
-NewInode()
-
-UpdateInode()
-
-RemoveInode()
-
-Search()
 
 */
 
-package inoder
+package shardserver

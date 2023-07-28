@@ -12,10 +12,4 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-/*
-
-The master oversees the cluster-level metadata and schedules the shards among the shardservers.
-
-*/
-
-package master
+package shardserver

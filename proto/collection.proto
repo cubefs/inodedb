@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+option go_package = "github.com/cubefs/inodedb/proto";
+
+service Collection {
+	rpc Cluster (ClusterRequest) returns (ClusterResponse) {}
+	rpc CreateCollection (CreateCollectionRequest) returns (CreateCollectionResponse) {}
+	rpc DeleteCollection (DeleteCollectionRequest) returns (DeleteCollectionResponse) {}
+}
+
+
+message ClusterRequest {}
+
+message ClusterResponse {}
+
+message CreateCollectionRequest {
+	Collection c = 1;
+}
+
+message CreateCollectionResponse {
+}
+
+message DeleteCollectionRequest {
+	Collection c = 1;
+}
+
+message DeleteCollectionResponse {
+}
+
