@@ -18,5 +18,12 @@
 
 /*
 The data model and communication protocol definitions
+
+
+* collection.proto - all server roles share the same grpc service
+
+* ShardKey = collection id +"/"+ start ino
+
 */
+
 package proto

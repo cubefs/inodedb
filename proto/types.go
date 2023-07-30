@@ -22,12 +22,12 @@ type Field struct {
 	Value   []byte
 }
 
-type Inode struct {
+type Item struct {
 	Ino    uint64
 	Fields []*Field
 }
 
-type Document = Inode
+type Document = Item
 
 type Embedding struct {
 	Elements []float32

@@ -1,29 +1,184 @@
 syntax = "proto3";
 
+package collection;
+
 option go_package = "github.com/cubefs/inodedb/proto";
 
-service Collection {
-	rpc Cluster (ClusterRequest) returns (ClusterResponse) {}
-	rpc CreateCollection (CreateCollectionRequest) returns (CreateCollectionResponse) {}
-	rpc DeleteCollection (DeleteCollectionRequest) returns (DeleteCollectionResponse) {}
+enum FieldType {
+	BOOL = 0;
+	INT = 1;
+	FLOAT = 2;
+	STRING = 3;
+	EMBEDDING = 4;
+}
+
+message Embedding {
+	repeated float elements = 1;
+	string source = 2;
+}
+
+enum IndexOption {
+	Null = 0;
+	Indexed = 1;
+	Fulltext = 2;
+	Unique = 3;
+}
+
+message Field {
+	string name = 1;
+	FieldType type = 2;
+	bytes value = 3;
+	IndexOption indexed = 4;
+}
+
+message Item {
+	uint64 ino = 1;
+	repeated Field fields = 2;
+}
+
+message Link {
+	uint64 parent = 1;
+	uint64 child = 2;
+	string name = 3;
+}
+
+enum NodeRole {
+    	NODE_ROLE_SINGLE = 0;
+    	NODE_ROLE_SHARDSERVER = 1;
+	NODE_ROLE_MASTER = 2;
+	NODE_ROLE_ROUTER = 4;
+}
+
+enum NodeState {
+    	NODE_STATE_UNKNOWN = 0;
+    	NODE_STATE_ALIVE = 1;
+    	NODE_STATE_SUSPECT = 2;
+    	NODE_STATE_QUIT = 3;
+}
+
+message Node {
+	uint32 id = 1;
+    	string addr = 2;
+    	uint32 grpc_port = 3;
+	uint32 http_port = 4;
+	NodeRole roles = 5;
+	NodeState state = 6;
 }
 
 
-message ClusterRequest {}
+service Collection {
+	rpc CreateCollection (CreateCollectionRequest) returns (CreateCollectionResponse) {}
+	rpc DeleteCollection (DeleteCollectionRequest) returns (DeleteCollectionResponse) {}
+	rpc CreateShard (CreateShardRequest) returns (CreateShardResponse) {}
+	rpc DeleteShard (DeleteShardRequest) returns (DeleteShardResponse) {}
+	rpc Metrics (MetricsRequest) returns (MetricsResponse) {}
 
-message ClusterResponse {}
+    	rpc Cluster (ClusterRequest) returns (ClusterResponse) {}
+    
+	rpc AddItems (AddItemsRequest) returns (AddItemsResponse) {}
+    	rpc DelItems (DelItemsRequest) returns (DelItemsResponse) {}
+
+	rpc AddLinks (AddLinksRequest) returns (AddLinksResponse) {}
+	rpc DelLinks (DelLinksRequest) returns (DelLinksResponse) {}
+
+    	rpc Search (SearchRequest) returns (SearchResponse) {}
+}
+
+message ClusterRequest { 
+	string operation = 1;	//Join, Quit, et al.
+	Node node_info = 2;
+}
+
+message ClusterResponse { }
 
 message CreateCollectionRequest {
-	Collection c = 1;
+	string name = 1;
 }
 
 message CreateCollectionResponse {
+	uint64 id = 1;
 }
 
 message DeleteCollectionRequest {
-	Collection c = 1;
+	string name = 1;
+	uint64 id = 2;
 }
 
-message DeleteCollectionResponse {
+message DeleteCollectionResponse { }
+
+message MetricsRequest {
+	string keys = 1;
 }
 
+message MetricsResponse {
+	bytes metrics = 1;
+}
+
+message CreateShardRequest {
+    	string collection_name = 1 [json_name="collection_name"];
+    	string shard_key = 2 [json_name="shard_key"];
+}
+
+message CreateShardResponse {
+}
+
+message DeleteShardRequest {
+    	string collection_name = 1 [json_name="collection_name"];
+    	string shard_key = 2 [json_name="shard_key"];
+}
+
+message DeleteShardResponse {
+}
+
+message AddItemsRequest {
+	string collection_name = 1 [json_name="collection_name"];
+	string shard_key = 2 [json_name="shard_key"];
+	repeated Item items = 3;
+}
+
+message AddItemsResponse {
+}
+
+message DelItemsRequest {
+	string collection_name = 1 [json_name="collection_name"];
+	string shard_key = 2 [json_name="shard_key"];
+	repeated string ids = 3;
+}
+
+message DelItemsResponse {
+}
+
+message AddLinksRequest { 
+	string collection_name = 1 [json_name="collection_name"];
+	string shard_key = 2 [json_name="shard_key"];
+	repeated Link links = 3;
+}
+
+message AddLinksResponse { }
+
+message DelLinksRequest { 
+	string collection_name = 1 [json_name="collection_name"];
+	string shard_key = 2 [json_name="shard_key"];
+	repeated Link links = 3;
+}
+
+message DelLinksResponse { }
+
+
+message Query { }
+
+message HighlightRequest { }
+
+message SearchRequest {
+    string collection_name = 1 [json_name="collection_name"];
+    string shard_key = 2 [json_name="shard_key"];
+    Query query = 3;
+    int32 count = 4;
+    string sorted_by = 5[json_name="sorted_by"];
+    repeated string fields = 6;
+}
+
+message SearchResponse {
+    uint64 hits = 2;
+    repeated Item items = 3;
+}

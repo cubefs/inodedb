@@ -12,20 +12,12 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package proto
+/*
+The Single Server Mode
 
-import "errors"
+As v0.1, the single server model implements all the grpc+http interfaces defined in proto and provides a working collection service.
 
-var (
-	ErrSpaceDoesNotExist = errors.New("space does not exist")
 
-	ErrShardDoesNotExist = errors.New("shard does not exist")
+*/
 
-	ErrInoDoesNotExist = errors.New("ino does not exist")
-
-	ErrNodeDoesNotFound = errors.New("node not found")
-
-	ErrUnknownQueryType   = errors.New("unknown query type")
-	ErrInvalidData        = errors.New("invalid data")
-	ErrInvalidCredentials = errors.New("invalid credentials")
-)
+package single
