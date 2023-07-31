@@ -35,4 +35,6 @@ var (
 	ErrUnknownFieldType = errors.New("unknown field type")
 
 	ErrUnknownIndexType = errors.New("unknown index type")
+
+	ErrInoOutOfRange = errors.New("ino out of range")
 )

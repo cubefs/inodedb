@@ -21,12 +21,14 @@ const _ = grpc.SupportPackageIsVersion7
 const (
 	Collection_CreateCollection_FullMethodName = "/collection.Collection/CreateCollection"
 	Collection_DeleteCollection_FullMethodName = "/collection.Collection/DeleteCollection"
+	Collection_GetCollection_FullMethodName    = "/collection.Collection/GetCollection"
 	Collection_CreateShard_FullMethodName      = "/collection.Collection/CreateShard"
 	Collection_DeleteShard_FullMethodName      = "/collection.Collection/DeleteShard"
 	Collection_Metrics_FullMethodName          = "/collection.Collection/Metrics"
 	Collection_Cluster_FullMethodName          = "/collection.Collection/Cluster"
 	Collection_AddItems_FullMethodName         = "/collection.Collection/AddItems"
 	Collection_DelItems_FullMethodName         = "/collection.Collection/DelItems"
+	Collection_GetItem_FullMethodName          = "/collection.Collection/GetItem"
 	Collection_AddLinks_FullMethodName         = "/collection.Collection/AddLinks"
 	Collection_DelLinks_FullMethodName         = "/collection.Collection/DelLinks"
 	Collection_Search_FullMethodName           = "/collection.Collection/Search"
@@ -38,12 +40,14 @@ const (
 type CollectionClient interface {
 	CreateCollection(ctx context.Context, in *CreateCollectionRequest, opts ...grpc.CallOption) (*CreateCollectionResponse, error)
 	DeleteCollection(ctx context.Context, in *DeleteCollectionRequest, opts ...grpc.CallOption) (*DeleteCollectionResponse, error)
+	GetCollection(ctx context.Context, in *GetCollectionRequest, opts ...grpc.CallOption) (*GetCollectionResponse, error)
 	CreateShard(ctx context.Context, in *CreateShardRequest, opts ...grpc.CallOption) (*CreateShardResponse, error)
 	DeleteShard(ctx context.Context, in *DeleteShardRequest, opts ...grpc.CallOption) (*DeleteShardResponse, error)
 	Metrics(ctx context.Context, in *MetricsRequest, opts ...grpc.CallOption) (*MetricsResponse, error)
 	Cluster(ctx context.Context, in *ClusterRequest, opts ...grpc.CallOption) (*ClusterResponse, error)
 	AddItems(ctx context.Context, in *AddItemsRequest, opts ...grpc.CallOption) (*AddItemsResponse, error)
 	DelItems(ctx context.Context, in *DelItemsRequest, opts ...grpc.CallOption) (*DelItemsResponse, error)
+	GetItem(ctx context.Context, in *GetItemRequest, opts ...grpc.CallOption) (*GetItemResponse, error)
 	AddLinks(ctx context.Context, in *AddLinksRequest, opts ...grpc.CallOption) (*AddLinksResponse, error)
 	DelLinks(ctx context.Context, in *DelLinksRequest, opts ...grpc.CallOption) (*DelLinksResponse, error)
 	Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error)
@@ -69,6 +73,15 @@ func (c *collectionClient) CreateCollection(ctx context.Context, in *CreateColle
 func (c *collectionClient) DeleteCollection(ctx context.Context, in *DeleteCollectionRequest, opts ...grpc.CallOption) (*DeleteCollectionResponse, error) {
 	out := new(DeleteCollectionResponse)
 	err := c.cc.Invoke(ctx, Collection_DeleteCollection_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *collectionClient) GetCollection(ctx context.Context, in *GetCollectionRequest, opts ...grpc.CallOption) (*GetCollectionResponse, error) {
+	out := new(GetCollectionResponse)
+	err := c.cc.Invoke(ctx, Collection_GetCollection_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -129,6 +142,15 @@ func (c *collectionClient) DelItems(ctx context.Context, in *DelItemsRequest, op
 	return out, nil
 }
 
+func (c *collectionClient) GetItem(ctx context.Context, in *GetItemRequest, opts ...grpc.CallOption) (*GetItemResponse, error) {
+	out := new(GetItemResponse)
+	err := c.cc.Invoke(ctx, Collection_GetItem_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *collectionClient) AddLinks(ctx context.Context, in *AddLinksRequest, opts ...grpc.CallOption) (*AddLinksResponse, error) {
 	out := new(AddLinksResponse)
 	err := c.cc.Invoke(ctx, Collection_AddLinks_FullMethodName, in, out, opts...)
@@ -162,12 +184,14 @@ func (c *collectionClient) Search(ctx context.Context, in *SearchRequest, opts .
 type CollectionServer interface {
 	CreateCollection(context.Context, *CreateCollectionRequest) (*CreateCollectionResponse, error)
 	DeleteCollection(context.Context, *DeleteCollectionRequest) (*DeleteCollectionResponse, error)
+	GetCollection(context.Context, *GetCollectionRequest) (*GetCollectionResponse, error)
 	CreateShard(context.Context, *CreateShardRequest) (*CreateShardResponse, error)
 	DeleteShard(context.Context, *DeleteShardRequest) (*DeleteShardResponse, error)
 	Metrics(context.Context, *MetricsRequest) (*MetricsResponse, error)
 	Cluster(context.Context, *ClusterRequest) (*ClusterResponse, error)
 	AddItems(context.Context, *AddItemsRequest) (*AddItemsResponse, error)
 	DelItems(context.Context, *DelItemsRequest) (*DelItemsResponse, error)
+	GetItem(context.Context, *GetItemRequest) (*GetItemResponse, error)
 	AddLinks(context.Context, *AddLinksRequest) (*AddLinksResponse, error)
 	DelLinks(context.Context, *DelLinksRequest) (*DelLinksResponse, error)
 	Search(context.Context, *SearchRequest) (*SearchResponse, error)
@@ -183,6 +207,9 @@ func (UnimplementedCollectionServer) CreateCollection(context.Context, *CreateCo
 }
 func (UnimplementedCollectionServer) DeleteCollection(context.Context, *DeleteCollectionRequest) (*DeleteCollectionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteCollection not implemented")
+}
+func (UnimplementedCollectionServer) GetCollection(context.Context, *GetCollectionRequest) (*GetCollectionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCollection not implemented")
 }
 func (UnimplementedCollectionServer) CreateShard(context.Context, *CreateShardRequest) (*CreateShardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateShard not implemented")
@@ -201,6 +228,9 @@ func (UnimplementedCollectionServer) AddItems(context.Context, *AddItemsRequest)
 }
 func (UnimplementedCollectionServer) DelItems(context.Context, *DelItemsRequest) (*DelItemsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DelItems not implemented")
+}
+func (UnimplementedCollectionServer) GetItem(context.Context, *GetItemRequest) (*GetItemResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetItem not implemented")
 }
 func (UnimplementedCollectionServer) AddLinks(context.Context, *AddLinksRequest) (*AddLinksResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddLinks not implemented")
@@ -256,6 +286,24 @@ func _Collection_DeleteCollection_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CollectionServer).DeleteCollection(ctx, req.(*DeleteCollectionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Collection_GetCollection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCollectionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CollectionServer).GetCollection(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Collection_GetCollection_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CollectionServer).GetCollection(ctx, req.(*GetCollectionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -368,6 +416,24 @@ func _Collection_DelItems_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Collection_GetItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetItemRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CollectionServer).GetItem(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Collection_GetItem_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CollectionServer).GetItem(ctx, req.(*GetItemRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Collection_AddLinks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AddLinksRequest)
 	if err := dec(in); err != nil {
@@ -438,6 +504,10 @@ var Collection_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Collection_DeleteCollection_Handler,
 		},
 		{
+			MethodName: "GetCollection",
+			Handler:    _Collection_GetCollection_Handler,
+		},
+		{
 			MethodName: "CreateShard",
 			Handler:    _Collection_CreateShard_Handler,
 		},
@@ -460,6 +530,10 @@ var Collection_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DelItems",
 			Handler:    _Collection_DelItems_Handler,
+		},
+		{
+			MethodName: "GetItem",
+			Handler:    _Collection_GetItem_Handler,
 		},
 		{
 			MethodName: "AddLinks",
