@@ -4,44 +4,6 @@ package collection;
 
 option go_package = "github.com/cubefs/inodedb/proto";
 
-enum FieldType {
-	BOOL = 0;
-	INT = 1;
-	FLOAT = 2;
-	STRING = 3;
-	EMBEDDING = 4;
-}
-
-message Embedding {
-	repeated float elements = 1;
-	string source = 2;
-}
-
-enum IndexOption {
-	Null = 0;
-	Indexed = 1;
-	Fulltext = 2;
-	Unique = 3;
-}
-
-message Field {
-	string name = 1;
-	FieldType type = 2;
-	bytes value = 3;
-	IndexOption indexed = 4;
-}
-
-message Item {
-	uint64 ino = 1;
-	repeated Field fields = 2;
-}
-
-message Link {
-	uint64 parent = 1;
-	uint64 child = 2;
-	string name = 3;
-}
-
 enum NodeRole {
     	NODE_ROLE_SINGLE = 0;
     	NODE_ROLE_SHARDSERVER = 1;
@@ -65,10 +27,65 @@ message Node {
 	NodeState state = 6;
 }
 
+enum FieldType {
+	BOOL = 0;
+	INT = 1;
+	FLOAT = 2;
+	STRING = 3;
+	EMBEDDING = 4;
+}
+
+message Embedding {
+	repeated float elements = 1;
+	string source = 2;
+}
+
+enum IndexOption {
+	Null = 0;
+	Indexed = 1;
+	Fulltext = 2;
+	Unique = 3;
+}
+
+message FieldMeta {	
+	string name = 1;
+	FieldType type = 2;
+	IndexOption indexed = 3;
+}
+
+message Field {
+	FieldMeta meta = 1;
+	bytes value = 2;
+}
+
+message Item {
+	uint64 ino = 1;
+	repeated Field fields = 2;
+}
+
+message Link {
+	uint64 parent = 1;
+	uint64 child = 2;
+	string name = 3;
+}
+
+message ShardId {
+	uint64 collection = 1;
+	uint64 start_ino = 2;
+}
+
+message CollectionMeta {
+	string name = 1;
+	uint64 id = 2;
+	repeated FieldMeta fixed_fields = 3;
+	map<uint64, ShardId> shards = 4;
+}
 
 service Collection {
 	rpc CreateCollection (CreateCollectionRequest) returns (CreateCollectionResponse) {}
 	rpc DeleteCollection (DeleteCollectionRequest) returns (DeleteCollectionResponse) {}
+	rpc GetCollection (GetCollectionRequest) returns (GetCollectionResponse) {}
+
 	rpc CreateShard (CreateShardRequest) returns (CreateShardResponse) {}
 	rpc DeleteShard (DeleteShardRequest) returns (DeleteShardResponse) {}
 	rpc Metrics (MetricsRequest) returns (MetricsResponse) {}
@@ -78,6 +95,8 @@ service Collection {
 	rpc AddItems (AddItemsRequest) returns (AddItemsResponse) {}
     	rpc DelItems (DelItemsRequest) returns (DelItemsResponse) {}
 
+	rpc GetItem (GetItemRequest) returns (GetItemResponse) {}
+	
 	rpc AddLinks (AddLinksRequest) returns (AddLinksResponse) {}
 	rpc DelLinks (DelLinksRequest) returns (DelLinksResponse) {}
 
@@ -106,6 +125,14 @@ message DeleteCollectionRequest {
 
 message DeleteCollectionResponse { }
 
+message GetCollectionRequest {
+	string name = 1;
+}
+
+message GetCollectionResponse {
+	CollectionMeta info = 1;
+}
+
 message MetricsRequest {
 	string keys = 1;
 }
@@ -116,7 +143,7 @@ message MetricsResponse {
 
 message CreateShardRequest {
     	string collection_name = 1 [json_name="collection_name"];
-    	string shard_key = 2 [json_name="shard_key"];
+    	ShardId shard_id = 2 [json_name="shard_id"];
 }
 
 message CreateShardResponse {
@@ -124,7 +151,7 @@ message CreateShardResponse {
 
 message DeleteShardRequest {
     	string collection_name = 1 [json_name="collection_name"];
-    	string shard_key = 2 [json_name="shard_key"];
+    	ShardId shard_id = 2 [json_name="shard_id"];
 }
 
 message DeleteShardResponse {
@@ -132,7 +159,7 @@ message DeleteShardResponse {
 
 message AddItemsRequest {
 	string collection_name = 1 [json_name="collection_name"];
-	string shard_key = 2 [json_name="shard_key"];
+	ShardId shard_id = 2 [json_name="shard_id"];
 	repeated Item items = 3;
 }
 
@@ -141,25 +168,30 @@ message AddItemsResponse {
 
 message DelItemsRequest {
 	string collection_name = 1 [json_name="collection_name"];
-	string shard_key = 2 [json_name="shard_key"];
-	repeated string ids = 3;
+	repeated uint64 inos = 2;
 }
 
 message DelItemsResponse {
 }
 
+message GetItemRequest {
+	uint64 ino = 1;
+}
+
+message GetItemResponse {
+	Item item = 1;
+}
+
 message AddLinksRequest { 
 	string collection_name = 1 [json_name="collection_name"];
-	string shard_key = 2 [json_name="shard_key"];
-	repeated Link links = 3;
+	repeated Link links = 2;
 }
 
 message AddLinksResponse { }
 
 message DelLinksRequest { 
 	string collection_name = 1 [json_name="collection_name"];
-	string shard_key = 2 [json_name="shard_key"];
-	repeated Link links = 3;
+	repeated Link links = 2;
 }
 
 message DelLinksResponse { }
@@ -171,14 +203,13 @@ message HighlightRequest { }
 
 message SearchRequest {
     string collection_name = 1 [json_name="collection_name"];
-    string shard_key = 2 [json_name="shard_key"];
-    Query query = 3;
-    int32 count = 4;
-    string sorted_by = 5[json_name="sorted_by"];
-    repeated string fields = 6;
+    Query query = 2;
+    int32 count = 3;
+    string sorted_by = 4[json_name="sorted_by"];
+    repeated string fields = 5;
 }
 
 message SearchResponse {
-    uint64 hits = 2;
-    repeated Item items = 3;
+    uint64 hits = 1;
+    repeated Item items = 2;
 }
