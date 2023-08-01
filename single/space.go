@@ -20,7 +20,7 @@ import (
 	"github.com/cubefs/inodedb/proto"
 )
 
-type Collection struct {
+type Space struct {
 	name   string
 	id     uint64
 	shards map[uint64]*Shard
