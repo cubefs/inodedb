@@ -15,8 +15,8 @@
 package single
 
 import (
-	"github.com/cubefs/inodedb/errors"
-	"github.com/cubefs/inodedb/proto"
+	"github.com/cubefs/inoder/errors"
+	"github.com/cubefs/inoder/proto"
 )
 
 type Shard struct {

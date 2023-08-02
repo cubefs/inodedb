@@ -24,8 +24,8 @@ const (
 	Space_GetSpace_FullMethodName    = "/space.Space/GetSpace"
 	Space_CreateShard_FullMethodName = "/space.Space/CreateShard"
 	Space_DeleteShard_FullMethodName = "/space.Space/DeleteShard"
-	Space_AddItem_FullMethodName     = "/space.Space/AddItem"
-	Space_DelItem_FullMethodName     = "/space.Space/DelItem"
+	Space_UpsertItem_FullMethodName  = "/space.Space/UpsertItem"
+	Space_DeleteItem_FullMethodName  = "/space.Space/DeleteItem"
 	Space_GetItem_FullMethodName     = "/space.Space/GetItem"
 	Space_Link_FullMethodName        = "/space.Space/Link"
 	Space_Unlink_FullMethodName      = "/space.Space/Unlink"
@@ -43,8 +43,8 @@ type SpaceClient interface {
 	GetSpace(ctx context.Context, in *GetSpaceRequest, opts ...grpc.CallOption) (*GetSpaceResponse, error)
 	CreateShard(ctx context.Context, in *CreateShardRequest, opts ...grpc.CallOption) (*CreateShardResponse, error)
 	DeleteShard(ctx context.Context, in *DeleteShardRequest, opts ...grpc.CallOption) (*DeleteShardResponse, error)
-	AddItem(ctx context.Context, in *AddItemRequest, opts ...grpc.CallOption) (*AddItemResponse, error)
-	DelItem(ctx context.Context, in *DelItemRequest, opts ...grpc.CallOption) (*DelItemResponse, error)
+	UpsertItem(ctx context.Context, in *UpsertItemRequest, opts ...grpc.CallOption) (*UpsertItemResponse, error)
+	DeleteItem(ctx context.Context, in *DeleteItemRequest, opts ...grpc.CallOption) (*DeleteItemResponse, error)
 	GetItem(ctx context.Context, in *GetItemRequest, opts ...grpc.CallOption) (*GetItemResponse, error)
 	Link(ctx context.Context, in *LinkRequest, opts ...grpc.CallOption) (*LinkResponse, error)
 	Unlink(ctx context.Context, in *UnlinkRequest, opts ...grpc.CallOption) (*UnlinkResponse, error)
@@ -106,18 +106,18 @@ func (c *spaceClient) DeleteShard(ctx context.Context, in *DeleteShardRequest, o
 	return out, nil
 }
 
-func (c *spaceClient) AddItem(ctx context.Context, in *AddItemRequest, opts ...grpc.CallOption) (*AddItemResponse, error) {
-	out := new(AddItemResponse)
-	err := c.cc.Invoke(ctx, Space_AddItem_FullMethodName, in, out, opts...)
+func (c *spaceClient) UpsertItem(ctx context.Context, in *UpsertItemRequest, opts ...grpc.CallOption) (*UpsertItemResponse, error) {
+	out := new(UpsertItemResponse)
+	err := c.cc.Invoke(ctx, Space_UpsertItem_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *spaceClient) DelItem(ctx context.Context, in *DelItemRequest, opts ...grpc.CallOption) (*DelItemResponse, error) {
-	out := new(DelItemResponse)
-	err := c.cc.Invoke(ctx, Space_DelItem_FullMethodName, in, out, opts...)
+func (c *spaceClient) DeleteItem(ctx context.Context, in *DeleteItemRequest, opts ...grpc.CallOption) (*DeleteItemResponse, error) {
+	out := new(DeleteItemResponse)
+	err := c.cc.Invoke(ctx, Space_DeleteItem_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -187,8 +187,8 @@ type SpaceServer interface {
 	GetSpace(context.Context, *GetSpaceRequest) (*GetSpaceResponse, error)
 	CreateShard(context.Context, *CreateShardRequest) (*CreateShardResponse, error)
 	DeleteShard(context.Context, *DeleteShardRequest) (*DeleteShardResponse, error)
-	AddItem(context.Context, *AddItemRequest) (*AddItemResponse, error)
-	DelItem(context.Context, *DelItemRequest) (*DelItemResponse, error)
+	UpsertItem(context.Context, *UpsertItemRequest) (*UpsertItemResponse, error)
+	DeleteItem(context.Context, *DeleteItemRequest) (*DeleteItemResponse, error)
 	GetItem(context.Context, *GetItemRequest) (*GetItemResponse, error)
 	Link(context.Context, *LinkRequest) (*LinkResponse, error)
 	Unlink(context.Context, *UnlinkRequest) (*UnlinkResponse, error)
@@ -217,11 +217,11 @@ func (UnimplementedSpaceServer) CreateShard(context.Context, *CreateShardRequest
 func (UnimplementedSpaceServer) DeleteShard(context.Context, *DeleteShardRequest) (*DeleteShardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteShard not implemented")
 }
-func (UnimplementedSpaceServer) AddItem(context.Context, *AddItemRequest) (*AddItemResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method AddItem not implemented")
+func (UnimplementedSpaceServer) UpsertItem(context.Context, *UpsertItemRequest) (*UpsertItemResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpsertItem not implemented")
 }
-func (UnimplementedSpaceServer) DelItem(context.Context, *DelItemRequest) (*DelItemResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DelItem not implemented")
+func (UnimplementedSpaceServer) DeleteItem(context.Context, *DeleteItemRequest) (*DeleteItemResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteItem not implemented")
 }
 func (UnimplementedSpaceServer) GetItem(context.Context, *GetItemRequest) (*GetItemResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetItem not implemented")
@@ -344,38 +344,38 @@ func _Space_DeleteShard_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Space_AddItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AddItemRequest)
+func _Space_UpsertItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpsertItemRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(SpaceServer).AddItem(ctx, in)
+		return srv.(SpaceServer).UpsertItem(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Space_AddItem_FullMethodName,
+		FullMethod: Space_UpsertItem_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(SpaceServer).AddItem(ctx, req.(*AddItemRequest))
+		return srv.(SpaceServer).UpsertItem(ctx, req.(*UpsertItemRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Space_DelItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DelItemRequest)
+func _Space_DeleteItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteItemRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(SpaceServer).DelItem(ctx, in)
+		return srv.(SpaceServer).DeleteItem(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Space_DelItem_FullMethodName,
+		FullMethod: Space_DeleteItem_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(SpaceServer).DelItem(ctx, req.(*DelItemRequest))
+		return srv.(SpaceServer).DeleteItem(ctx, req.(*DeleteItemRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -516,12 +516,12 @@ var Space_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Space_DeleteShard_Handler,
 		},
 		{
-			MethodName: "AddItem",
-			Handler:    _Space_AddItem_Handler,
+			MethodName: "UpsertItem",
+			Handler:    _Space_UpsertItem_Handler,
 		},
 		{
-			MethodName: "DelItem",
-			Handler:    _Space_DelItem_Handler,
+			MethodName: "DeleteItem",
+			Handler:    _Space_DeleteItem_Handler,
 		},
 		{
 			MethodName: "GetItem",

@@ -16,6 +16,7 @@ package single
 
 type Catalog struct {
 	createTime  int64
-	collections map[string]*Space
+	spaceIdList map[string]uint64
+	spaces      []*Space
 	mutex       sync.RWMutex
 }

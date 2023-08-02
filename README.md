@@ -1,2 +1,5 @@
-# inodedb
-the next-gen metadata subsystem
+# inoder
+
+the next-gen metadata system of CubeFS
+
+

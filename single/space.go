@@ -17,7 +17,7 @@ package single
 import (
 	"sync"
 
-	"github.com/cubefs/inodedb/proto"
+	"github.com/cubefs/inoder/proto"
 )
 
 type Space struct {
@@ -25,6 +25,4 @@ type Space struct {
 	id     uint64
 	shards map[uint64]*Shard
 	lock   sync.RWMutex
-
-	s *Store
 }

@@ -16,8 +16,8 @@ package single
 
 import (
 	"context"
-	"github.com/cbuefs/inodedb/errors"
-	"github.com/cubefs/inodedb/proto"
+	"github.com/cbuefs/inoder/errors"
+	"github.com/cubefs/inoder/proto"
 )
 
 type Server struct {

@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2023 InodeDB authors.
+ * Copyright 2023 CubeFS authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 
 /*
 
-# InodeDB: the CubeFS metadata subsystem redefined
+# Inoder: the CubeFS metadata subsystem redefined
 
 ## Why re-design the metadata subsystem?
 
@@ -28,7 +28,7 @@
 
 3, native file/object search - by name/tag/embedding etc.
 
-We define InodeDB as a specialized distributed document database used as the metadata subsystem of cloud data lake and file or object storage, rather than a general-purpose key-value or relational database.
+We define Inoder as a specialized distributed document database used as the metadata subsystem of cloud data lake and file or object storage, rather than a general-purpose key-value or relational database.
 
 ## Data Model
 
@@ -38,11 +38,11 @@ We define InodeDB as a specialized distributed document database used as the met
 
 * Shard, the physical 'container' of items, working as the replication and storage unit.
 
-* Space, the logical namespace of items. While InodeDB is schemaless by design, all items of a collection typically have a similar structure (although they can have different fields) and work for the same application.
+* Space, the logical namespace of items. While Inoder is schemaless by design, all items of a collection typically have a similar structure (although they can have different fields) and work for the same application.
 
 * Link, <parent ino, name> --> <child ino,...>
 
-* CubeFS' volume/partition/inode/dentry => InodeDB's space/shard/item/link
+* CubeFS' volume/partition/inode/dentry => Inoder's space/shard/item/link
 
 * Scalar Index, the index of scalar fields
 
@@ -51,7 +51,7 @@ We define InodeDB as a specialized distributed document database used as the met
 
 ## Architecture
 
-An InodeDB cluster has several server roles:
+An Inoder cluster has several server roles:
 
 * ShardServer, serving the shards
 * Master, in charge of the cluster-level metadata
@@ -81,4 +81,4 @@ the Change Data Capture
 
 */
 
-package inodedb
+package inoder

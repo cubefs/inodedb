@@ -1,4 +1,4 @@
-# The Chat Agent of InodeDB
+# The Chat Agent
 
 To be written in Python
 
