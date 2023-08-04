@@ -12,11 +12,29 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package master
+package cmd
 
-type Collection struct {
-	name string
-	id   uint64
+import (
+	"fmt"
+	"runtime"
+)
 
-	shards map[uint64]*Shard
+var (
+	Version    string
+	CommitID   string
+	BranchName string
+	BuildTime  string
+)
+
+func VersionInfo(role string) string {
+	return fmt.Sprintf("InodeDB %s\n"+
+		"Version : %s\n"+
+		"Branch  : %s\n"+
+		"Commit  : %s\n"+
+		"Build   : %s %s %s %s\n",
+		role,
+		Version,
+		BranchName,
+		CommitID,
+		runtime.Version(), runtime.GOOS, runtime.GOARCH, BuildTime)
 }

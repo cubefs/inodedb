@@ -1,0 +1,10 @@
+{
+    "role": "singleserver",
+    "grpc": "9021",
+    "http": "8080",
+    "prof": "9092",
+    "logLevel": "info",
+    "dataDir": "/export/Data/singleserver",
+    "logDir": "/export/Logs/singleserver"
+
+}

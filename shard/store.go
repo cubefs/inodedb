@@ -12,6 +12,6 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package shardserver
+package shard
 
-type ScalarIndex struct{}
+type Store struct{}

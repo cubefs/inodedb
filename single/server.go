@@ -16,15 +16,14 @@ package single
 
 import (
 	"context"
-	"github.com/cbuefs/inoder/errors"
-	"github.com/cubefs/inoder/proto"
+	"github.com/cubefs/inodedb/errors"
+	"github.com/cubefs/inodedb/proto"
 )
 
 type Server struct {
 	ctx context.Context
 
-	collectionStore *CollectionStore
-	shardStore      *ShardStore
+	catalog *Catalog
 }
 
 func NewServer() (*Server, error) {
@@ -39,31 +38,29 @@ func (s *Server) Stop() error {
 	return nil
 }
 
-func (s *Server) CreateCollection(ctx context.Context, req *proto.CreateCollectionRequest) (*proto.CreateCollectionResponse, error) {
-	// firstly, check if the colleciton already created
-	if s.collectionStore.Exists(req.CollectionName) {
-		err := errors.ErrCollectionAlreadyExists
+func (s *Server) CreateSpace(ctx context.Context, req *proto.CreateSpaceRequest) (*proto.CreateSpaceResponse, error) {
+	// firstly, check if the space already created
+	if s.catalog.exists(req.SpaceName) {
+		err := errors.ErrSpaceAlreadyExists
 		return nil, err
 	}
 
-	//then insert a record into collectionStore
-	if err := s.collecitonStore.Insert(req.CollectionName); err != nil {
+	if err := s.catalog.Create(req.SpaceName); err != nil {
 		return nil, err
 	}
-	return &proto.CreateCollectionResponse{}, nil
+	return &proto.CreateSpaceResponse{}, nil
 }
 
-func (s *Server) DeleteCollection(ctx context.Context, req *proto.DeleteCollectionRequest) (*proto.DeleteCollectionResponse, error) {
-
-	return &proto.DeleteCollectionResponse{}, nil
+func (s *Server) DeleteSpace(ctx context.Context, req *proto.DeleteSpaceRequest) (*proto.DeleteSpaceResponse, error) {
+	return &proto.DeleteSpaceResponse{}, nil
 }
 
-func (s *Server) AddItems(ctx context.Context, req *proto.AddItemsRequest) (*proto.AddItemsResponse, error) {
-	return &proto.AddDocumentsResponse{}, nil
+func (s *Server) UpsertItem(ctx context.Context, req *proto.UpsertItemRequest) (*proto.UpsertItemResponse, error) {
+	return &proto.UpsertItemResponse{}, nil
 }
 
-func (s *Server) DelItems(ctx context.Context, req *proto.DelItemsRequest) (*proto.DelItemsResponse, error) {
-	return &proto.DelItemsResponse{}, nil
+func (s *Server) DeleteItem(ctx context.Context, req *proto.DeleteItemRequest) (*proto.DeleteItemResponse, error) {
+	return &proto.DeleteItemResponse{}, nil
 }
 
 func (s *Server) Search(ctx context.Context, req *proto.SearchRequest) (*proto.SearchResponse, error) {

@@ -12,6 +12,16 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package shardserver
+package master
 
-type VectorIndex struct{}
+import (
+	"sync"
+)
+
+type Catalog struct {
+	Name         string
+	CreateTime   int64
+	spaces       map[string]*Space
+	mutex        sync.RWMutex
+	shardservers sync.Map
+}

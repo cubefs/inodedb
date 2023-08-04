@@ -15,8 +15,9 @@
 /*
 The Single Server Mode
 
-As v0.1, the single server model implements all the grpc+http interfaces defined in proto and provides a working collection service.
+As v0.1, the single server mode implements the grpc interfaces defined in proto.
 
+singleserver = master + shardserver
 
 */
 

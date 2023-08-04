@@ -1,5 +1,5 @@
-# inoder
+# InodeDB
 
-the next-gen metadata system of CubeFS
+the next-gen metadata service for unstructured data
 
 

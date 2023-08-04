@@ -12,21 +12,4 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package shardserver
-
-import (
-	"context"
-	"github.com/cubefs/inodedb/proto"
-)
-
-type ShardService struct{}
-
-func (s *ShardService) CreateShard(ctx *context.Context, req *proto.CreateShardRequest) (*proto.CreateShardResponse, error) {
-}
-
-func (s *ShardService) DeleteShard(ctx *context.Context, req *proto.DeleteShardRequest) (*proto.DeleteShardResponse, error) {
-}
-
-func (s *ShardService) Write()
-
-func (s *ShardService) Search()
+package server

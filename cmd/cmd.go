@@ -28,17 +28,15 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/cubefs/cubefs/cmd/common"
+	"github.com/jacobsa/daemonize"
+
 	"github.com/cubefs/cubefs/util/config"
 	"github.com/cubefs/cubefs/util/errors"
 	"github.com/cubefs/cubefs/util/log"
 	sysutil "github.com/cubefs/cubefs/util/sys"
 	"github.com/cubefs/cubefs/util/ump"
-	"github.com/cubefs/inodedb/inoder"
-	"github.com/cubefs/inodedb/master"
-	"github.com/cubefs/inodedb/merger"
 	"github.com/cubefs/inodedb/proto"
-	"github.com/jacobsa/daemonize"
+	"github.com/cubefs/inodedb/server"
 )
 
 const (
@@ -48,18 +46,6 @@ const (
 	ConfigKeyProfPort          = "prof"
 	ConfigKeyWarnLogDir        = "warnLogDir"
 	ConfigKeyBuffersTotalLimit = "buffersTotalLimit"
-)
-
-const (
-	RoleMaster = "master"
-	RoleInoder = "Inoder"
-	RoleRouter = "Router"
-)
-
-const (
-	ModuleMaster = "master"
-	ModuleInoder = "inoder"
-	ModuleRouter = "merger"
 )
 
 const (
@@ -73,7 +59,7 @@ var (
 	redirectSTD      = flag.Bool("redirect-std", true, "redirect standard output to file")
 )
 
-func interceptSignal(s common.Server) {
+func interceptSignal(s server.Server) {
 	sigC := make(chan os.Signal, 1)
 	signal.Notify(sigC, syscall.SIGINT, syscall.SIGTERM)
 	syslog.Println("action[interceptSignal] register system signal.")
@@ -147,26 +133,19 @@ func main() {
 	buffersTotalLimit := cfg.GetInt64(ConfigKeyBuffersTotalLimit)
 
 	// Init server instance with specified role configuration.
-	var (
-		server common.Server
-		module string
-	)
 	switch role {
-	case RoleInoder:
-		server = inoder.NewServer()
-		module = ModuleInoder
-	case RoleMaster:
-		server = master.NewServer()
-		module = ModuleMaster
-	case RoleMerger:
-		server = Merger.NewServer()
-		module = ModuleMerger
+	case "singleserver":
+	case "master":
+	case "shardserver":
+	case "router":
 	default:
 		err = errors.NewErrorf("Fatal: role mismatch: %s", role)
 		fmt.Println(err)
 		daemonize.SignalOutcome(err)
 		os.Exit(1)
 	}
+
+	server := server.NewServer()
 
 	// Init logging
 	var (
@@ -262,6 +241,7 @@ func main() {
 	}
 
 	interceptSignal(server)
+
 	err = server.Start(cfg)
 	if err != nil {
 		log.LogFlush()

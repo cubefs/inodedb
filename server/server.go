@@ -12,10 +12,23 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package proto
+package shardserver
 
-// the shard info
-type Shard struct{}
+import (
+	"context"
+	"github.com/cubefs/inodedb/proto"
+)
 
-// the shardserver metadata
-type ShardServer struct{}
+type Server struct{}
+
+func (s *Server) CreateShard(ctx *context.Context, req *proto.CreateShardRequest) (*proto.CreateShardResponse, error) {
+}
+
+func (s *Server) DeleteShard(ctx *context.Context, req *proto.DeleteShardRequest) (*proto.DeleteShardResponse, error) {
+}
+
+func (s *Server) UpsertItem() {}
+
+func (s *Server) DeleteItem() {}
+
+func (s *Server) GetItem() {}

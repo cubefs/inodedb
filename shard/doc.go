@@ -12,30 +12,23 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package single
+/*
 
-import (
-	"github.com/cubefs/inoder/errors"
-	"github.com/cubefs/inoder/proto"
-)
+Core data structures:
 
-type Shard struct {
-	id     proto.ShardId
-	cursor uint64
-	endIno unt64
+ShardStore
 
-	store *Store
-}
+ScalarIndex
 
-func (s *Shard) nextIno() (ino uint64, e error) {
-	for {
-		cur := atomic.LoadUint64(&s.cursor)
-		if cur >= s.endIno {
-			return 0, errors.ErrInoOutOfRange
-		}
-		newId := cur + 1
-		if atomic.CompareAndSwapUint64(&s.cursor, cur, newId) {
-			return newId, nil
-		}
-	}
-}
+VectorIndex
+
+WAL - the write-ahead log
+
+Core operations:
+
+## the write I/O path
+
+
+*/
+
+package shard

@@ -1,10 +1,11 @@
 {
     "role": "router",
-    "listen": "9088",
+    "grpc": "9088",
+    "http": "8080",
     "prof": "9089",
     "logLevel": "info",
-    "logDir": "/export/Logs/inoder",
+    "logDir": "/export/Logs/router",
     "masterAddr": [
-        "192.168.30.200:80"
+        "192.168.31.247:80"
     ]
 }

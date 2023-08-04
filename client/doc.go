@@ -14,7 +14,7 @@
 
 /*
 
-This is the native Go client library for the shardserver + master, called by the router and the Cubefs API nodes.
+This is the native Go client library for the InodeDB servers - singleserver, shardserver, master, and router, called by router, CubeFS API nodes, or other go applications
 
 */
 

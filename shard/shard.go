@@ -12,29 +12,30 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package proto
+package shard
 
 import (
-	"fmt"
-	"runtime"
+	"github.com/cubefs/inodedb/errors"
+	"github.com/cubefs/inodedb/proto"
 )
 
-var (
-	Version    string
-	CommitID   string
-	BranchName string
-	BuildTime  string
-)
+type Shard struct {
+	id     proto.ShardId
+	cursor uint64
+	endIno unt64
 
-func VersionInfo(role string) string {
-	return fmt.Sprintf("InodeDB %s\n"+
-		"Version : %s\n"+
-		"Branch  : %s\n"+
-		"Commit  : %s\n"+
-		"Build   : %s %s %s %s\n",
-		role,
-		Version,
-		BranchName,
-		CommitID,
-		runtime.Version(), runtime.GOOS, runtime.GOARCH, BuildTime)
+	store *Store
+}
+
+func (s *Shard) nextIno() (ino uint64, e error) {
+	for {
+		cur := atomic.LoadUint64(&s.cursor)
+		if cur >= s.endIno {
+			return 0, errors.ErrInoOutOfRange
+		}
+		newId := cur + 1
+		if atomic.CompareAndSwapUint64(&s.cursor, cur, newId) {
+			return newId, nil
+		}
+	}
 }

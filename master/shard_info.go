@@ -12,23 +12,7 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-/*
+package proto
 
-Core data structures:
-
-ShardStore
-
-ScalarIndex
-
-VectorIndex
-
-WAL - the write-ahead log
-
-Core operations:
-
-## the write I/O path
-
-
-*/
-
-package shardserver
+// the shard info
+type ShardInfo struct{}

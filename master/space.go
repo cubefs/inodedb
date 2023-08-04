@@ -12,8 +12,16 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-//the RPC client of ShardServer
+package master
 
-package shardserver
+import (
+	"sync"
+)
 
-type Client struct{}
+type Space struct {
+	name string
+	id   uint64
+
+	shards map[uint64]*ShardInfo
+	lock   sync.RWMutex
+}

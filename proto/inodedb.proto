@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package space;
+package inodedb;
 
-option go_package = "github.com/cubefs/inoder/proto";
+option go_package = "github.com/cubefs/inodedb/proto";
 
 enum NodeRole {
     	NODE_ROLE_SINGLE = 0;
@@ -66,7 +66,6 @@ message Item {
 message Link {
 	uint64 parent = 1;
 	string name = 2;
-
 	uint64 child = 3;
 	bytes fields = 4;
 }
@@ -83,14 +82,15 @@ message SpaceMeta {
 	repeated InoRange shards = 4;
 }
 
-service Space {
+service InodeDB {
 	rpc CreateSpace (CreateSpaceRequest) returns (CreateSpaceResponse) {}
 	rpc DeleteSpace (DeleteSpaceRequest) returns (DeleteSpaceResponse) {}
 	rpc GetSpace (GetSpaceRequest) returns (GetSpaceResponse) {}
 
 	rpc CreateShard (CreateShardRequest) returns (CreateShardResponse) {}
 	rpc DeleteShard (DeleteShardRequest) returns (DeleteShardResponse) {}
-	
+	rpc GetShard (GetShardRequest) returns (GetShardResponse) {}
+
 	rpc UpsertItem (UpsertItemRequest) returns (UpsertItemResponse) {}
     	rpc DeleteItem (DeleteItemRequest) returns (DeleteItemResponse) {}
 	rpc GetItem (GetItemRequest) returns (GetItemResponse) {}
@@ -99,8 +99,8 @@ service Space {
 	rpc Unlink (UnlinkRequest) returns (UnlinkResponse) {}
 
     	rpc Search (SearchRequest) returns (SearchResponse) {}
-	rpc Metrics (MetricsRequest) returns (MetricsResponse) {}
 
+	rpc Metrics (MetricsRequest) returns (MetricsResponse) {}
     	rpc Cluster (ClusterRequest) returns (ClusterResponse) {}
 }
 
@@ -116,7 +116,7 @@ message CreateSpaceRequest {
 }
 
 message CreateSpaceResponse { 
-	uint64 space_id = 1;
+	uint64 sid = 1;
 }
 
 message DeleteSpaceRequest {
@@ -144,7 +144,7 @@ message MetricsResponse {
 
 
 message CreateShardRequest {	
-    	uint64 sid = 1 [json_name="space_id"];
+    	string space_name = 1 [json_name="space_name"];
     	InoRange shard_id = 2 [json_name="shard_id"];
 }
 
@@ -152,15 +152,21 @@ message CreateShardResponse {
 }
 
 message DeleteShardRequest {	
-    	uint64 sid = 1 [json_name="space_id"];
+    	string space_name = 1 [json_name="space_name"];
     	InoRange shard_id = 2 [json_name="shard_id"];
 }
 
 message DeleteShardResponse {
 }
 
+message GetShardRequest {
+}
+
+message GetShardResponse {
+}
+
 message UpsertItemRequest {
-	uint64 sid = 1;;
+	string space_name = 1;
 	Item item = 2;	//insert if item.ino = 0 else update 
 }
 
@@ -169,7 +175,7 @@ message UpsertItemResponse {
 }
 
 message DeleteItemRequest {
-	uint64 sid = 1;
+	string space_name = 1;
 	uint64 ino = 2;
 }
 
@@ -177,7 +183,7 @@ message DeleteItemResponse {
 }
 
 message GetItemRequest {
-	uint64 sid = 1;
+	string space_name = 1;
 	uint64 ino = 2;
 }
 
@@ -186,14 +192,14 @@ message GetItemResponse {
 }
 
 message LinkRequest {
-	uint64 sid = 1; 
+	string space_name = 1;
 	Link link = 2;
 }
 
 message LinkResponse { }
 
 message UnlinkRequest {
-	uint64 sid = 1;
+	string space_name = 1;
 	Link link = 2;
 }
 

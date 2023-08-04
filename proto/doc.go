@@ -20,7 +20,7 @@
 The data model and communication protocol definitions
 
 
-* space.proto - all server roles share the same grpc service
+* inodedb.proto - all server roles share the same grpc service
 
 
 */
