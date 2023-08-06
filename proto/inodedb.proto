@@ -97,6 +97,7 @@ service InodeDB {
 	
 	rpc Link (LinkRequest) returns (LinkResponse) {}
 	rpc Unlink (UnlinkRequest) returns (UnlinkResponse) {}
+	rpc List (ListRequest) returns (ListResponse) {}
 
     	rpc Search (SearchRequest) returns (SearchResponse) {}
 
@@ -205,6 +206,17 @@ message UnlinkRequest {
 
 message UnlinkResponse { }
 
+message ListRequest {
+	string space_name = 1;
+	uint64 ino = 2;
+	uint32 start = 3;
+	uint32 num = 4;
+}
+
+message ListResponse {
+	uint32 num_links = 1;
+	repeated Link links = 2;
+}
 
 message Query { }
 

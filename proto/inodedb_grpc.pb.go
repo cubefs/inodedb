@@ -30,6 +30,7 @@ const (
 	InodeDB_GetItem_FullMethodName     = "/inodedb.InodeDB/GetItem"
 	InodeDB_Link_FullMethodName        = "/inodedb.InodeDB/Link"
 	InodeDB_Unlink_FullMethodName      = "/inodedb.InodeDB/Unlink"
+	InodeDB_List_FullMethodName        = "/inodedb.InodeDB/List"
 	InodeDB_Search_FullMethodName      = "/inodedb.InodeDB/Search"
 	InodeDB_Metrics_FullMethodName     = "/inodedb.InodeDB/Metrics"
 	InodeDB_Cluster_FullMethodName     = "/inodedb.InodeDB/Cluster"
@@ -50,6 +51,7 @@ type InodeDBClient interface {
 	GetItem(ctx context.Context, in *GetItemRequest, opts ...grpc.CallOption) (*GetItemResponse, error)
 	Link(ctx context.Context, in *LinkRequest, opts ...grpc.CallOption) (*LinkResponse, error)
 	Unlink(ctx context.Context, in *UnlinkRequest, opts ...grpc.CallOption) (*UnlinkResponse, error)
+	List(ctx context.Context, in *ListRequest, opts ...grpc.CallOption) (*ListResponse, error)
 	Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error)
 	Metrics(ctx context.Context, in *MetricsRequest, opts ...grpc.CallOption) (*MetricsResponse, error)
 	Cluster(ctx context.Context, in *ClusterRequest, opts ...grpc.CallOption) (*ClusterResponse, error)
@@ -162,6 +164,15 @@ func (c *inodeDBClient) Unlink(ctx context.Context, in *UnlinkRequest, opts ...g
 	return out, nil
 }
 
+func (c *inodeDBClient) List(ctx context.Context, in *ListRequest, opts ...grpc.CallOption) (*ListResponse, error) {
+	out := new(ListResponse)
+	err := c.cc.Invoke(ctx, InodeDB_List_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *inodeDBClient) Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error) {
 	out := new(SearchResponse)
 	err := c.cc.Invoke(ctx, InodeDB_Search_FullMethodName, in, out, opts...)
@@ -204,6 +215,7 @@ type InodeDBServer interface {
 	GetItem(context.Context, *GetItemRequest) (*GetItemResponse, error)
 	Link(context.Context, *LinkRequest) (*LinkResponse, error)
 	Unlink(context.Context, *UnlinkRequest) (*UnlinkResponse, error)
+	List(context.Context, *ListRequest) (*ListResponse, error)
 	Search(context.Context, *SearchRequest) (*SearchResponse, error)
 	Metrics(context.Context, *MetricsRequest) (*MetricsResponse, error)
 	Cluster(context.Context, *ClusterRequest) (*ClusterResponse, error)
@@ -246,6 +258,9 @@ func (UnimplementedInodeDBServer) Link(context.Context, *LinkRequest) (*LinkResp
 }
 func (UnimplementedInodeDBServer) Unlink(context.Context, *UnlinkRequest) (*UnlinkResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Unlink not implemented")
+}
+func (UnimplementedInodeDBServer) List(context.Context, *ListRequest) (*ListResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method List not implemented")
 }
 func (UnimplementedInodeDBServer) Search(context.Context, *SearchRequest) (*SearchResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Search not implemented")
@@ -467,6 +482,24 @@ func _InodeDB_Unlink_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _InodeDB_List_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InodeDBServer).List(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InodeDB_List_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InodeDBServer).List(ctx, req.(*ListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _InodeDB_Search_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SearchRequest)
 	if err := dec(in); err != nil {
@@ -571,6 +604,10 @@ var InodeDB_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Unlink",
 			Handler:    _InodeDB_Unlink_Handler,
+		},
+		{
+			MethodName: "List",
+			Handler:    _InodeDB_List_Handler,
 		},
 		{
 			MethodName: "Search",

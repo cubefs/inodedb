@@ -1,8 +1,8 @@
 # Single Server Mode
 
-Inoder supports running a single server for testing or prototyping  purposes, while the cluster mode works for production environments.
+InodeDB supports running a single server for testing or prototyping purposes, i.e., start it on a local machine. And the cluster mode works for production environments.
 
-The single server mode has no replication/distribution so does not provide reliability, high availability or scalability. 
+The single server mode has neither replication nor data distribution so does not guarantee reliability, high availability, and scalability. 
 
 However, it implements the same functional API as the cluster mode.
 
