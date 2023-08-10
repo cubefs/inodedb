@@ -70,16 +70,11 @@ message Link {
 	bytes fields = 4;
 }
 
-message InoRange {
-	uint64 start_ino = 1;
-	uint64 end_ino = 2;
-}
-
 message SpaceMeta {
 	string name = 1;
 	uint64 id = 2;
 	repeated FieldMeta fixed_fields = 3;
-	repeated InoRange shards = 4;
+	uint32 shards = 4;
 }
 
 service InodeDB {
@@ -87,11 +82,11 @@ service InodeDB {
 	rpc DeleteSpace (DeleteSpaceRequest) returns (DeleteSpaceResponse) {}
 	rpc GetSpace (GetSpaceRequest) returns (GetSpaceResponse) {}
 
-	rpc CreateShard (CreateShardRequest) returns (CreateShardResponse) {}
-	rpc DeleteShard (DeleteShardRequest) returns (DeleteShardResponse) {}
+	rpc AddShard (AddShardRequest) returns (AddShardResponse) {}
 	rpc GetShard (GetShardRequest) returns (GetShardResponse) {}
 
-	rpc UpsertItem (UpsertItemRequest) returns (UpsertItemResponse) {}
+	rpc InsertItem (InsertItemRequest) returns (InsertItemResponse) {}
+	rpc UpdateItem (UpdateItemRequest) returns (UpdateItemResponse) {}
     	rpc DeleteItem (DeleteItemRequest) returns (DeleteItemResponse) {}
 	rpc GetItem (GetItemRequest) returns (GetItemResponse) {}
 	
@@ -144,35 +139,37 @@ message MetricsResponse {
 }
 
 
-message CreateShardRequest {	
+message AddShardRequest {	
     	string space_name = 1 [json_name="space_name"];
-    	InoRange shard_id = 2 [json_name="shard_id"];
+	uint32 shard_no = 2 [json_name="shard_number"];
 }
 
-message CreateShardResponse {
+message AddShardResponse {
 }
 
-message DeleteShardRequest {	
+message GetShardRequest {	
     	string space_name = 1 [json_name="space_name"];
-    	InoRange shard_id = 2 [json_name="shard_id"];
-}
-
-message DeleteShardResponse {
-}
-
-message GetShardRequest {
+	uint32 shard_no = 2 [json_name="shard_number"];
 }
 
 message GetShardResponse {
 }
 
-message UpsertItemRequest {
+message InsertItemRequest {
 	string space_name = 1;
-	Item item = 2;	//insert if item.ino = 0 else update 
+	uint32 preferred_shard = 2;	// -1 if no preference
+	Item item = 3;	//item.ino = 0
+}
+message InsertItemResponse {
+	uint64 ino = 1;
 }
 
-message UpsertItemResponse {
-	uint64 ino = 1;
+message UpdateItemRequest {
+	string space_name = 1;
+	Item item = 2;
+}
+
+message UpdateItemResponse {
 }
 
 message DeleteItemRequest {
@@ -225,7 +222,7 @@ message HighlightRequest { }
 message SearchRequest {
     string space_name = 1 [json_name="space_name"];
     Query query = 2;
-    int32 count = 3;
+    uint32 count = 3;
     string sorted_by = 4[json_name="sorted_by"];
     repeated string fields = 5;
 }

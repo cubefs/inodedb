@@ -20,12 +20,13 @@ import (
 )
 
 type Shard struct {
-	id     proto.ShardId
+	no     uint32
 	cursor uint64
-	endIno unt64
 
 	store *Store
 }
+
+func NewShard() (s *Shard, e erro) {}
 
 func (s *Shard) nextIno() (ino uint64, e error) {
 	for {
@@ -35,7 +36,7 @@ func (s *Shard) nextIno() (ino uint64, e error) {
 		}
 		newId := cur + 1
 		if atomic.CompareAndSwapUint64(&s.cursor, cur, newId) {
-			return newId, nil
+			return newId + (s.no << 32), nil
 		}
 	}
 }

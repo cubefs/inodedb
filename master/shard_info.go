@@ -15,4 +15,6 @@
 package proto
 
 // the shard info
-type ShardInfo struct{}
+type ShardInfo struct {
+	shardNo uint32
+}

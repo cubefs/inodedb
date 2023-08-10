@@ -1,23 +1,3 @@
-/*
- *
- * Copyright 2023 CubeFS authors.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
-
-/*
-
 # InodeDB: the CubeFS metadata subsystem redefined
 
 ## Why re-design the metadata subsystem?
@@ -36,7 +16,7 @@ We define InodeDB as a specialized distributed document database used as the met
 
 * Item, ino --> fields, ino is uint64, and items are partitioned into 'shards' by ino ranges. An item can be represented as a JSON document.
 
-* Shard, the physical 'container' of items, working as the replication and storage unit.
+* Shard, the physical 'container' of items, working as the replication and storage unit. For simplicity we define each shard has a fixed ino range - 2^32.
 
 * Space, the logical namespace of items. While InodeDB is schemaless by design, all items of a collection typically have a similar structure (although they can have different fields) and work for the same application.
 
@@ -83,6 +63,3 @@ the Change Data Capture
 * Rocksdb
 * Prometheus
 
-*/
-
-package inodedb

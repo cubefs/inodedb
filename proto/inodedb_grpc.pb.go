@@ -22,10 +22,10 @@ const (
 	InodeDB_CreateSpace_FullMethodName = "/inodedb.InodeDB/CreateSpace"
 	InodeDB_DeleteSpace_FullMethodName = "/inodedb.InodeDB/DeleteSpace"
 	InodeDB_GetSpace_FullMethodName    = "/inodedb.InodeDB/GetSpace"
-	InodeDB_CreateShard_FullMethodName = "/inodedb.InodeDB/CreateShard"
-	InodeDB_DeleteShard_FullMethodName = "/inodedb.InodeDB/DeleteShard"
+	InodeDB_AddShard_FullMethodName    = "/inodedb.InodeDB/AddShard"
 	InodeDB_GetShard_FullMethodName    = "/inodedb.InodeDB/GetShard"
-	InodeDB_UpsertItem_FullMethodName  = "/inodedb.InodeDB/UpsertItem"
+	InodeDB_InsertItem_FullMethodName  = "/inodedb.InodeDB/InsertItem"
+	InodeDB_UpdateItem_FullMethodName  = "/inodedb.InodeDB/UpdateItem"
 	InodeDB_DeleteItem_FullMethodName  = "/inodedb.InodeDB/DeleteItem"
 	InodeDB_GetItem_FullMethodName     = "/inodedb.InodeDB/GetItem"
 	InodeDB_Link_FullMethodName        = "/inodedb.InodeDB/Link"
@@ -43,10 +43,10 @@ type InodeDBClient interface {
 	CreateSpace(ctx context.Context, in *CreateSpaceRequest, opts ...grpc.CallOption) (*CreateSpaceResponse, error)
 	DeleteSpace(ctx context.Context, in *DeleteSpaceRequest, opts ...grpc.CallOption) (*DeleteSpaceResponse, error)
 	GetSpace(ctx context.Context, in *GetSpaceRequest, opts ...grpc.CallOption) (*GetSpaceResponse, error)
-	CreateShard(ctx context.Context, in *CreateShardRequest, opts ...grpc.CallOption) (*CreateShardResponse, error)
-	DeleteShard(ctx context.Context, in *DeleteShardRequest, opts ...grpc.CallOption) (*DeleteShardResponse, error)
+	AddShard(ctx context.Context, in *AddShardRequest, opts ...grpc.CallOption) (*AddShardResponse, error)
 	GetShard(ctx context.Context, in *GetShardRequest, opts ...grpc.CallOption) (*GetShardResponse, error)
-	UpsertItem(ctx context.Context, in *UpsertItemRequest, opts ...grpc.CallOption) (*UpsertItemResponse, error)
+	InsertItem(ctx context.Context, in *InsertItemRequest, opts ...grpc.CallOption) (*InsertItemResponse, error)
+	UpdateItem(ctx context.Context, in *UpdateItemRequest, opts ...grpc.CallOption) (*UpdateItemResponse, error)
 	DeleteItem(ctx context.Context, in *DeleteItemRequest, opts ...grpc.CallOption) (*DeleteItemResponse, error)
 	GetItem(ctx context.Context, in *GetItemRequest, opts ...grpc.CallOption) (*GetItemResponse, error)
 	Link(ctx context.Context, in *LinkRequest, opts ...grpc.CallOption) (*LinkResponse, error)
@@ -92,18 +92,9 @@ func (c *inodeDBClient) GetSpace(ctx context.Context, in *GetSpaceRequest, opts 
 	return out, nil
 }
 
-func (c *inodeDBClient) CreateShard(ctx context.Context, in *CreateShardRequest, opts ...grpc.CallOption) (*CreateShardResponse, error) {
-	out := new(CreateShardResponse)
-	err := c.cc.Invoke(ctx, InodeDB_CreateShard_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *inodeDBClient) DeleteShard(ctx context.Context, in *DeleteShardRequest, opts ...grpc.CallOption) (*DeleteShardResponse, error) {
-	out := new(DeleteShardResponse)
-	err := c.cc.Invoke(ctx, InodeDB_DeleteShard_FullMethodName, in, out, opts...)
+func (c *inodeDBClient) AddShard(ctx context.Context, in *AddShardRequest, opts ...grpc.CallOption) (*AddShardResponse, error) {
+	out := new(AddShardResponse)
+	err := c.cc.Invoke(ctx, InodeDB_AddShard_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -119,9 +110,18 @@ func (c *inodeDBClient) GetShard(ctx context.Context, in *GetShardRequest, opts 
 	return out, nil
 }
 
-func (c *inodeDBClient) UpsertItem(ctx context.Context, in *UpsertItemRequest, opts ...grpc.CallOption) (*UpsertItemResponse, error) {
-	out := new(UpsertItemResponse)
-	err := c.cc.Invoke(ctx, InodeDB_UpsertItem_FullMethodName, in, out, opts...)
+func (c *inodeDBClient) InsertItem(ctx context.Context, in *InsertItemRequest, opts ...grpc.CallOption) (*InsertItemResponse, error) {
+	out := new(InsertItemResponse)
+	err := c.cc.Invoke(ctx, InodeDB_InsertItem_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inodeDBClient) UpdateItem(ctx context.Context, in *UpdateItemRequest, opts ...grpc.CallOption) (*UpdateItemResponse, error) {
+	out := new(UpdateItemResponse)
+	err := c.cc.Invoke(ctx, InodeDB_UpdateItem_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -207,10 +207,10 @@ type InodeDBServer interface {
 	CreateSpace(context.Context, *CreateSpaceRequest) (*CreateSpaceResponse, error)
 	DeleteSpace(context.Context, *DeleteSpaceRequest) (*DeleteSpaceResponse, error)
 	GetSpace(context.Context, *GetSpaceRequest) (*GetSpaceResponse, error)
-	CreateShard(context.Context, *CreateShardRequest) (*CreateShardResponse, error)
-	DeleteShard(context.Context, *DeleteShardRequest) (*DeleteShardResponse, error)
+	AddShard(context.Context, *AddShardRequest) (*AddShardResponse, error)
 	GetShard(context.Context, *GetShardRequest) (*GetShardResponse, error)
-	UpsertItem(context.Context, *UpsertItemRequest) (*UpsertItemResponse, error)
+	InsertItem(context.Context, *InsertItemRequest) (*InsertItemResponse, error)
+	UpdateItem(context.Context, *UpdateItemRequest) (*UpdateItemResponse, error)
 	DeleteItem(context.Context, *DeleteItemRequest) (*DeleteItemResponse, error)
 	GetItem(context.Context, *GetItemRequest) (*GetItemResponse, error)
 	Link(context.Context, *LinkRequest) (*LinkResponse, error)
@@ -235,17 +235,17 @@ func (UnimplementedInodeDBServer) DeleteSpace(context.Context, *DeleteSpaceReque
 func (UnimplementedInodeDBServer) GetSpace(context.Context, *GetSpaceRequest) (*GetSpaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSpace not implemented")
 }
-func (UnimplementedInodeDBServer) CreateShard(context.Context, *CreateShardRequest) (*CreateShardResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CreateShard not implemented")
-}
-func (UnimplementedInodeDBServer) DeleteShard(context.Context, *DeleteShardRequest) (*DeleteShardResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DeleteShard not implemented")
+func (UnimplementedInodeDBServer) AddShard(context.Context, *AddShardRequest) (*AddShardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddShard not implemented")
 }
 func (UnimplementedInodeDBServer) GetShard(context.Context, *GetShardRequest) (*GetShardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetShard not implemented")
 }
-func (UnimplementedInodeDBServer) UpsertItem(context.Context, *UpsertItemRequest) (*UpsertItemResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UpsertItem not implemented")
+func (UnimplementedInodeDBServer) InsertItem(context.Context, *InsertItemRequest) (*InsertItemResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method InsertItem not implemented")
+}
+func (UnimplementedInodeDBServer) UpdateItem(context.Context, *UpdateItemRequest) (*UpdateItemResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateItem not implemented")
 }
 func (UnimplementedInodeDBServer) DeleteItem(context.Context, *DeleteItemRequest) (*DeleteItemResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteItem not implemented")
@@ -338,38 +338,20 @@ func _InodeDB_GetSpace_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
-func _InodeDB_CreateShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CreateShardRequest)
+func _InodeDB_AddShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddShardRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(InodeDBServer).CreateShard(ctx, in)
+		return srv.(InodeDBServer).AddShard(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: InodeDB_CreateShard_FullMethodName,
+		FullMethod: InodeDB_AddShard_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(InodeDBServer).CreateShard(ctx, req.(*CreateShardRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _InodeDB_DeleteShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeleteShardRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(InodeDBServer).DeleteShard(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: InodeDB_DeleteShard_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(InodeDBServer).DeleteShard(ctx, req.(*DeleteShardRequest))
+		return srv.(InodeDBServer).AddShard(ctx, req.(*AddShardRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -392,20 +374,38 @@ func _InodeDB_GetShard_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
-func _InodeDB_UpsertItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UpsertItemRequest)
+func _InodeDB_InsertItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InsertItemRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(InodeDBServer).UpsertItem(ctx, in)
+		return srv.(InodeDBServer).InsertItem(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: InodeDB_UpsertItem_FullMethodName,
+		FullMethod: InodeDB_InsertItem_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(InodeDBServer).UpsertItem(ctx, req.(*UpsertItemRequest))
+		return srv.(InodeDBServer).InsertItem(ctx, req.(*InsertItemRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InodeDB_UpdateItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateItemRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InodeDBServer).UpdateItem(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InodeDB_UpdateItem_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InodeDBServer).UpdateItem(ctx, req.(*UpdateItemRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -574,20 +574,20 @@ var InodeDB_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _InodeDB_GetSpace_Handler,
 		},
 		{
-			MethodName: "CreateShard",
-			Handler:    _InodeDB_CreateShard_Handler,
-		},
-		{
-			MethodName: "DeleteShard",
-			Handler:    _InodeDB_DeleteShard_Handler,
+			MethodName: "AddShard",
+			Handler:    _InodeDB_AddShard_Handler,
 		},
 		{
 			MethodName: "GetShard",
 			Handler:    _InodeDB_GetShard_Handler,
 		},
 		{
-			MethodName: "UpsertItem",
-			Handler:    _InodeDB_UpsertItem_Handler,
+			MethodName: "InsertItem",
+			Handler:    _InodeDB_InsertItem_Handler,
+		},
+		{
+			MethodName: "UpdateItem",
+			Handler:    _InodeDB_UpdateItem_Handler,
 		},
 		{
 			MethodName: "DeleteItem",

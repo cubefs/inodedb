@@ -22,6 +22,6 @@ type Space struct {
 	name string
 	id   uint64
 
-	shards map[uint64]*ShardInfo
+	shards []*ShardInfo
 	lock   sync.RWMutex
 }
