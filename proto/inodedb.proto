@@ -1,30 +1,41 @@
 syntax = "proto3";
 
-package inodedb;
+package proto;
 
 option go_package = "github.com/cubefs/inodedb/proto";
 
+enum ClusterOperation {
+	OPERATION_JOIN = 0;
+	OPERATION_QUIT = 1;
+	OPERATION_OFFLINE = 2;
+}
+
+enum SpaceType {
+	SPACE_TYPE_NORMAL = 0;
+}
+
 enum NodeRole {
-    	NODE_ROLE_SINGLE = 0;
-    	NODE_ROLE_SHARDSERVER = 1;
+	NODE_ROLE_SINGLE = 0;
+	NODE_ROLE_SHARDSERVER = 1;
 	NODE_ROLE_MASTER = 2;
 	NODE_ROLE_ROUTER = 4;
 }
 
 enum NodeState {
-    	NODE_STATE_UNKNOWN = 0;
-    	NODE_STATE_ALIVE = 1;
-    	NODE_STATE_SUSPECT = 2;
-    	NODE_STATE_QUIT = 3;
+	NODE_STATE_UNKNOWN = 0;
+	NODE_STATE_ALIVE = 1;
+	NODE_STATE_SUSPECT = 2;
+	NODE_STATE_QUIT = 3;
 }
 
 message Node {
 	uint32 id = 1;
-    	string addr = 2;
-    	uint32 grpc_port = 3;
+	string addr = 2;
+	uint32 grpc_port = 3;
 	uint32 http_port = 4;
-	NodeRole roles = 5;
-	NodeState state = 6;
+	string az = 5;
+	NodeRole roles = 6;
+	NodeState state = 7;
 }
 
 enum FieldType {
@@ -35,11 +46,6 @@ enum FieldType {
 	EMBEDDING = 4;
 }
 
-message Embedding {
-	repeated float elements = 1;
-	string source = 2;
-}
-
 enum IndexOption {
 	Null = 0;
 	Indexed = 1;
@@ -47,10 +53,31 @@ enum IndexOption {
 	Unique = 3;
 }
 
-message FieldMeta {	
-	string name = 1;
-	FieldType type = 2;
-	IndexOption indexed = 3;
+message SpaceMeta {
+	uint64 sid = 1;
+	string name = 2;
+	SpaceType type = 3;
+	repeated FieldMeta fixed_fields = 4;
+	repeated Shard shards = 5;
+}
+
+message Shard {
+	uint32 shard_id = 1;
+	InoRange ino_range = 2;
+	uint64 ino_used = 3;
+	repeated Node replicates = 4;
+}
+
+message InoRange {
+	uint64 start_ino = 1;
+	uint64 end_ino = 2;
+	uint64 ino_limit = 3;
+}
+
+message Item {
+	uint64 ino = 1;
+	uint64 links = 2;
+	repeated Field fields = 3;
 }
 
 message Field {
@@ -58,9 +85,15 @@ message Field {
 	bytes value = 2;
 }
 
-message Item {
-	uint64 ino = 1;
-	repeated Field fields = 2;
+message FieldMeta {
+	string name = 1;
+	FieldType type = 2;
+	IndexOption indexed = 3;
+}
+
+message Embedding {
+	repeated float elements = 1;
+	string source = 2;
 }
 
 message Link {
@@ -70,167 +103,7 @@ message Link {
 	bytes fields = 4;
 }
 
-message InoRange {
-	uint64 start_ino = 1;
-	uint64 end_ino = 2;
-}
-
-message SpaceMeta {
-	string name = 1;
-	uint64 id = 2;
-	repeated FieldMeta fixed_fields = 3;
-	repeated InoRange shards = 4;
-}
-
-service InodeDB {
-	rpc CreateSpace (CreateSpaceRequest) returns (CreateSpaceResponse) {}
-	rpc DeleteSpace (DeleteSpaceRequest) returns (DeleteSpaceResponse) {}
-	rpc GetSpace (GetSpaceRequest) returns (GetSpaceResponse) {}
-
-	rpc CreateShard (CreateShardRequest) returns (CreateShardResponse) {}
-	rpc DeleteShard (DeleteShardRequest) returns (DeleteShardResponse) {}
-	rpc GetShard (GetShardRequest) returns (GetShardResponse) {}
-
-	rpc UpsertItem (UpsertItemRequest) returns (UpsertItemResponse) {}
-    	rpc DeleteItem (DeleteItemRequest) returns (DeleteItemResponse) {}
-	rpc GetItem (GetItemRequest) returns (GetItemResponse) {}
-	
-	rpc Link (LinkRequest) returns (LinkResponse) {}
-	rpc Unlink (UnlinkRequest) returns (UnlinkResponse) {}
-	rpc List (ListRequest) returns (ListResponse) {}
-
-    	rpc Search (SearchRequest) returns (SearchResponse) {}
-
-	rpc Metrics (MetricsRequest) returns (MetricsResponse) {}
-    	rpc Cluster (ClusterRequest) returns (ClusterResponse) {}
-}
-
-message ClusterRequest { 
-	string operation = 1;	//Join, Quit, et al.
-	Node node_info = 2;
-}
-
-message ClusterResponse { }
-
-message CreateSpaceRequest {
-	SpaceMeta config = 1;
-}
-
-message CreateSpaceResponse { 
-	uint64 sid = 1;
-}
-
-message DeleteSpaceRequest {
-	string name = 1;
-	uint64 sid = 2;
-}
-
-message DeleteSpaceResponse { }
-
-message GetSpaceRequest {
-	string name = 1;
-}
-
-message GetSpaceResponse {
-	SpaceMeta info = 1;
-}
-
-message MetricsRequest {
-	string keys = 1;
-}
-
-message MetricsResponse {
-	bytes metrics = 1;
-}
-
-
-message CreateShardRequest {	
-    	string space_name = 1 [json_name="space_name"];
-    	InoRange shard_id = 2 [json_name="shard_id"];
-}
-
-message CreateShardResponse {
-}
-
-message DeleteShardRequest {	
-    	string space_name = 1 [json_name="space_name"];
-    	InoRange shard_id = 2 [json_name="shard_id"];
-}
-
-message DeleteShardResponse {
-}
-
-message GetShardRequest {
-}
-
-message GetShardResponse {
-}
-
-message UpsertItemRequest {
-	string space_name = 1;
-	Item item = 2;	//insert if item.ino = 0 else update 
-}
-
-message UpsertItemResponse {
-	uint64 ino = 1;
-}
-
-message DeleteItemRequest {
-	string space_name = 1;
-	uint64 ino = 2;
-}
-
-message DeleteItemResponse {
-}
-
-message GetItemRequest {
-	string space_name = 1;
-	uint64 ino = 2;
-}
-
-message GetItemResponse {
-	Item item = 1;
-}
-
-message LinkRequest {
-	string space_name = 1;
-	Link link = 2;
-}
-
-message LinkResponse { }
-
-message UnlinkRequest {
-	string space_name = 1;
-	Link link = 2;
-}
-
-message UnlinkResponse { }
-
-message ListRequest {
-	string space_name = 1;
-	uint64 ino = 2;
-	uint32 start = 3;
-	uint32 num = 4;
-}
-
-message ListResponse {
-	uint32 num_links = 1;
-	repeated Link links = 2;
-}
-
-message Query { }
-
-message HighlightRequest { }
-
-message SearchRequest {
-    string space_name = 1 [json_name="space_name"];
-    Query query = 2;
-    int32 count = 3;
-    string sorted_by = 4[json_name="sorted_by"];
-    repeated string fields = 5;
-}
-
-message SearchResponse {
-    uint64 hits = 1;
-    repeated Item items = 2;
+message Unlink {
+	uint64 parent = 1;
+	string name = 2;
 }

@@ -12,15 +12,15 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package proto
+package errors
 
 import "errors"
 
+// common error definition
 var (
+	ErrNotFound                 = errors.New("error not found")
 	ErrCollectionDoesNotExist   = errors.New("the colleciton does not exist")
 	ErrCollectionAlreadyCreated = errors.New("the collection is already created")
-
-	ErrShardDoesNotExist = errors.New("shard does not exist")
 
 	ErrInoDoesNotExist = errors.New("ino does not exist")
 
@@ -35,6 +35,15 @@ var (
 	ErrUnknownFieldType = errors.New("unknown field type")
 
 	ErrUnknownIndexType = errors.New("unknown index type")
-
-	ErrInoOutOfRange = errors.New("ino out of range")
 )
+
+// server error definition
+var (
+	ErrInodeLimitExceed  = errors.New("inode limit exceed")
+	ErrInoOutOfRange     = errors.New("ino out of range")
+	ErrSpaceDoesNotExist = errors.New("space does do Exist")
+	ErrShardDoesNotExist = errors.New("shard does not exist")
+)
+
+// master error definition
+var ()

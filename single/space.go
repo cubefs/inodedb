@@ -17,7 +17,7 @@ package single
 import (
 	"sync"
 
-	"github.com/cubefs/inodedb/proto"
+	"github.com/cubefs/inodedb/shard"
 )
 
 type Space struct {

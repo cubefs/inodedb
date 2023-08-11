@@ -1,0 +1,157 @@
+syntax = "proto3";
+
+import "inodedb.proto";
+
+package proto;
+
+option go_package = "github.com/cubefs/inodedb/proto";
+
+service InodeDB {
+	rpc Cluster (ClusterRequest) returns (ClusterResponse) {}
+	rpc CreateSpace (CreateSpaceRequest) returns (CreateSpaceResponse) {}
+	rpc DeleteSpace (DeleteSpaceRequest) returns (DeleteSpaceResponse) {}
+	rpc GetSpace (GetSpaceRequest) returns (GetSpaceResponse) {}
+
+	rpc AddShard (AddShardRequest) returns (AddShardResponse) {}
+	rpc GetShard (GetShardRequest) returns (GetShardResponse) {}
+
+	rpc InsertItem (InsertItemRequest) returns (InsertItemResponse) {}
+	rpc UpdateItem (UpdateItemRequest) returns (UpdateItemResponse) {}
+	rpc DeleteItem (DeleteItemRequest) returns (DeleteItemResponse) {}
+	rpc GetItem (GetItemRequest) returns (GetItemResponse) {}
+	rpc Link (LinkRequest) returns (LinkResponse) {}
+	rpc Unlink (UnlinkRequest) returns (UnlinkResponse) {}
+	rpc List (ListRequest) returns (ListResponse) {}
+	rpc Search (SearchRequest) returns (SearchResponse) {}
+}
+
+message ClusterRequest {
+	ClusterOperation operation = 1;
+	Node node_info = 2;
+}
+
+message ClusterResponse { }
+
+message CreateSpaceRequest {
+	string name = 1;
+	SpaceType type = 2;
+	uint32 desired_shards = 3;
+	repeated FieldMeta fixed_fields = 4;
+}
+
+message CreateSpaceResponse {
+	SpaceMeta info = 2;
+}
+
+message DeleteSpaceRequest {
+	string name = 1;
+	optional uint64 sid = 2;
+}
+
+message DeleteSpaceResponse { }
+
+message GetSpaceRequest {
+	string name = 1;
+	optional uint64 sid = 2;
+}
+
+message GetSpaceResponse {
+	SpaceMeta info = 1;
+}
+
+message AddShardRequest {
+	string space_name = 1 [json_name="space_name"];
+	uint32 shard_id = 2 [json_name="shard_id"];
+	InoRange ino_range = 3 [json_name="ino_range"];
+	map<uint32, string> replicates = 4 [json_name="replicates"];
+}
+
+message AddShardResponse {
+}
+
+message GetShardRequest {
+	string space_name = 1 [json_name="space_name"];
+	uint32 shard_id = 2 [json_name="shard_id"];
+}
+
+message GetShardResponse {
+		Shard shard = 1;
+}
+
+message InsertItemRequest {
+	string space_name = 1;
+	uint32 preferred_shard = 2;	// -1 if no preference
+	Item item = 3;	//item.ino = 0
+}
+
+message InsertItemResponse {
+	uint64 ino = 1;
+}
+
+message UpdateItemRequest {
+	string space_name = 1;
+	Item item = 2;
+}
+
+message UpdateItemResponse {
+}
+
+message DeleteItemRequest {
+	string space_name = 1;
+	uint64 ino = 2;
+}
+
+message DeleteItemResponse {
+}
+
+message GetItemRequest {
+	string space_name = 1;
+	uint64 ino = 2;
+}
+
+message GetItemResponse {
+	Item item = 1;
+}
+
+message LinkRequest {
+	string space_name = 1;
+	Link link = 2;
+}
+
+message LinkResponse { }
+
+message UnlinkRequest {
+	string space_name = 1;
+	Unlink unlink = 2;
+}
+
+message UnlinkResponse { }
+
+message ListRequest {
+	string space_name = 1;
+	uint64 ino = 2;
+	string start = 3;
+	uint32 num = 4;
+}
+
+message ListResponse {
+	uint32 num_links = 1;
+	repeated Link links = 2;
+}
+
+message Query { }
+
+message HighlightRequest { }
+
+message SearchRequest {
+	string space_name = 1 [json_name="space_name"];
+	Query query = 2;
+	int32 count = 3;
+	string sorted_by = 4[json_name="sorted_by"];
+	repeated string fields = 5;
+}
+
+message SearchResponse {
+	uint64 hits = 1;
+	repeated Item items = 2;
+}

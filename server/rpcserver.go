@@ -13,3 +13,51 @@
 // permissions and limitations under the License.
 
 package server
+
+import (
+	"context"
+
+	"github.com/cubefs/inodedb/proto"
+)
+
+type RPCServer struct{}
+
+func (r *RPCServer) AddShard(ctx context.Context, req *proto.AddShardRequest) (*proto.AddShardResponse, error) {
+	return nil, nil
+}
+
+func (r *RPCServer) GetShard(context.Context, *proto.GetShardRequest) (*proto.GetShardResponse, error) {
+	return nil, nil
+}
+
+func (r *RPCServer) InsertItem(context.Context, *proto.InsertItemRequest) (*proto.InsertItemResponse, error) {
+	return nil, nil
+}
+
+func (r *RPCServer) UpdateItem(context.Context, *proto.UpdateItemRequest) (*proto.UpdateItemResponse, error) {
+	return nil, nil
+}
+
+func (r *RPCServer) DeleteItem(context.Context, *proto.DeleteItemRequest) (*proto.DeleteItemResponse, error) {
+	return nil, nil
+}
+
+func (r *RPCServer) GetItem(context.Context, *proto.GetItemRequest) (*proto.GetItemResponse, error) {
+	return nil, nil
+}
+
+func (r *RPCServer) Link(context.Context, *proto.LinkRequest) (*proto.LinkResponse, error) {
+	return nil, nil
+}
+
+func (r *RPCServer) Unlink(context.Context, *proto.UnlinkRequest) (*proto.UnlinkResponse, error) {
+	return nil, nil
+}
+
+func (r *RPCServer) List(context.Context, *proto.ListRequest) (*proto.ListResponse, error) {
+	return nil, nil
+}
+
+func (r *RPCServer) Search(context.Context, *proto.SearchRequest) (*proto.SearchResponse, error) {
+	return nil, nil
+}

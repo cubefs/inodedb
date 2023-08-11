@@ -14,21 +14,8 @@
 
 package server
 
-import (
-	"context"
-	"github.com/cubefs/inodedb/proto"
-)
+import "github.com/cubefs/inodedb/master/catalog"
 
-type Server struct{}
-
-func (s *Server) CreateShard(ctx *context.Context, req *proto.CreateShardRequest) (*proto.CreateShardResponse, error) {
+type Server struct {
+	catalog *catalog.Catalog
 }
-
-func (s *Server) DeleteShard(ctx *context.Context, req *proto.DeleteShardRequest) (*proto.DeleteShardResponse, error) {
-}
-
-func (s *Server) UpsertItem() {}
-
-func (s *Server) DeleteItem() {}
-
-func (s *Server) GetItem() {}
