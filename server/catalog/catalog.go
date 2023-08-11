@@ -1,4 +1,4 @@
-package route
+package catalog
 
 import (
 	"context"
@@ -12,10 +12,10 @@ type Catalog struct {
 	spaces sync.Map
 }
 
-func (c *Catalog) AddShard(ctx context.Context, spaceName string, shardID uint32, inoRange *proto.InoRange, replicates map[uint32]string) error {
+func (c *Catalog) AddShard(ctx context.Context, spaceName string, shardId uint32, inoRange *proto.InoRange, replicates map[uint32]string) error {
 	actual, _ := c.spaces.LoadOrStore(spaceName, &space{name: spaceName})
 	space := actual.(*space)
-	space.AddShard(ctx, shardID, inoRange, replicates)
+	space.AddShard(ctx, shardId, inoRange, replicates)
 	return nil
 }
 

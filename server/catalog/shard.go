@@ -1,4 +1,4 @@
-package route
+package catalog
 
 import (
 	"sync"
@@ -26,10 +26,10 @@ func (s *shardMeta) Copy() btree.Item {
 	return &(*s)
 }
 
-func newShard(shardID uint32, inoRange *proto.InoRange, replicates map[uint32]string) *shard {
+func newShard(shardId uint32, inoRange *proto.InoRange, replicates map[uint32]string) *shard {
 	shard := &shard{
 		shardMeta: &shardMeta{
-			id:       shardID,
+			id:       shardId,
 			inoRange: inoRange,
 		},
 		replicates: replicates,

@@ -1,4 +1,4 @@
-package route
+package catalog
 
 import (
 	"context"
@@ -17,9 +17,9 @@ type space struct {
 	shardsTree btree.BTree
 }
 
-func (s *space) AddShard(ctx context.Context, shardID uint32, inoRange *proto.InoRange, replicates map[uint32]string) {
-	new := newShard(shardID, inoRange, replicates)
-	actual, loaded := s.shards.LoadOrStore(shardID, new)
+func (s *space) AddShard(ctx context.Context, shardId uint32, inoRange *proto.InoRange, replicates map[uint32]string) {
+	new := newShard(shardId, inoRange, replicates)
+	actual, loaded := s.shards.LoadOrStore(shardId, new)
 	if loaded {
 		return
 	}

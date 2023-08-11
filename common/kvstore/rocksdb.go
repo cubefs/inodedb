@@ -113,18 +113,22 @@ func newRocksdb(ctx context.Context, path string, option *Option) (Store, error)
 		cfNames = append(cfNames, cols[i].String())
 		cfOpts = append(cfOpts, dbOpt)
 	}
+
 	db, cfhs, err := rdb.OpenDbColumnFamilies(dbOpt, path, cfNames, cfOpts)
 	if err != nil {
 		return nil, err
 	}
+
 	cfhMap := make(map[CF]*rdb.ColumnFamilyHandle)
 	for i, h := range cfhs {
 		cfhMap[cols[i]] = h
 	}
+
 	wo := rdb.NewDefaultWriteOptions()
 	if option.Sync {
 		wo.SetSync(option.Sync)
 	}
+
 	ro := rdb.NewDefaultReadOptions()
 
 	optHelper := &optHelper{db: db, opt: option}
@@ -834,11 +838,6 @@ func (oph *optHelper) SetIOWriteRateLimiter(value int64) error {
 	return nil
 }
 
-func formatFIFOCompactionOption(key, value string) ([]string, []string) {
-	s := fmt.Sprintf("%s=%s;", key, value)
-	return []string{"compaction_options_fifo"}, []string{s}
-}
-
 func (s *rocksdb) getColumnFamily(col CF) *rdb.ColumnFamilyHandle {
 	if col == "" {
 		col = defaultCF
@@ -969,4 +968,9 @@ func genRocksdbOpts(opt *Option) (opts *rdb.Options) {
 	opts.SetCreateIfMissingColumnFamilies(true)
 
 	return
+}
+
+func formatFIFOCompactionOption(key, value string) ([]string, []string) {
+	s := fmt.Sprintf("%s=%s;", key, value)
+	return []string{"compaction_options_fifo"}, []string{s}
 }

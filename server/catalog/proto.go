@@ -1,4 +1,4 @@
-package route
+package catalog
 
 // proto for storage encoding/decoding and function return value
 

@@ -20,14 +20,21 @@ import (
 	"github.com/cubefs/inodedb/proto"
 )
 
-type RPCServer struct{}
-
-func (r *RPCServer) AddShard(ctx context.Context, req *proto.AddShardRequest) (*proto.AddShardResponse, error) {
-	return nil, nil
+type RPCServer struct {
+	*Server
 }
 
-func (r *RPCServer) GetShard(context.Context, *proto.GetShardRequest) (*proto.GetShardResponse, error) {
-	return nil, nil
+func (r *RPCServer) AddShard(ctx context.Context, req *proto.AddShardRequest) (*proto.AddShardResponse, error) {
+	err := r.catalog.AddShard(ctx, req.SpaceName, req.ShardId, req.InoRange, req.Replicates)
+	return nil, err
+}
+
+func (r *RPCServer) GetShard(ctx context.Context, req *proto.GetShardRequest) (*proto.GetShardResponse, error) {
+	shard, err := r.catalog.GetShard(ctx, req.SpaceName, req.ShardId)
+	if err != nil {
+		return nil, err
+	}
+	return &proto.GetShardResponse{Shard: shard}, nil
 }
 
 func (r *RPCServer) InsertItem(context.Context, *proto.InsertItemRequest) (*proto.InsertItemResponse, error) {

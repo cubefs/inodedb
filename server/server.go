@@ -14,7 +14,7 @@
 
 package server
 
-import "github.com/cubefs/inodedb/master/catalog"
+import "github.com/cubefs/inodedb/server/catalog"
 
 type Server struct {
 	catalog *catalog.Catalog

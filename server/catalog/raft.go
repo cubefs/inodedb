@@ -1,4 +1,4 @@
-package route
+package catalog
 
 type RaftManager struct{}
 

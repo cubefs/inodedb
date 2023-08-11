@@ -38,7 +38,8 @@ type (
 	CF              string
 	LsmKVType       string
 	CompactionStyle string
-	Store           interface {
+
+	Store interface {
 		NewSnapshot() Snapshot
 		CreateColumn(col CF) error
 		GetAllColumns() []CF
@@ -138,6 +139,7 @@ type (
 		Close()
 		// Iterator()
 	}
+
 	Stats struct {
 		Used        uint64
 		MemoryUsage MemoryUsage
