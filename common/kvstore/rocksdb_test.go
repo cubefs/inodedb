@@ -12,7 +12,7 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package kv
+package kvstore
 
 import (
 	"context"
@@ -29,7 +29,7 @@ import (
 )
 
 type testEg struct {
-	engine KVStore
+	engine Store
 	path   string
 	opt    *Option
 }

@@ -12,7 +12,7 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package kv
+package kvstore
 
 import (
 	"context"
@@ -38,7 +38,7 @@ type (
 	CF              string
 	LsmKVType       string
 	CompactionStyle string
-	KVStore         interface {
+	Store           interface {
 		NewSnapshot() Snapshot
 		CreateColumn(col CF) error
 		GetAllColumns() []CF
@@ -190,7 +190,7 @@ type (
 	}
 )
 
-func NewKV(ctx context.Context, path string, lsmType LsmKVType, option *Option) (KVStore, error) {
+func NewKV(ctx context.Context, path string, lsmType LsmKVType, option *Option) (Store, error) {
 	switch lsmType {
 	case RocksdbEngineType:
 		return newRocksdb(ctx, path, option)

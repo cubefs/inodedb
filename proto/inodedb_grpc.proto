@@ -8,6 +8,9 @@ option go_package = "github.com/cubefs/inodedb/proto";
 
 service InodeDB {
 	rpc Cluster (ClusterRequest) returns (ClusterResponse) {}
+	rpc Heartbeat (HeartbeatRequest) returns (HeartbeatResponse) {}
+	rpc Report (ReportRequest) returns (ReportResponse) {}
+	rpc GetNode (GetNodeRequest) returns (GetNodeResponse) {}
 	rpc CreateSpace (CreateSpaceRequest) returns (CreateSpaceResponse) {}
 	rpc DeleteSpace (DeleteSpaceRequest) returns (DeleteSpaceResponse) {}
 	rpc GetSpace (GetSpaceRequest) returns (GetSpaceResponse) {}
@@ -37,6 +40,29 @@ message CreateSpaceRequest {
 	SpaceType type = 2;
 	uint32 desired_shards = 3;
 	repeated FieldMeta fixed_fields = 4;
+}
+
+message HeartbeatRequest {
+	uint32 id = 1;
+}
+
+message HeartbeatResponse {
+}
+
+message ReportRequest {
+	uint32 id = 1;
+	repeated ShardReport infos = 2;
+}
+
+message ReportResponse {
+}
+
+message GetNodeRequest {
+	uint32 id = 1;
+}
+
+message GetNodeResponse {
+	Node node_info = 1;
 }
 
 message CreateSpaceResponse {

@@ -1,11 +1,11 @@
 package store
 
-import "github.com/cubefs/inodedb/server/store/kv"
+import "github.com/cubefs/inodedb/common/kvstore"
 
 type Store struct {
-	kvStore kv.KVStore
+	kvStore kvstore.Store
 }
 
-func (s *Store) KVStore() kv.KVStore {
+func (s *Store) KVStore() kvstore.Store {
 	return s.kvStore
 }

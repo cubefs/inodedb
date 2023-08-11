@@ -23,3 +23,15 @@ func (s *RPCServer) DeleteSpace(context.Context, *proto.DeleteSpaceRequest) (*pr
 func (s *RPCServer) GetSpace(context.Context, *proto.GetSpaceRequest) (*proto.GetSpaceResponse, error) {
 	return nil, nil
 }
+
+func (s *RPCServer) Heartbeat(context.Context, *proto.HeartbeatRequest) (*proto.HeartbeatResponse, error) {
+	return nil, nil
+}
+
+func (s *RPCServer) Report(context.Context, *proto.ReportRequest) (*proto.ReportResponse, error) {
+	return nil, nil
+}
+
+func (s *RPCServer) GetNode(context.Context, *proto.GetNodeRequest) (*proto.GetNodeResponse, error) {
+	return nil, nil
+}

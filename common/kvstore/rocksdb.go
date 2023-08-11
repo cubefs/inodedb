@@ -12,7 +12,7 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package kv
+package kvstore
 
 import (
 	"bytes"
@@ -91,7 +91,7 @@ type (
 	}
 )
 
-func newRocksdb(ctx context.Context, path string, option *Option) (KVStore, error) {
+func newRocksdb(ctx context.Context, path string, option *Option) (Store, error) {
 	if path == "" {
 		return nil, errors.New("path is empty")
 	}

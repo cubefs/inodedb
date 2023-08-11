@@ -33,9 +33,10 @@ message Node {
 	string addr = 2;
 	uint32 grpc_port = 3;
 	uint32 http_port = 4;
-	string az = 5;
-	NodeRole roles = 6;
-	NodeState state = 7;
+	uint32 replica_port = 5;
+	string az = 6;
+	NodeRole roles = 7;
+	NodeState state = 8;
 }
 
 enum FieldType {
@@ -106,4 +107,8 @@ message Link {
 message Unlink {
 	uint64 parent = 1;
 	string name = 2;
+}
+
+message ShardReport {
+	Shard shard = 1;
 }
