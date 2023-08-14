@@ -16,6 +16,14 @@ package server
 
 import "github.com/cubefs/inodedb/server/catalog"
 
+const (
+	maxListNum = 1000
+)
+
 type Server struct {
 	catalog *catalog.Catalog
+}
+
+func NewServer() *Server {
+	return &Server{}
 }

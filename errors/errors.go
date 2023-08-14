@@ -39,10 +39,14 @@ var (
 
 // server error definition
 var (
-	ErrInodeLimitExceed  = errors.New("inode limit exceed")
-	ErrInoOutOfRange     = errors.New("ino out of range")
-	ErrSpaceDoesNotExist = errors.New("space does do Exist")
-	ErrShardDoesNotExist = errors.New("shard does not exist")
+	ErrInodeLimitExceed      = errors.New("inode limit exceed")
+	ErrInoOutOfRange         = errors.New("ino out of range")
+	ErrSpaceDoesNotExist     = errors.New("space does do Exist")
+	ErrShardDoesNotExist     = errors.New("shard does not exist")
+	ErrInoRangeNotFound      = errors.New("ino range not found")
+	ErrInoMismatchShardRange = errors.New("ino mismatch shard range")
+	ErrListNumExceed         = errors.New("list num exceed")
+	ErrInvalidShardID        = errors.New("invalid shard id")
 )
 
 // master error definition

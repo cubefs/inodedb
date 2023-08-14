@@ -1,31 +1,54 @@
 syntax = "proto3";
 
+import "google/protobuf/any.proto";
+
 package proto;
 
 option go_package = "github.com/cubefs/inodedb/proto";
 
 enum ClusterOperation {
-	OPERATION_JOIN = 0;
-	OPERATION_QUIT = 1;
-	OPERATION_OFFLINE = 2;
+	Join = 0;
+	Quit = 2;
 }
 
 enum SpaceType {
-	SPACE_TYPE_NORMAL = 0;
+	Normal = 0;
 }
 
 enum NodeRole {
-	NODE_ROLE_SINGLE = 0;
-	NODE_ROLE_SHARDSERVER = 1;
-	NODE_ROLE_MASTER = 2;
-	NODE_ROLE_ROUTER = 4;
+	Single = 0;
+	ShardServer = 1;
+	Master = 2;
+	Router = 3;
 }
 
 enum NodeState {
-	NODE_STATE_UNKNOWN = 0;
-	NODE_STATE_ALIVE = 1;
-	NODE_STATE_SUSPECT = 2;
-	NODE_STATE_QUIT = 3;
+	Unknown = 0;
+	Alive = 1;
+	Suspect = 2;
+	Quited = 3;
+}
+
+
+enum FieldType {
+	Bool = 0;
+	Int = 1;
+	Float = 2;
+	String = 3;
+	Embedding = 4;
+}
+
+enum IndexOption {
+	Null = 0;
+	Indexed = 1;
+	Fulltext = 2;
+	Unique = 3;
+}
+
+enum RouteItemType {
+	AddSpace = 0;
+	DeleteSpace = 1;
+	AddShard = 2;
 }
 
 message Node {
@@ -35,23 +58,8 @@ message Node {
 	uint32 http_port = 4;
 	uint32 replica_port = 5;
 	string az = 6;
-	NodeRole roles = 7;
+	NodeRole role = 7;
 	NodeState state = 8;
-}
-
-enum FieldType {
-	BOOL = 0;
-	INT = 1;
-	FLOAT = 2;
-	STRING = 3;
-	EMBEDDING = 4;
-}
-
-enum IndexOption {
-	Null = 0;
-	Indexed = 1;
-	Fulltext = 2;
-	Unique = 3;
 }
 
 message SpaceMeta {
@@ -63,10 +71,11 @@ message SpaceMeta {
 }
 
 message Shard {
-	uint32 shard_id = 1;
-	InoRange ino_range = 2;
-	uint64 ino_used = 3;
-	repeated Node replicates = 4;
+	uint64 route_version = 1;
+	uint32 shard_id = 2;
+	InoRange ino_range = 3;
+	uint64 ino_used = 4;
+	repeated Node replicates = 5;
 }
 
 message InoRange {
@@ -82,7 +91,7 @@ message Item {
 }
 
 message Field {
-	FieldMeta meta = 1;
+	string name = 1;
 	bytes value = 2;
 }
 
@@ -92,7 +101,7 @@ message FieldMeta {
 	IndexOption indexed = 3;
 }
 
-message Embedding {
+message EmbeddingField {
 	repeated float elements = 1;
 	string source = 2;
 }
@@ -111,4 +120,29 @@ message Unlink {
 
 message ShardReport {
 	Shard shard = 1;
+}
+
+message RouteItem {
+	uint64 route_version = 1;
+	RouteItemType type = 2;
+	google.protobuf.Any item =3;
+}
+
+message RouteItemSpaceAdd {
+	uint64 sid = 1;
+	string name = 2;
+	SpaceType type = 3;
+	repeated FieldMeta fixed_fields = 4;
+}
+
+message RouteItemSpaceDelete {
+	uint64 sid = 1;
+	optional string name = 2;
+}
+
+message RouteItemShardAdd {
+	string space_name = 1;
+	uint32 shard_id = 2;
+	InoRange ino_range = 3;
+	map<uint32, string> replicates = 4;
 }

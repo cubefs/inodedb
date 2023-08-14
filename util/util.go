@@ -20,7 +20,6 @@ import (
 	"net"
 	"os"
 	"reflect"
-	"strconv"
 	"unsafe"
 
 	"github.com/cubefs/cubefs/blobstore/util/bytespool"
@@ -38,16 +37,6 @@ func GenTmpPath() (string, error) {
 		return "", err
 	}
 	return path, nil
-}
-
-func GenTmpListen() (ln net.Listener, err error) {
-	for port := 30000; port < 35000; port++ {
-		ln, err = net.Listen("tcp4", "127.0.0.1:"+strconv.Itoa(port))
-		if err == nil {
-			return
-		}
-	}
-	return
 }
 
 func StringsToBytes(s string) []byte {
@@ -69,7 +58,6 @@ func GetLocalIp() (string, error) {
 	if err != nil {
 		return "", err
 	}
-
 	for _, address := range addresses {
 		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
 			if ipnet.IP.To4() != nil {
@@ -77,22 +65,7 @@ func GetLocalIp() (string, error) {
 			}
 		}
 	}
-
 	return "", errors.New("can not find the local ip address")
-}
-
-func GenUnusedPort() int {
-	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-	if err != nil {
-		return 0
-	}
-
-	l, err := net.ListenTCP("tcp", addr)
-	if err != nil {
-		return 0
-	}
-	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port
 }
 
 func GetBufferWriter(size int) *bytes.Buffer {

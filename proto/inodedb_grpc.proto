@@ -14,6 +14,7 @@ service InodeDB {
 	rpc CreateSpace (CreateSpaceRequest) returns (CreateSpaceResponse) {}
 	rpc DeleteSpace (DeleteSpaceRequest) returns (DeleteSpaceResponse) {}
 	rpc GetSpace (GetSpaceRequest) returns (GetSpaceResponse) {}
+	rpc GetRoute(GetRouteRequest) returns (GetRouteResponse) {}
 
 	rpc AddShard (AddShardRequest) returns (AddShardResponse) {}
 	rpc GetShard (GetShardRequest) returns (GetShardResponse) {}
@@ -33,7 +34,9 @@ message ClusterRequest {
 	Node node_info = 2;
 }
 
-message ClusterResponse { }
+message ClusterResponse {
+	uint32 id = 1;
+}
 
 message CreateSpaceRequest {
 	string name = 1;
@@ -86,10 +89,11 @@ message GetSpaceResponse {
 }
 
 message AddShardRequest {
-	string space_name = 1 [json_name="space_name"];
-	uint32 shard_id = 2 [json_name="shard_id"];
-	InoRange ino_range = 3 [json_name="ino_range"];
-	map<uint32, string> replicates = 4 [json_name="replicates"];
+	optional uint64 sid  = 1 [json_name="space_id"];
+	string space_name = 2 [json_name="space_name"];
+	uint32 shard_id = 3 [json_name="shard_id"];
+	InoRange ino_range = 4 [json_name="ino_range"];
+	map<uint32, string> replicates = 5 [json_name="replicates"];
 }
 
 message AddShardResponse {
@@ -180,4 +184,14 @@ message SearchRequest {
 message SearchResponse {
 	uint64 hits = 1;
 	repeated Item items = 2;
+}
+
+message GetRouteRequest {
+	uint64 route_version = 1;
+	uint32 node_id = 2;
+}
+
+message GetRouteResponse {
+	uint64 route_version = 1;
+	repeated RouteItem items = 2;
 }
