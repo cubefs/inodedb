@@ -52,4 +52,15 @@ var (
 )
 
 // master error definition
-var ()
+var (
+	ErrUnknownOperationType    = errors.New("unknown operation type")
+	ErrNodeAlreadyExist        = errors.New("node has exist")
+	ErrNodeNotExist            = errors.New("node not exist")
+	ErrAzNotExist              = errors.New("az not exist")
+	ErrNoAvailableNode         = errors.New("no available node")
+	ErrCreateShardAlreadyExist = errors.New("create shard already exist")
+	ErrRouteVersionConflict    = errors.New("route version conflict")
+	ErrInvalidSpaceID          = errors.New("invalid space id")
+	ErrSpaceNotExist           = errors.New("space not exist")
+	ErrShardNotExist           = errors.New("space not exist")
+)
