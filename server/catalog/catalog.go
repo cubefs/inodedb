@@ -13,6 +13,11 @@ import (
 	"github.com/cubefs/inodedb/server/store"
 )
 
+type Config struct {
+	StorePath  string   `json:"store_path"`
+	MasterAddr []string `json:"master_addr"`
+}
+
 type Catalog struct {
 	routeVersion uint64
 	transport    *transport
@@ -22,7 +27,11 @@ type Catalog struct {
 	done   chan struct{}
 }
 
-func (c *Catalog) AddShard(ctx context.Context, spaceName string, shardId uint32, inoRange *proto.InoRange, replicates map[uint32]string) error {
+func NewCatalog(cfg Config) *Catalog {
+	return &Catalog{}
+}
+
+func (c *Catalog) AddShard(ctx context.Context, spaceName string, shardId uint32, inoLimit uint64, replicates map[uint32]string) error {
 	span := trace.SpanFromContext(ctx)
 	v, ok := c.spaces.Load(spaceName)
 	if !ok {
@@ -37,7 +46,7 @@ func (c *Catalog) AddShard(ctx context.Context, spaceName string, shardId uint32
 		}
 	}
 	space := v.(*space)
-	space.AddShard(ctx, shardId, inoRange, replicates)
+	space.AddShard(ctx, shardId, inoLimit, replicates)
 	return nil
 }
 
@@ -50,19 +59,26 @@ func (c *Catalog) GetShard(ctx context.Context, spaceName string, shardID uint32
 	// TODO: transform replicates into nodes
 
 	return &proto.Shard{
-		ShardId:    shard.id,
-		InoRange:   &shardStat.inoRange,
+		ShardId:    shard.shardId,
+		InoLimit:   shardStat.inoLimit,
 		InoUsed:    shardStat.inoUsed,
 		Replicates: nil,
 	}, nil
 }
 
-func (c *Catalog) InsertItem(ctx context.Context, spaceName string, shardID uint32, item *proto.Item) (uint64, error) {
-	// TODO: check item field is valid
-	shard, err := c.getShard(ctx, spaceName, shardID)
+func (c *Catalog) InsertItem(ctx context.Context, spaceName string, shardId uint32, item *proto.Item) (uint64, error) {
+	space, err := c.getSpace(ctx, spaceName)
 	if err != nil {
 		return 0, err
 	}
+	if !space.ValidateFields(item.Fields) {
+		return 0, errors.ErrUnknownField
+	}
+	shard, err := space.GetShard(ctx, shardId)
+	if err != nil {
+		return 0, err
+	}
+
 	ino, err := shard.InsertItem(ctx, item)
 	if err != nil {
 		return 0, err
@@ -71,11 +87,18 @@ func (c *Catalog) InsertItem(ctx context.Context, spaceName string, shardID uint
 }
 
 func (c *Catalog) UpdateItem(ctx context.Context, spaceName string, item *proto.Item) error {
-	// TODO: check item field is valid
-	shard, err := c.locateShard(ctx, spaceName, item.Ino)
+	space, err := c.getSpace(ctx, spaceName)
 	if err != nil {
 		return err
 	}
+	if !space.ValidateFields(item.Fields) {
+		return errors.ErrUnknownField
+	}
+	shard := space.LocateShard(ctx, item.Ino)
+	if shard == nil {
+		return errors.ErrInoRangeNotFound
+	}
+
 	return shard.UpdateItem(ctx, item)
 }
 
@@ -148,30 +171,13 @@ func (c *Catalog) loop(ctx context.Context) {
 	}
 }
 
-func (c *Catalog) getShard(ctx context.Context, spaceName string, shardId uint32) (*shard, error) {
+func (c *Catalog) getSpace(ctx context.Context, spaceName string) (*space, error) {
 	v, ok := c.spaces.Load(spaceName)
 	if !ok {
 		return nil, errors.ErrSpaceDoesNotExist
 	}
 	space := v.(*space)
-	shard, err := space.GetShard(ctx, shardId)
-	if err != nil {
-		return nil, err
-	}
-	return shard, nil
-}
-
-func (c *Catalog) locateShard(ctx context.Context, spaceName string, ino uint64) (*shard, error) {
-	v, ok := c.spaces.Load(spaceName)
-	if !ok {
-		return nil, errors.ErrSpaceDoesNotExist
-	}
-	space := v.(*space)
-	shard := space.LocateShard(ctx, ino)
-	if shard == nil {
-		return nil, errors.ErrInoRangeNotFound
-	}
-	return shard, nil
+	return space, nil
 }
 
 // TODO: get altered shards, optimized the load of master
@@ -185,7 +191,7 @@ func (c *Catalog) updateRoute(ctx context.Context) error {
 		return err
 	}
 	for _, routeItem := range changes {
-		if routeItem.RouteVersion <= c.routeVersion {
+		if routeItem.RouteVersion <= atomic.LoadUint64(&c.routeVersion) {
 			continue
 		}
 		switch routeItem.Type {
@@ -194,15 +200,16 @@ func (c *Catalog) updateRoute(ctx context.Context) error {
 			if err := routeItem.Item.UnmarshalTo(spaceItem); err != nil {
 				return err
 			}
-			// as we don't need to update any space info
+			fixedFields := make(map[string]proto.FieldMeta, len(spaceItem.FixedFields))
+			for _, field := range spaceItem.FixedFields {
+				fixedFields[field.Name] = *field
+			}
 			c.spaces.LoadOrStore(spaceItem.Name, &space{
-				store: c.store,
-				meta: proto.SpaceMeta{
-					Sid:         spaceItem.Sid,
-					Name:        spaceItem.Name,
-					Type:        spaceItem.Type,
-					FixedFields: spaceItem.FixedFields,
-				},
+				store:       c.store,
+				sid:         spaceItem.Sid,
+				name:        spaceItem.Name,
+				spaceType:   spaceItem.Type,
+				fixedFields: fixedFields,
 			})
 		case proto.RouteItemType_DeleteSpace:
 			spaceItem := new(proto.RouteItemSpaceDelete)
@@ -232,4 +239,28 @@ func (c *Catalog) updateRouteVersion(new uint64) {
 			// otherwise, retry cas
 		}
 	}
+}
+
+func (c *Catalog) getShard(ctx context.Context, spaceName string, shardId uint32) (*shard, error) {
+	space, err := c.getSpace(ctx, spaceName)
+	if err != nil {
+		return nil, err
+	}
+	shard, err := space.GetShard(ctx, shardId)
+	if err != nil {
+		return nil, err
+	}
+	return shard, nil
+}
+
+func (c *Catalog) locateShard(ctx context.Context, spaceName string, ino uint64) (*shard, error) {
+	space, err := c.getSpace(ctx, spaceName)
+	if err != nil {
+		return nil, err
+	}
+	shard := space.LocateShard(ctx, ino)
+	if shard == nil {
+		return nil, errors.ErrInoRangeNotFound
+	}
+	return shard, nil
 }

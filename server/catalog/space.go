@@ -11,21 +11,27 @@ import (
 )
 
 type space struct {
+	// read only
+	sid         uint64
+	name        string
+	spaceType   proto.SpaceType
+	fixedFields map[string]proto.FieldMeta
+
 	shards     sync.Map
 	shardsTree btree.BTree
 	store      *store.Store
-
-	meta proto.SpaceMeta
+	lock       sync.RWMutex
 }
 
-func (s *space) AddShard(ctx context.Context, shardId uint32, inoRange *proto.InoRange, replicates map[uint32]string) {
-	new := newShard(s.meta.Sid, shardId, inoRange, replicates, s.store)
-	actual, loaded := s.shards.LoadOrStore(shardId, new)
+func (s *space) AddShard(ctx context.Context, shardId uint32, inoLimit uint64, replicates map[uint32]string) {
+	shard := newShard(s.sid, shardId, inoLimit, replicates, s.store)
+	_, loaded := s.shards.LoadOrStore(shardId, shard)
 	if loaded {
 		return
 	}
-	shard := actual.(*shard)
+	s.lock.Lock()
 	s.shardsTree.ReplaceOrInsert(shard.shardMeta)
+	s.lock.Unlock()
 	shard.Start()
 }
 
@@ -39,13 +45,20 @@ func (s *space) GetShard(ctx context.Context, shardID uint32) (*shard, error) {
 
 func (s *space) LocateShard(ctx context.Context, ino uint64) *shard {
 	found := s.shardsTree.Get(&shardMeta{
-		inoRange: &proto.InoRange{
-			StartIno: ino,
-		},
+		startIno: ino,
 	})
 	if found == nil {
 		return nil
 	}
-	v, _ := s.shards.Load(found.(*shardMeta).id)
+	v, _ := s.shards.Load(found.(*shardMeta).shardId)
 	return v.(*shard)
+}
+
+func (s *space) ValidateFields(fields []*proto.Field) bool {
+	for _, field := range fields {
+		if _, ok := s.fixedFields[field.Name]; !ok {
+			return false
+		}
+	}
+	return true
 }

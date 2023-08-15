@@ -16,7 +16,7 @@ type masterClient interface {
 	Heartbeat(context.Context, *proto.HeartbeatRequest) (*proto.HeartbeatResponse, error)
 	Report(context.Context, *proto.ReportRequest) (*proto.ReportResponse, error)
 	GetNode(context.Context, *proto.GetNodeRequest) (*proto.GetNodeResponse, error)
-	GetRoute(context.Context, *proto.GetRouteRequest) (*proto.GetRouteResponse, error)
+	GetCatalogChanges(context.Context, *proto.GetCatalogChangesRequest) (*proto.GetCatalogChangesResponse, error)
 }
 
 type nodeInfo struct {
@@ -59,7 +59,7 @@ func (t *transport) Register(ctx context.Context) error {
 }
 
 func (t *transport) GetRouteUpdate(ctx context.Context, routeVersion uint64) ([]*proto.RouteItem, error) {
-	resp, err := t.masterClient.GetRoute(ctx, &proto.GetRouteRequest{RouteVersion: routeVersion, NodeId: t.myself.id})
+	resp, err := t.masterClient.GetCatalogChanges(ctx, &proto.GetCatalogChangesRequest{RouteVersion: routeVersion, NodeId: t.myself.id})
 	if err != nil {
 		return nil, err
 	}

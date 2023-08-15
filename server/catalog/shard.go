@@ -20,25 +20,26 @@ import (
 const keyLocksNum = 1024
 
 type shardMeta struct {
-	id       uint32
-	inoRange *proto.InoRange
+	shardId  uint32
+	startIno uint64
 }
 
 func (s *shardMeta) Less(than btree.Item) bool {
 	thanShard := than.(*shardMeta)
-	return s.inoRange.StartIno < thanShard.inoRange.StartIno
+	return s.startIno < thanShard.startIno
 }
 
 func (s *shardMeta) Copy() btree.Item {
 	return &(*s)
 }
 
-func newShard(sid uint64, shardId uint32, inoRange *proto.InoRange, replicates map[uint32]string, store *store.Store) *shard {
+func newShard(spaceId uint64, shardId uint32, inoLimit uint64, replicates map[uint32]string, store *store.Store) *shard {
 	shard := &shard{
-		sid: sid,
+		inoLimit: inoLimit,
+		spaceId:  spaceId,
 		shardMeta: &shardMeta{
-			id:       shardId,
-			inoRange: inoRange,
+			shardId:  shardId,
+			startIno: uint64(shardId-1) * proto.ShardFixedRange,
 		},
 		replicates: replicates,
 		store:      store,
@@ -49,14 +50,15 @@ func newShard(sid uint64, shardId uint32, inoRange *proto.InoRange, replicates m
 type shardStat struct {
 	inoUsed    uint64
 	inoCursor  uint64
-	inoRange   proto.InoRange
+	inoLimit   uint64
 	replicates []uint32
 }
 
 type shard struct {
-	sid         uint64
-	inoCursor   uint64
+	cursor      uint64
+	inoLimit    uint64
 	inoUsed     uint64
+	spaceId     uint64
 	replicates  map[uint32]string
 	vectorIndex *vector.Index
 	scalarIndex *scalar.Index
@@ -119,6 +121,7 @@ func (s *shard) DeleteItem(ctx context.Context, ino uint64) error {
 	if err := kvStore.Delete(ctx, dataCF, s.encodeInoKey(ino), nil); err != nil {
 		return err
 	}
+	s.decreaseInoUsed()
 	return nil
 }
 
@@ -280,13 +283,13 @@ func (s *shard) Stats() *shardStat {
 	for i := range s.replicates {
 		replicates = append(replicates, i)
 	}
-	inoRange := *s.inoRange
+	inoLimit := s.inoLimit
 	s.lock.RUnlock()
 
 	return &shardStat{
 		inoUsed:    atomic.LoadUint64(&s.inoUsed),
-		inoCursor:  atomic.LoadUint64(&s.inoCursor),
-		inoRange:   inoRange,
+		inoCursor:  atomic.LoadUint64(&s.cursor),
+		inoLimit:   inoLimit,
 		replicates: replicates,
 	}
 }
@@ -296,37 +299,37 @@ func (s *shard) Start() {
 }
 
 func (s *shard) nextIno() (uint64, error) {
-	if s.inoUsed > s.inoRange.InoLimit {
+	if atomic.LoadUint64(&s.inoUsed) > s.inoLimit {
 		return 0, apierrors.ErrInodeLimitExceed
 	}
 	for {
-		cur := atomic.LoadUint64(&s.inoCursor)
-		if cur >= s.inoRange.EndIno {
+		cur := atomic.LoadUint64(&s.cursor)
+		if cur >= proto.ShardFixedRange {
 			return 0, apierrors.ErrInoOutOfRange
 		}
 		newId := cur + 1
-		if atomic.CompareAndSwapUint64(&s.inoCursor, cur, newId) {
-			atomic.AddUint64(&s.inoUsed, 1)
-			return newId, nil
+		if atomic.CompareAndSwapUint64(&s.cursor, cur, newId) {
+			s.increaseInoUsed()
+			return newId + s.startIno, nil
 		}
 	}
 }
 
 func (s *shard) checkInoMatchRange(ino uint64) bool {
-	return s.inoRange.StartIno >= ino && s.inoRange.EndIno > ino
+	return s.startIno >= ino && s.startIno+proto.ShardFixedRange > ino
 }
 
 func (s *shard) encodeInoKey(ino uint64) []byte {
-	key := make([]byte, shardDataPrefixSize(s.sid, s.id)+8)
-	encodeShardDataPrefix(s.sid, s.id, key)
+	key := make([]byte, shardDataPrefixSize(s.spaceId, s.shardId)+8)
+	encodeShardDataPrefix(s.spaceId, s.shardId, key)
 	encodeIno(ino, key[len(key)-8:])
 	return key
 }
 
 func (s *shard) encodeLinkKey(ino uint64, name string) []byte {
-	shardDataPrefixSize := shardDataPrefixSize(s.sid, s.id)
+	shardDataPrefixSize := shardDataPrefixSize(s.spaceId, s.shardId)
 	key := make([]byte, shardDataPrefixSize+8+len(infix)+len(name))
-	encodeShardDataPrefix(s.sid, s.id, key)
+	encodeShardDataPrefix(s.spaceId, s.shardId, key)
 	encodeIno(ino, key[shardDataPrefixSize:])
 	copy(key[shardDataPrefixSize+8:], infix)
 	copy(key[shardDataPrefixSize+8+len(infix):], util.StringsToBytes(name))
@@ -334,7 +337,7 @@ func (s *shard) encodeLinkKey(ino uint64, name string) []byte {
 }
 
 func (s *shard) decodeLinkKey(key []byte) (ino uint64, name string) {
-	shardDataPrefixSize := shardDataPrefixSize(s.sid, s.id)
+	shardDataPrefixSize := shardDataPrefixSize(s.spaceId, s.shardId)
 	ino = decodeIno(key[shardDataPrefixSize:])
 	nameRaw := make([]byte, len(key[shardDataPrefixSize+8+len(infix):]))
 	copy(nameRaw, key[shardDataPrefixSize+8+len(infix):])
@@ -343,9 +346,9 @@ func (s *shard) decodeLinkKey(key []byte) (ino uint64, name string) {
 }
 
 func (s *shard) encodeLinkKeyPrefix(ino uint64) []byte {
-	shardDataPrefixSize := shardDataPrefixSize(s.sid, s.id)
+	shardDataPrefixSize := shardDataPrefixSize(s.spaceId, s.shardId)
 	keyPrefix := make([]byte, shardDataPrefixSize+8+len(infix))
-	encodeShardDataPrefix(s.sid, s.id, keyPrefix)
+	encodeShardDataPrefix(s.spaceId, s.shardId, keyPrefix)
 	encodeIno(ino, keyPrefix[shardDataPrefixSize:])
 	copy(keyPrefix[shardDataPrefixSize+8:], infix)
 	return keyPrefix
@@ -356,4 +359,12 @@ func (s *shard) getKeyLock(key []byte) sync.Mutex {
 	crc32.Write(key)
 	idx := crc32.Sum32() % keyLocksNum
 	return s.keyLocks[idx]
+}
+
+func (s *shard) increaseInoUsed() {
+	atomic.AddUint64(&s.inoUsed, 1)
+}
+
+func (s *shard) decreaseInoUsed() {
+	atomic.AddUint64(&s.inoUsed, -1)
 }

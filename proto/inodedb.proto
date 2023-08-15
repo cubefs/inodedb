@@ -73,15 +73,9 @@ message SpaceMeta {
 message Shard {
 	uint64 route_version = 1;
 	uint32 shard_id = 2;
-	InoRange ino_range = 3;
+	uint64 ino_limit = 3;
 	uint64 ino_used = 4;
 	repeated Node replicates = 5;
-}
-
-message InoRange {
-	uint64 start_ino = 1;
-	uint64 end_ino = 2;
-	uint64 ino_limit = 3;
 }
 
 message Item {
@@ -143,6 +137,6 @@ message RouteItemSpaceDelete {
 message RouteItemShardAdd {
 	string space_name = 1;
 	uint32 shard_id = 2;
-	InoRange ino_range = 3;
+	uint64 ino_limit = 3;
 	map<uint32, string> replicates = 4;
 }

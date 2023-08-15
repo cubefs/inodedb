@@ -47,6 +47,7 @@ var (
 	ErrInoMismatchShardRange = errors.New("ino mismatch shard range")
 	ErrListNumExceed         = errors.New("list num exceed")
 	ErrInvalidShardID        = errors.New("invalid shard id")
+	ErrUnknownField          = errors.New("unknown field")
 )
 
 // master error definition
