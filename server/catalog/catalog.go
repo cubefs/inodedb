@@ -31,7 +31,15 @@ func NewCatalog(cfg Config) *Catalog {
 	return &Catalog{}
 }
 
-func (c *Catalog) AddShard(ctx context.Context, spaceName string, shardId uint32, inoLimit uint64, replicates map[uint32]string) error {
+func (c *Catalog) GetSpace(ctx context.Context, spaceName string) (*Space, error) {
+	space, err := c.getSpace(ctx, spaceName)
+	if err != nil {
+		return nil, err
+	}
+	return space, nil
+}
+
+func (c *Catalog) AddShard(ctx context.Context, spaceName string, shardId uint32, routeVersion uint64, inoLimit uint64, replicates map[uint32]string) error {
 	span := trace.SpanFromContext(ctx)
 	v, ok := c.spaces.Load(spaceName)
 	if !ok {
@@ -41,12 +49,12 @@ func (c *Catalog) AddShard(ctx context.Context, spaceName string, shardId uint32
 		}
 		v, ok = c.spaces.Load(spaceName)
 		if !ok {
-			span.Warnf("still can not get route update for space[%s]", spaceName)
+			span.Warnf("still can not get route update for Space[%s]", spaceName)
 			return errors.ErrSpaceDoesNotExist
 		}
 	}
-	space := v.(*space)
-	space.AddShard(ctx, shardId, inoLimit, replicates)
+	space := v.(*Space)
+	space.AddShard(ctx, shardId, routeVersion, inoLimit, replicates)
 	return nil
 }
 
@@ -56,95 +64,22 @@ func (c *Catalog) GetShard(ctx context.Context, spaceName string, shardID uint32
 		return nil, err
 	}
 	shardStat := shard.Stats()
-	// TODO: transform replicates into nodes
+	// transform into external nodes
+	nodes := make([]*proto.Node, 0, len(shardStat.nodes))
+	for _, nodeId := range shardStat.nodes {
+		nodeInfo, err := c.transport.GetNode(ctx, nodeId)
+		if err != nil {
+			return nil, err
+		}
+		nodes = append(nodes, internalNodeInfoToExternalNode(nodeInfo))
+	}
 
 	return &proto.Shard{
-		ShardId:    shard.shardId,
-		InoLimit:   shardStat.inoLimit,
-		InoUsed:    shardStat.inoUsed,
-		Replicates: nil,
+		Id:       shard.shardId,
+		InoLimit: shardStat.inoLimit,
+		InoUsed:  shardStat.inoUsed,
+		Nodes:    nodes,
 	}, nil
-}
-
-func (c *Catalog) InsertItem(ctx context.Context, spaceName string, shardId uint32, item *proto.Item) (uint64, error) {
-	space, err := c.getSpace(ctx, spaceName)
-	if err != nil {
-		return 0, err
-	}
-	if !space.ValidateFields(item.Fields) {
-		return 0, errors.ErrUnknownField
-	}
-	shard, err := space.GetShard(ctx, shardId)
-	if err != nil {
-		return 0, err
-	}
-
-	ino, err := shard.InsertItem(ctx, item)
-	if err != nil {
-		return 0, err
-	}
-	return ino, nil
-}
-
-func (c *Catalog) UpdateItem(ctx context.Context, spaceName string, item *proto.Item) error {
-	space, err := c.getSpace(ctx, spaceName)
-	if err != nil {
-		return err
-	}
-	if !space.ValidateFields(item.Fields) {
-		return errors.ErrUnknownField
-	}
-	shard := space.LocateShard(ctx, item.Ino)
-	if shard == nil {
-		return errors.ErrInoRangeNotFound
-	}
-
-	return shard.UpdateItem(ctx, item)
-}
-
-func (c *Catalog) DeleteItem(ctx context.Context, spaceName string, ino uint64) error {
-	shard, err := c.locateShard(ctx, spaceName, ino)
-	if err != nil {
-		return err
-	}
-	return shard.DeleteItem(ctx, ino)
-}
-
-func (c *Catalog) GetItem(ctx context.Context, spaceName string, ino uint64) (*proto.Item, error) {
-	shard, err := c.locateShard(ctx, spaceName, ino)
-	if err != nil {
-		return nil, err
-	}
-	return shard.GetItem(ctx, ino)
-}
-
-func (c *Catalog) Link(ctx context.Context, spaceName string, link *proto.Link) error {
-	shard, err := c.locateShard(ctx, spaceName, link.Parent)
-	if err != nil {
-		return err
-	}
-	return shard.Link(ctx, link)
-}
-
-func (c *Catalog) Unlink(ctx context.Context, spaceName string, unlink *proto.Unlink) error {
-	shard, err := c.locateShard(ctx, spaceName, unlink.Parent)
-	if err != nil {
-		return err
-	}
-	return shard.Unlink(ctx, unlink.Parent, unlink.Name)
-}
-
-func (c *Catalog) List(ctx context.Context, req *proto.ListRequest) ([]*proto.Link, error) {
-	shard, err := c.locateShard(ctx, req.SpaceName, req.Ino)
-	if err != nil {
-		return nil, err
-	}
-	return shard.List(ctx, req.Ino, req.Start, req.Num)
-}
-
-func (c *Catalog) Search(ctx context.Context) error {
-	// todo
-	return nil
 }
 
 func (c *Catalog) loop(ctx context.Context) {
@@ -171,17 +106,33 @@ func (c *Catalog) loop(ctx context.Context) {
 	}
 }
 
-func (c *Catalog) getSpace(ctx context.Context, spaceName string) (*space, error) {
+func (c *Catalog) getSpace(ctx context.Context, spaceName string) (*Space, error) {
 	v, ok := c.spaces.Load(spaceName)
 	if !ok {
 		return nil, errors.ErrSpaceDoesNotExist
 	}
-	space := v.(*space)
+	space := v.(*Space)
 	return space, nil
 }
 
 // TODO: get altered shards, optimized the load of master
 func (c *Catalog) getAlteredShards() []*proto.ShardReport {
+	ret := make([]*proto.ShardReport, 0, 1<<10)
+	c.spaces.Range(func(key, value interface{}) bool {
+		space := value.(*Space)
+		space.shards.Range(func(key, value interface{}) bool {
+			shard := value.(*shard)
+			stats := shard.Stats()
+			ret = append(ret, &proto.ShardReport{Shard: &proto.Shard{
+				RouteVersion: stats.routeVersion,
+				Id:           shard.shardId,
+				InoLimit:     stats.inoLimit,
+				InoUsed:      stats.inoUsed,
+			}})
+			return true
+		})
+		return true
+	})
 	return nil
 }
 
@@ -195,8 +146,8 @@ func (c *Catalog) updateRoute(ctx context.Context) error {
 			continue
 		}
 		switch routeItem.Type {
-		case proto.RouteItemType_AddSpace:
-			spaceItem := new(proto.RouteItemSpaceAdd)
+		case proto.CatalogChangeType_AddSpace:
+			spaceItem := new(proto.CatalogChangeSpaceAdd)
 			if err := routeItem.Item.UnmarshalTo(spaceItem); err != nil {
 				return err
 			}
@@ -204,15 +155,15 @@ func (c *Catalog) updateRoute(ctx context.Context) error {
 			for _, field := range spaceItem.FixedFields {
 				fixedFields[field.Name] = *field
 			}
-			c.spaces.LoadOrStore(spaceItem.Name, &space{
+			c.spaces.LoadOrStore(spaceItem.Name, &Space{
 				store:       c.store,
 				sid:         spaceItem.Sid,
 				name:        spaceItem.Name,
 				spaceType:   spaceItem.Type,
 				fixedFields: fixedFields,
 			})
-		case proto.RouteItemType_DeleteSpace:
-			spaceItem := new(proto.RouteItemSpaceDelete)
+		case proto.CatalogChangeType_DeleteSpace:
+			spaceItem := new(proto.CatalogChangeSpaceDelete)
 			if err := routeItem.Item.UnmarshalTo(spaceItem); err != nil {
 				return err
 			}
@@ -253,14 +204,15 @@ func (c *Catalog) getShard(ctx context.Context, spaceName string, shardId uint32
 	return shard, nil
 }
 
-func (c *Catalog) locateShard(ctx context.Context, spaceName string, ino uint64) (*shard, error) {
-	space, err := c.getSpace(ctx, spaceName)
-	if err != nil {
-		return nil, err
+func internalNodeInfoToExternalNode(info *nodeInfo) *proto.Node {
+	return &proto.Node{
+		Id:       info.id,
+		Addr:     info.addr,
+		GrpcPort: info.grpcPort,
+		HttpPort: info.httpPort,
+		RaftPort: info.raftPort,
+		Az:       info.az,
+		Role:     info.role,
+		State:    info.state,
 	}
-	shard := space.LocateShard(ctx, ino)
-	if shard == nil {
-		return nil, errors.ErrInoRangeNotFound
-	}
-	return shard, nil
 }

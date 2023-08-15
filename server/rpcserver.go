@@ -26,7 +26,7 @@ type RPCServer struct {
 }
 
 func (r *RPCServer) AddShard(ctx context.Context, req *proto.AddShardRequest) (*proto.AddShardResponse, error) {
-	err := r.catalog.AddShard(ctx, req.SpaceName, req.ShardId, req.InoRange, req.Replicates)
+	err := r.catalog.AddShard(ctx, req.SpaceName, req.ShardId, req.RouteVersion, req.InoLimit, req.Replicates)
 	return nil, err
 }
 
@@ -42,7 +42,11 @@ func (r *RPCServer) InsertItem(ctx context.Context, req *proto.InsertItemRequest
 	if req.PreferredShard == 0 {
 		return nil, errors.ErrInvalidShardID
 	}
-	ino, err := r.catalog.InsertItem(ctx, req.SpaceName, req.PreferredShard, req.Item)
+	space, err := r.catalog.GetSpace(ctx, req.SpaceName)
+	if err != nil {
+		return nil, err
+	}
+	ino, err := space.InsertItem(ctx, req.PreferredShard, req.Item)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +54,11 @@ func (r *RPCServer) InsertItem(ctx context.Context, req *proto.InsertItemRequest
 }
 
 func (r *RPCServer) UpdateItem(ctx context.Context, req *proto.UpdateItemRequest) (*proto.UpdateItemResponse, error) {
-	err := r.catalog.UpdateItem(ctx, req.SpaceName, req.Item)
+	space, err := r.catalog.GetSpace(ctx, req.SpaceName)
+	if err != nil {
+		return nil, err
+	}
+	err = space.UpdateItem(ctx, req.Item)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +66,11 @@ func (r *RPCServer) UpdateItem(ctx context.Context, req *proto.UpdateItemRequest
 }
 
 func (r *RPCServer) DeleteItem(ctx context.Context, req *proto.DeleteItemRequest) (*proto.DeleteItemResponse, error) {
-	err := r.catalog.DeleteItem(ctx, req.SpaceName, req.Ino)
+	space, err := r.catalog.GetSpace(ctx, req.SpaceName)
+	if err != nil {
+		return nil, err
+	}
+	err = space.DeleteItem(ctx, req.Ino)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +78,11 @@ func (r *RPCServer) DeleteItem(ctx context.Context, req *proto.DeleteItemRequest
 }
 
 func (r *RPCServer) GetItem(ctx context.Context, req *proto.GetItemRequest) (*proto.GetItemResponse, error) {
-	item, err := r.catalog.GetItem(ctx, req.SpaceName, req.Ino)
+	space, err := r.catalog.GetSpace(ctx, req.SpaceName)
+	if err != nil {
+		return nil, err
+	}
+	item, err := space.GetItem(ctx, req.Ino)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +90,11 @@ func (r *RPCServer) GetItem(ctx context.Context, req *proto.GetItemRequest) (*pr
 }
 
 func (r *RPCServer) Link(ctx context.Context, req *proto.LinkRequest) (*proto.LinkResponse, error) {
-	err := r.catalog.Link(ctx, req.SpaceName, req.Link)
+	space, err := r.catalog.GetSpace(ctx, req.SpaceName)
+	if err != nil {
+		return nil, err
+	}
+	err = space.Link(ctx, req.Link)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +102,11 @@ func (r *RPCServer) Link(ctx context.Context, req *proto.LinkRequest) (*proto.Li
 }
 
 func (r *RPCServer) Unlink(ctx context.Context, req *proto.UnlinkRequest) (*proto.UnlinkResponse, error) {
-	err := r.catalog.Unlink(ctx, req.SpaceName, req.Unlink)
+	space, err := r.catalog.GetSpace(ctx, req.SpaceName)
+	if err != nil {
+		return nil, err
+	}
+	err = space.Unlink(ctx, req.Unlink)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +117,11 @@ func (r *RPCServer) List(ctx context.Context, req *proto.ListRequest) (*proto.Li
 	if req.Num > maxListNum {
 		return nil, errors.ErrListNumExceed
 	}
-	links, err := r.catalog.List(ctx, req)
+	space, err := r.catalog.GetSpace(ctx, req.SpaceName)
+	if err != nil {
+		return nil, err
+	}
+	links, err := space.List(ctx, req)
 	if err != nil {
 		return nil, err
 	}

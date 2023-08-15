@@ -12,7 +12,7 @@ enum ClusterOperation {
 }
 
 enum SpaceType {
-	Normal = 0;
+	Inode = 0;
 }
 
 enum NodeRole {
@@ -29,7 +29,6 @@ enum NodeState {
 	Quited = 3;
 }
 
-
 enum FieldType {
 	Bool = 0;
 	Int = 1;
@@ -45,7 +44,7 @@ enum IndexOption {
 	Unique = 3;
 }
 
-enum RouteItemType {
+enum CatalogChangeType {
 	AddSpace = 0;
 	DeleteSpace = 1;
 	AddShard = 2;
@@ -56,7 +55,7 @@ message Node {
 	string addr = 2;
 	uint32 grpc_port = 3;
 	uint32 http_port = 4;
-	uint32 replica_port = 5;
+	uint32 raft_port = 5;
 	string az = 6;
 	NodeRole role = 7;
 	NodeState state = 8;
@@ -72,10 +71,10 @@ message SpaceMeta {
 
 message Shard {
 	uint64 route_version = 1;
-	uint32 shard_id = 2;
+	uint32 id = 2;
 	uint64 ino_limit = 3;
 	uint64 ino_used = 4;
-	repeated Node replicates = 5;
+	repeated Node nodes = 5; // nodes related to replicate nodes or stripe nodes
 }
 
 message Item {
@@ -104,7 +103,7 @@ message Link {
 	uint64 parent = 1;
 	string name = 2;
 	uint64 child = 3;
-	bytes fields = 4;
+	repeated Field fields = 4;
 }
 
 message Unlink {
@@ -116,25 +115,25 @@ message ShardReport {
 	Shard shard = 1;
 }
 
-message RouteItem {
+message CatalogChangeItem {
 	uint64 route_version = 1;
-	RouteItemType type = 2;
+	CatalogChangeType type = 2;
 	google.protobuf.Any item =3;
 }
 
-message RouteItemSpaceAdd {
+message CatalogChangeSpaceAdd {
 	uint64 sid = 1;
 	string name = 2;
 	SpaceType type = 3;
 	repeated FieldMeta fixed_fields = 4;
 }
 
-message RouteItemSpaceDelete {
+message CatalogChangeSpaceDelete {
 	uint64 sid = 1;
 	optional string name = 2;
 }
 
-message RouteItemShardAdd {
+message CatalogChangeShardAdd {
 	string space_name = 1;
 	uint32 shard_id = 2;
 	uint64 ino_limit = 3;

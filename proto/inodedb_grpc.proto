@@ -89,11 +89,12 @@ message GetSpaceResponse {
 }
 
 message AddShardRequest {
-	optional uint64 sid  = 1 [json_name="space_id"];
-	string space_name = 2 [json_name="space_name"];
-	uint32 shard_id = 3 [json_name="shard_id"];
-	uint64 ino_limit = 4 [json_name="ino_limit"];
-	map<uint32, string> replicates = 5 [json_name="replicates"];
+	optional uint64 sid  = 2 [json_name="space_id"];
+	string space_name = 3 [json_name="space_name"];
+	uint32 shard_id = 4 [json_name="shard_id"];
+	uint64 route_version = 1 [json_name="route_version"];
+	uint64 ino_limit = 5 [json_name="ino_limit"];
+	map<uint32, string> replicates = 6 [json_name="replicates"];
 }
 
 message AddShardResponse {
@@ -193,5 +194,5 @@ message GetCatalogChangesRequest {
 
 message GetCatalogChangesResponse {
 	uint64 route_version = 1;
-	repeated RouteItem items = 2;
+	repeated CatalogChangeItem items = 2;
 }

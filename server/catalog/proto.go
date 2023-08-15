@@ -11,18 +11,14 @@ const (
 )
 
 var (
-	infix      = []byte{'/'}
-	dataSuffix = []byte{'d'}
-	raftSuffix = []byte{'r'}
+	infix       = []byte{'/'}
+	inodeSuffix = []byte{'i'}
+	raftSuffix  = []byte{'r'}
 )
 
 type Timestamp struct{}
 
 // proto for storage encoding/decoding and function return value
-
-type spaceInfo struct{}
-
-type shardInfo struct{}
 
 type item struct {
 	ino    uint64
@@ -63,7 +59,7 @@ type field struct {
 }
 
 func shardDataPrefixSize(sid uint64, shardId uint32) int {
-	return 8 + len(infix) + 4 + len(dataSuffix)
+	return 8 + len(infix) + 4 + len(inodeSuffix)
 }
 
 func shardRaftPrefixSize(sid uint64, shardId uint32) int {
@@ -78,7 +74,7 @@ func encodeShardDataPrefix(sid uint64, shardId uint32, raw []byte) {
 	binary.BigEndian.PutUint64(raw[:8], sid)
 	copy(raw[8:], infix)
 	binary.BigEndian.PutUint32(raw[8+infixSize:], shardId)
-	copy(raw[8+infixSize+4:], dataSuffix)
+	copy(raw[8+infixSize+4:], inodeSuffix)
 }
 
 func encodeShardRaftPrefix(sid uint64, shardId uint32, raw []byte) {

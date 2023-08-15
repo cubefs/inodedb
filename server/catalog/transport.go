@@ -20,14 +20,14 @@ type masterClient interface {
 }
 
 type nodeInfo struct {
-	id          uint32
-	addr        string
-	grpcPort    uint32
-	httpPort    uint32
-	replicaPort uint32
-	az          string
-	role        proto.NodeRole
-	state       proto.NodeState
+	id       uint32
+	addr     string
+	grpcPort uint32
+	httpPort uint32
+	raftPort uint32
+	az       string
+	role     proto.NodeRole
+	state    proto.NodeState
 }
 
 type transport struct {
@@ -42,13 +42,13 @@ func (t *transport) Register(ctx context.Context) error {
 	resp, err := t.masterClient.Cluster(ctx, &proto.ClusterRequest{
 		Operation: proto.ClusterOperation_Join,
 		NodeInfo: &proto.Node{
-			Addr:        t.myself.addr,
-			GrpcPort:    t.myself.grpcPort,
-			HttpPort:    t.myself.httpPort,
-			ReplicaPort: t.myself.replicaPort,
-			Az:          t.myself.az,
-			Role:        proto.NodeRole_ShardServer,
-			State:       proto.NodeState_Alive,
+			Addr:     t.myself.addr,
+			GrpcPort: t.myself.grpcPort,
+			HttpPort: t.myself.httpPort,
+			RaftPort: t.myself.raftPort,
+			Az:       t.myself.az,
+			Role:     proto.NodeRole_ShardServer,
+			State:    proto.NodeState_Alive,
 		},
 	})
 	if err != nil {
@@ -58,7 +58,7 @@ func (t *transport) Register(ctx context.Context) error {
 	return nil
 }
 
-func (t *transport) GetRouteUpdate(ctx context.Context, routeVersion uint64) ([]*proto.RouteItem, error) {
+func (t *transport) GetRouteUpdate(ctx context.Context, routeVersion uint64) ([]*proto.CatalogChangeItem, error) {
 	resp, err := t.masterClient.GetCatalogChanges(ctx, &proto.GetCatalogChangesRequest{RouteVersion: routeVersion, NodeId: t.myself.id})
 	if err != nil {
 		return nil, err
@@ -85,14 +85,14 @@ func (t *transport) GetNode(ctx context.Context, nodeId uint32) (*nodeInfo, erro
 			return nil, err
 		}
 		newNode := &nodeInfo{
-			id:          nodeId,
-			addr:        resp.NodeInfo.Addr,
-			grpcPort:    resp.NodeInfo.GrpcPort,
-			httpPort:    resp.NodeInfo.HttpPort,
-			replicaPort: resp.NodeInfo.ReplicaPort,
-			az:          resp.NodeInfo.Az,
-			role:        resp.NodeInfo.Role,
-			state:       resp.NodeInfo.State,
+			id:       nodeId,
+			addr:     resp.NodeInfo.Addr,
+			grpcPort: resp.NodeInfo.GrpcPort,
+			httpPort: resp.NodeInfo.HttpPort,
+			raftPort: resp.NodeInfo.RaftPort,
+			az:       resp.NodeInfo.Az,
+			role:     resp.NodeInfo.Role,
+			state:    resp.NodeInfo.State,
 		}
 		t.allNodes.Store(nodeId, newNode)
 		return newNode, nil
