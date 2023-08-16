@@ -10,7 +10,7 @@ import (
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/inodedb/errors"
 	"github.com/cubefs/inodedb/proto"
-	"github.com/cubefs/inodedb/server/store"
+	"github.com/cubefs/inodedb/shard/store"
 )
 
 type Config struct {
@@ -32,11 +32,7 @@ func NewCatalog(cfg Config) *Catalog {
 }
 
 func (c *Catalog) GetSpace(ctx context.Context, spaceName string) (*Space, error) {
-	space, err := c.getSpace(ctx, spaceName)
-	if err != nil {
-		return nil, err
-	}
-	return space, nil
+	return c.getSpace(ctx, spaceName)
 }
 
 func (c *Catalog) AddShard(ctx context.Context, spaceName string, shardId uint32, routeVersion uint64, inoLimit uint64, replicates map[uint32]string) error {
@@ -47,12 +43,14 @@ func (c *Catalog) AddShard(ctx context.Context, spaceName string, shardId uint32
 			span.Warnf("update route failed: %s", err)
 			return errors.ErrSpaceDoesNotExist
 		}
+
 		v, ok = c.spaces.Load(spaceName)
 		if !ok {
 			span.Warnf("still can not get route update for Space[%s]", spaceName)
 			return errors.ErrSpaceDoesNotExist
 		}
 	}
+
 	space := v.(*Space)
 	space.AddShard(ctx, shardId, routeVersion, inoLimit, replicates)
 	return nil
@@ -63,6 +61,7 @@ func (c *Catalog) GetShard(ctx context.Context, spaceName string, shardID uint32
 	if err != nil {
 		return nil, err
 	}
+
 	shardStat := shard.Stats()
 	// transform into external nodes
 	nodes := make([]*proto.Node, 0, len(shardStat.nodes))
@@ -111,6 +110,7 @@ func (c *Catalog) getSpace(ctx context.Context, spaceName string) (*Space, error
 	if !ok {
 		return nil, errors.ErrSpaceDoesNotExist
 	}
+
 	space := v.(*Space)
 	return space, nil
 }
@@ -123,17 +123,19 @@ func (c *Catalog) getAlteredShards() []*proto.ShardReport {
 		space.shards.Range(func(key, value interface{}) bool {
 			shard := value.(*shard)
 			stats := shard.Stats()
+
 			ret = append(ret, &proto.ShardReport{Shard: &proto.Shard{
 				RouteVersion: stats.routeVersion,
 				Id:           shard.shardId,
 				InoLimit:     stats.inoLimit,
 				InoUsed:      stats.inoUsed,
 			}})
+
 			return true
 		})
 		return true
 	})
-	return nil
+	return ret
 }
 
 func (c *Catalog) updateRoute(ctx context.Context) error {
@@ -141,6 +143,7 @@ func (c *Catalog) updateRoute(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
 	for _, routeItem := range changes {
 		if routeItem.RouteVersion <= atomic.LoadUint64(&c.routeVersion) {
 			continue
@@ -151,10 +154,12 @@ func (c *Catalog) updateRoute(ctx context.Context) error {
 			if err := routeItem.Item.UnmarshalTo(spaceItem); err != nil {
 				return err
 			}
+
 			fixedFields := make(map[string]proto.FieldMeta, len(spaceItem.FixedFields))
 			for _, field := range spaceItem.FixedFields {
 				fixedFields[field.Name] = *field
 			}
+
 			c.spaces.LoadOrStore(spaceItem.Name, &Space{
 				store:       c.store,
 				sid:         spaceItem.Sid,
@@ -167,6 +172,7 @@ func (c *Catalog) updateRoute(ctx context.Context) error {
 			if err := routeItem.Item.UnmarshalTo(spaceItem); err != nil {
 				return err
 			}
+
 			c.spaces.Delete(spaceItem.Name)
 		}
 		c.updateRouteVersion(routeItem.RouteVersion)
@@ -197,11 +203,8 @@ func (c *Catalog) getShard(ctx context.Context, spaceName string, shardId uint32
 	if err != nil {
 		return nil, err
 	}
-	shard, err := space.GetShard(ctx, shardId)
-	if err != nil {
-		return nil, err
-	}
-	return shard, nil
+
+	return space.GetShard(ctx, shardId)
 }
 
 func internalNodeInfoToExternalNode(info *nodeInfo) *proto.Node {

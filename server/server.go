@@ -14,14 +14,20 @@
 
 package server
 
-import "github.com/cubefs/inodedb/server/catalog"
+import (
+	"github.com/cubefs/inodedb/master"
+	"github.com/cubefs/inodedb/router"
+	"github.com/cubefs/inodedb/shard"
+)
 
 const (
 	maxListNum = 1000
 )
 
 type Server struct {
-	catalog *catalog.Catalog
+	master      *master.Master
+	router      *router.Router
+	shardServer *shard.Shard
 }
 
 func NewServer() *Server {

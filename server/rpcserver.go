@@ -26,12 +26,14 @@ type RPCServer struct {
 }
 
 func (r *RPCServer) AddShard(ctx context.Context, req *proto.AddShardRequest) (*proto.AddShardResponse, error) {
-	err := r.catalog.AddShard(ctx, req.SpaceName, req.ShardId, req.RouteVersion, req.InoLimit, req.Replicates)
+	shardServer := r.shardServer
+	err := shardServer.Catalog.AddShard(ctx, req.SpaceName, req.ShardId, req.RouteVersion, req.InoLimit, req.Replicates)
 	return nil, err
 }
 
 func (r *RPCServer) GetShard(ctx context.Context, req *proto.GetShardRequest) (*proto.GetShardResponse, error) {
-	shard, err := r.catalog.GetShard(ctx, req.SpaceName, req.ShardId)
+	shardServer := r.shardServer
+	shard, err := shardServer.Catalog.GetShard(ctx, req.SpaceName, req.ShardId)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +44,8 @@ func (r *RPCServer) InsertItem(ctx context.Context, req *proto.InsertItemRequest
 	if req.PreferredShard == 0 {
 		return nil, errors.ErrInvalidShardID
 	}
-	space, err := r.catalog.GetSpace(ctx, req.SpaceName)
+	shardServer := r.shardServer
+	space, err := shardServer.Catalog.GetSpace(ctx, req.SpaceName)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +57,8 @@ func (r *RPCServer) InsertItem(ctx context.Context, req *proto.InsertItemRequest
 }
 
 func (r *RPCServer) UpdateItem(ctx context.Context, req *proto.UpdateItemRequest) (*proto.UpdateItemResponse, error) {
-	space, err := r.catalog.GetSpace(ctx, req.SpaceName)
+	shardServer := r.shardServer
+	space, err := shardServer.Catalog.GetSpace(ctx, req.SpaceName)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +70,8 @@ func (r *RPCServer) UpdateItem(ctx context.Context, req *proto.UpdateItemRequest
 }
 
 func (r *RPCServer) DeleteItem(ctx context.Context, req *proto.DeleteItemRequest) (*proto.DeleteItemResponse, error) {
-	space, err := r.catalog.GetSpace(ctx, req.SpaceName)
+	shardServer := r.shardServer
+	space, err := shardServer.Catalog.GetSpace(ctx, req.SpaceName)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +83,8 @@ func (r *RPCServer) DeleteItem(ctx context.Context, req *proto.DeleteItemRequest
 }
 
 func (r *RPCServer) GetItem(ctx context.Context, req *proto.GetItemRequest) (*proto.GetItemResponse, error) {
-	space, err := r.catalog.GetSpace(ctx, req.SpaceName)
+	shardServer := r.shardServer
+	space, err := shardServer.Catalog.GetSpace(ctx, req.SpaceName)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +96,8 @@ func (r *RPCServer) GetItem(ctx context.Context, req *proto.GetItemRequest) (*pr
 }
 
 func (r *RPCServer) Link(ctx context.Context, req *proto.LinkRequest) (*proto.LinkResponse, error) {
-	space, err := r.catalog.GetSpace(ctx, req.SpaceName)
+	shardServer := r.shardServer
+	space, err := shardServer.Catalog.GetSpace(ctx, req.SpaceName)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +109,8 @@ func (r *RPCServer) Link(ctx context.Context, req *proto.LinkRequest) (*proto.Li
 }
 
 func (r *RPCServer) Unlink(ctx context.Context, req *proto.UnlinkRequest) (*proto.UnlinkResponse, error) {
-	space, err := r.catalog.GetSpace(ctx, req.SpaceName)
+	shardServer := r.shardServer
+	space, err := shardServer.Catalog.GetSpace(ctx, req.SpaceName)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +125,8 @@ func (r *RPCServer) List(ctx context.Context, req *proto.ListRequest) (*proto.Li
 	if req.Num > maxListNum {
 		return nil, errors.ErrListNumExceed
 	}
-	space, err := r.catalog.GetSpace(ctx, req.SpaceName)
+	shardServer := r.shardServer
+	space, err := shardServer.Catalog.GetSpace(ctx, req.SpaceName)
 	if err != nil {
 		return nil, err
 	}
@@ -129,5 +138,33 @@ func (r *RPCServer) List(ctx context.Context, req *proto.ListRequest) (*proto.Li
 }
 
 func (r *RPCServer) Search(context.Context, *proto.SearchRequest) (*proto.SearchResponse, error) {
+	return nil, nil
+}
+
+func (r *RPCServer) Cluster(context.Context, *proto.ClusterRequest) (*proto.ClusterResponse, error) {
+	return nil, nil
+}
+
+func (r *RPCServer) CreateSpace(context.Context, *proto.CreateSpaceRequest) (*proto.CreateSpaceResponse, error) {
+	return nil, nil
+}
+
+func (r *RPCServer) DeleteSpace(context.Context, *proto.DeleteSpaceRequest) (*proto.DeleteSpaceResponse, error) {
+	return nil, nil
+}
+
+func (r *RPCServer) GetSpace(context.Context, *proto.GetSpaceRequest) (*proto.GetSpaceResponse, error) {
+	return nil, nil
+}
+
+func (r *RPCServer) Heartbeat(context.Context, *proto.HeartbeatRequest) (*proto.HeartbeatResponse, error) {
+	return nil, nil
+}
+
+func (r *RPCServer) Report(context.Context, *proto.ReportRequest) (*proto.ReportResponse, error) {
+	return nil, nil
+}
+
+func (r *RPCServer) GetNode(context.Context, *proto.GetNodeRequest) (*proto.GetNodeResponse, error) {
 	return nil, nil
 }

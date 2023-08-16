@@ -28,8 +28,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/jacobsa/daemonize"
-
 	"github.com/cubefs/cubefs/util/config"
 	"github.com/cubefs/cubefs/util/errors"
 	"github.com/cubefs/cubefs/util/log"
@@ -37,6 +35,7 @@ import (
 	"github.com/cubefs/cubefs/util/ump"
 	"github.com/cubefs/inodedb/proto"
 	"github.com/cubefs/inodedb/server"
+	"github.com/jacobsa/daemonize"
 )
 
 const (
@@ -178,7 +177,7 @@ func main() {
 	if *redirectSTD {
 		// Init output file
 		outputFilePath := path.Join(logDir, module, LoggerOutput)
-		outputFile, err := os.OpenFile(outputFilePath, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
+		outputFile, err := os.OpenFile(outputFilePath, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0o666)
 		if err != nil {
 			err = errors.NewErrorf("Fatal: failed to open output path - %v", err)
 			fmt.Println(err)
@@ -216,7 +215,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	//for multi-cpu scheduling
+	// for multi-cpu scheduling
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	if err = ump.InitUmp(role, umpDatadir); err != nil {
 		log.LogFlush()

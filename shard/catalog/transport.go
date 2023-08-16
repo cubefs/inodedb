@@ -54,6 +54,7 @@ func (t *transport) Register(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
 	t.myself.id = resp.Id
 	return nil
 }
@@ -63,6 +64,7 @@ func (t *transport) GetRouteUpdate(ctx context.Context, routeVersion uint64) ([]
 	if err != nil {
 		return nil, err
 	}
+
 	return resp.Items, nil
 }
 
@@ -71,6 +73,7 @@ func (t *transport) Report(ctx context.Context, infos []*proto.ShardReport) erro
 		Id:    t.myself.id,
 		Infos: infos,
 	})
+
 	return err
 }
 
@@ -79,6 +82,7 @@ func (t *transport) GetNode(ctx context.Context, nodeId uint32) (*nodeInfo, erro
 	if ok {
 		return v.(*nodeInfo), nil
 	}
+
 	v, err, _ := t.singleRun.Do(strconv.Itoa(int(nodeId)), func() (interface{}, error) {
 		resp, err := t.masterClient.GetNode(ctx, &proto.GetNodeRequest{Id: nodeId})
 		if err != nil {
@@ -100,6 +104,7 @@ func (t *transport) GetNode(ctx context.Context, nodeId uint32) (*nodeInfo, erro
 	if err != nil {
 		return nil, err
 	}
+
 	return v.(*nodeInfo), err
 }
 

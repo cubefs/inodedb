@@ -11,9 +11,9 @@ import (
 	"github.com/cubefs/inodedb/common/kvstore"
 	apierrors "github.com/cubefs/inodedb/errors"
 	"github.com/cubefs/inodedb/proto"
-	"github.com/cubefs/inodedb/server/scalar"
-	"github.com/cubefs/inodedb/server/store"
-	"github.com/cubefs/inodedb/server/vector"
+	"github.com/cubefs/inodedb/shard/scalar"
+	"github.com/cubefs/inodedb/shard/store"
+	"github.com/cubefs/inodedb/shard/vector"
 	"github.com/cubefs/inodedb/util"
 )
 
@@ -24,40 +24,39 @@ type shardConfig struct {
 	spaceId      uint64
 	shardId      uint32
 	inoLimit     uint64
-	replicates   map[uint32]string
+	nodes        map[uint32]string
 	store        *store.Store
 }
 
 func newShard(cfg *shardConfig) *shard {
 	shard := &shard{
+		shardId:      cfg.shardId,
 		routeVersion: cfg.routeVersion,
 		inoLimit:     cfg.inoLimit,
 		spaceId:      cfg.spaceId,
-		nodes:        cfg.replicates,
+		nodes:        cfg.nodes,
 		store:        cfg.store,
-		shardMeta: &shardMeta{
-			shardId:  cfg.shardId,
+		shardRange: &shardRange{
 			startIno: uint64(cfg.shardId-1) * proto.ShardFixedRange,
 		},
 	}
 	return shard
 }
 
-type shardMeta struct {
-	shardId  uint32
+type shardRange struct {
 	startIno uint64
 }
 
-func (s *shardMeta) Less(than btree.Item) bool {
-	thanShard := than.(*shardMeta)
+func (s *shardRange) Less(than btree.Item) bool {
+	thanShard := than.(*shardRange)
 	return s.startIno < thanShard.startIno
 }
 
-func (s *shardMeta) Copy() btree.Item {
+func (s *shardRange) Copy() btree.Item {
 	return &(*s)
 }
 
-type shardStat struct {
+type shardStats struct {
 	routeVersion uint64
 	inoUsed      uint64
 	inoCursor    uint64
@@ -66,7 +65,8 @@ type shardStat struct {
 }
 
 type shard struct {
-	cursor       uint64
+	shardId      uint32
+	inoCursor    uint64
 	inoLimit     uint64
 	inoUsed      uint64
 	spaceId      uint64
@@ -82,7 +82,7 @@ type shard struct {
 	lock     sync.RWMutex
 
 	// read only
-	*shardMeta
+	*shardRange
 }
 
 func (s *shard) InsertItem(ctx context.Context, i *proto.Item) (uint64, error) {
@@ -90,6 +90,7 @@ func (s *shard) InsertItem(ctx context.Context, i *proto.Item) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	// transform into internal item
 	fields := externalFieldsToInternalFields(i.Fields)
 	data, err := (&item{
@@ -107,6 +108,7 @@ func (s *shard) InsertItem(ctx context.Context, i *proto.Item) (uint64, error) {
 	}); err != nil {
 		return 0, err
 	}
+
 	return ino, nil
 }
 
@@ -142,11 +144,9 @@ func (s *shard) UpdateItem(ctx context.Context, updateItem *proto.Item) error {
 	if err != nil {
 		return err
 	}
+
 	// TODO: move into raft apply progress
-	if err := kvStore.SetRaw(ctx, dataCF, key, data, nil); err != nil {
-		return err
-	}
-	return nil
+	return kvStore.SetRaw(ctx, dataCF, key, data, nil)
 }
 
 func (s *shard) DeleteItem(ctx context.Context, ino uint64) error {
@@ -159,6 +159,7 @@ func (s *shard) DeleteItem(ctx context.Context, ino uint64) error {
 	if err := kvStore.Delete(ctx, dataCF, s.shardKeys.encodeInoKey(ino), nil); err != nil {
 		return err
 	}
+
 	s.decreaseInoUsed()
 	return nil
 }
@@ -177,6 +178,7 @@ func (s *shard) GetItem(ctx context.Context, ino uint64) (*proto.Item, error) {
 	if err := item.Unmarshal(data); err != nil {
 		return nil, err
 	}
+
 	// transform into external item
 	fields := internalFieldsToExternalFields(item.fields)
 	return &proto.Item{Ino: item.ino, Links: item.links, Fields: fields}, nil
@@ -279,7 +281,6 @@ func (s *shard) Unlink(ctx context.Context, ino uint64, name string) error {
 	batch.Delete(dataCF, linkKey)
 	batch.Put(dataCF, pKey, pData)
 	return kvStore.Write(ctx, batch, nil)
-	return nil
 }
 
 func (s *shard) List(ctx context.Context, ino uint64, start string, num uint32) (ret []*proto.Link, err error) {
@@ -322,7 +323,7 @@ func (s *shard) List(ctx context.Context, ino uint64, start string, num uint32) 
 	return
 }
 
-func (s *shard) Stats() *shardStat {
+func (s *shard) Stats() *shardStats {
 	s.lock.RLock()
 	replicates := make([]uint32, 0, len(s.nodes))
 	for i := range s.nodes {
@@ -332,10 +333,10 @@ func (s *shard) Stats() *shardStat {
 	routeVersion := s.routeVersion
 	s.lock.RUnlock()
 
-	return &shardStat{
+	return &shardStats{
 		routeVersion: routeVersion,
 		inoUsed:      atomic.LoadUint64(&s.inoUsed),
-		inoCursor:    atomic.LoadUint64(&s.cursor),
+		inoCursor:    atomic.LoadUint64(&s.inoCursor),
 		inoLimit:     inoLimit,
 		nodes:        replicates,
 	}
@@ -349,15 +350,16 @@ func (s *shard) nextIno() (uint64, error) {
 	if atomic.LoadUint64(&s.inoUsed) > s.inoLimit {
 		return 0, apierrors.ErrInodeLimitExceed
 	}
+
 	for {
-		cur := atomic.LoadUint64(&s.cursor)
-		if cur >= proto.ShardFixedRange {
+		cur := atomic.LoadUint64(&s.inoCursor)
+		if cur >= s.startIno+proto.ShardFixedRange {
 			return 0, apierrors.ErrInoOutOfRange
 		}
 		newId := cur + 1
-		if atomic.CompareAndSwapUint64(&s.cursor, cur, newId) {
+		if atomic.CompareAndSwapUint64(&s.inoCursor, cur, newId) {
 			s.increaseInoUsed()
-			return newId + s.startIno, nil
+			return newId, nil
 		}
 	}
 }

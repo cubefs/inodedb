@@ -35,6 +35,7 @@ var (
 	ErrUnknownFieldType = errors.New("unknown field type")
 
 	ErrUnknownIndexType = errors.New("unknown index type")
+	ErrUnSupportedAPI   = errors.New("unsupported api")
 )
 
 // server error definition

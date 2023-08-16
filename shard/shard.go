@@ -14,28 +14,12 @@
 
 package shard
 
-import (
-	"github.com/cubefs/inodedb/errors"
-	"github.com/cubefs/inodedb/proto"
-)
+import "github.com/cubefs/inodedb/shard/catalog"
 
 type Shard struct {
-	id     proto.ShardId
-	cursor uint64
-	endIno unt64
-
-	store *Store
+	Catalog *catalog.Catalog
 }
 
-func (s *Shard) nextIno() (ino uint64, e error) {
-	for {
-		cur := atomic.LoadUint64(&s.cursor)
-		if cur >= s.endIno {
-			return 0, errors.ErrInoOutOfRange
-		}
-		newId := cur + 1
-		if atomic.CompareAndSwapUint64(&s.cursor, cur, newId) {
-			return newId, nil
-		}
-	}
+func NewShard() *Shard {
+	return &Shard{}
 }

@@ -41,6 +41,7 @@ func (s *shard) applyInsertItem(ctx context.Context, data []byte) error {
 	if err := item.Unmarshal(data); err != nil {
 		return err
 	}
+
 	key := s.shardKeys.encodeInoKey(item.ino)
 	vg, err := kvStore.Get(ctx, dataCF, key, nil)
 	if err != nil && err != kvstore.ErrNotFound {
@@ -52,8 +53,5 @@ func (s *shard) applyInsertItem(ctx context.Context, data []byte) error {
 		return nil
 	}
 
-	if err := kvStore.SetRaw(ctx, dataCF, key, data, nil); err != nil {
-		return err
-	}
-	return nil
+	return kvStore.SetRaw(ctx, dataCF, key, data, nil)
 }

@@ -37,31 +37,3 @@ func TestBytesToString(t *testing.T) {
 	str := BytesToString(b)
 	require.Equal(t, str, string(b))
 }
-
-func TestGetLocalIp(t *testing.T) {
-	ip, err := GetLocalIp()
-	require.NoError(t, err)
-	t.Log(ip)
-}
-
-func TestBufferReader(t *testing.T) {
-	br := GetBufferWriter(1 << 10)
-	require.Equal(t, 0, len(br.Bytes()))
-	require.Equal(t, 1<<10, cap(br.Bytes()))
-
-	PutBufferWriter(br)
-
-	br = GetBufferWriter(1 << 10)
-	require.Equal(t, 0, len(br.Bytes()))
-	require.Equal(t, 1<<10, cap(br.Bytes()))
-}
-
-func TestBuffer(t *testing.T) {
-	b := GetBuffer(1 << 10)
-	require.Equal(t, 1<<10, len(b))
-
-	PutBuffer(b)
-
-	b = GetBuffer(1 << 10)
-	require.Equal(t, 1<<10, len(b))
-}

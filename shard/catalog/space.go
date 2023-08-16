@@ -7,7 +7,7 @@ import (
 	"github.com/cubefs/cubefs/util/btree"
 	"github.com/cubefs/inodedb/errors"
 	"github.com/cubefs/inodedb/proto"
-	"github.com/cubefs/inodedb/server/store"
+	"github.com/cubefs/inodedb/shard/store"
 )
 
 type Space struct {
@@ -29,15 +29,17 @@ func (s *Space) AddShard(ctx context.Context, shardId uint32, routeVersion uint6
 		spaceId:      s.sid,
 		shardId:      shardId,
 		inoLimit:     inoLimit,
-		replicates:   replicates,
+		nodes:        replicates,
 		store:        s.store,
 	})
+
 	_, loaded := s.shards.LoadOrStore(shardId, shard)
 	if loaded {
 		return
 	}
+
 	s.lock.Lock()
-	s.shardsTree.ReplaceOrInsert(shard.shardMeta)
+	s.shardsTree.ReplaceOrInsert(shard.shardRange)
 	s.lock.Unlock()
 	shard.Start()
 }
@@ -46,6 +48,7 @@ func (s *Space) InsertItem(ctx context.Context, shardId uint32, item *proto.Item
 	if !s.validateFields(item.Fields) {
 		return 0, errors.ErrUnknownField
 	}
+
 	shard, err := s.GetShard(ctx, shardId)
 	if err != nil {
 		return 0, err
@@ -55,6 +58,7 @@ func (s *Space) InsertItem(ctx context.Context, shardId uint32, item *proto.Item
 	if err != nil {
 		return 0, err
 	}
+
 	return ino, nil
 }
 
@@ -62,6 +66,7 @@ func (s *Space) UpdateItem(ctx context.Context, item *proto.Item) error {
 	if !s.validateFields(item.Fields) {
 		return errors.ErrUnknownField
 	}
+
 	shard := s.locateShard(ctx, item.Ino)
 	if shard == nil {
 		return errors.ErrInoRangeNotFound
@@ -75,6 +80,7 @@ func (s *Space) DeleteItem(ctx context.Context, ino uint64) error {
 	if shard == nil {
 		return errors.ErrInoRangeNotFound
 	}
+
 	return shard.DeleteItem(ctx, ino)
 }
 
@@ -83,6 +89,7 @@ func (s *Space) GetItem(ctx context.Context, ino uint64) (*proto.Item, error) {
 	if shard == nil {
 		return nil, errors.ErrInoRangeNotFound
 	}
+
 	return shard.GetItem(ctx, ino)
 }
 
@@ -91,6 +98,7 @@ func (s *Space) Link(ctx context.Context, link *proto.Link) error {
 	if shard == nil {
 		return errors.ErrInoRangeNotFound
 	}
+
 	return shard.Link(ctx, link)
 }
 
@@ -99,6 +107,7 @@ func (s *Space) Unlink(ctx context.Context, unlink *proto.Unlink) error {
 	if shard == nil {
 		return errors.ErrInoRangeNotFound
 	}
+
 	return shard.Unlink(ctx, unlink.Parent, unlink.Name)
 }
 
@@ -107,6 +116,7 @@ func (s *Space) List(ctx context.Context, req *proto.ListRequest) ([]*proto.Link
 	if shard == nil {
 		return nil, errors.ErrInoRangeNotFound
 	}
+
 	return shard.List(ctx, req.Ino, req.Start, req.Num)
 }
 
@@ -120,17 +130,18 @@ func (s *Space) GetShard(ctx context.Context, shardID uint32) (*shard, error) {
 	if !ok {
 		return nil, errors.ErrShardDoesNotExist
 	}
+
 	return v.(*shard), nil
 }
 
 func (s *Space) locateShard(ctx context.Context, ino uint64) *shard {
-	found := s.shardsTree.Get(&shardMeta{
+	found := s.shardsTree.Get(&shardRange{
 		startIno: ino,
 	})
 	if found == nil {
 		return nil
 	}
-	v, _ := s.shards.Load(found.(*shardMeta).shardId)
+	v, _ := s.shards.Load(found.(*shardRange).startIno / proto.ShardFixedRange)
 	return v.(*shard)
 }
 
