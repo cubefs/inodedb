@@ -108,7 +108,7 @@ func (s *Space) Unlink(ctx context.Context, unlink *proto.Unlink) error {
 		return errors.ErrInoRangeNotFound
 	}
 
-	return shard.Unlink(ctx, unlink.Parent, unlink.Name)
+	return shard.Unlink(ctx, unlink)
 }
 
 func (s *Space) List(ctx context.Context, req *proto.ListRequest) ([]*proto.Link, error) {

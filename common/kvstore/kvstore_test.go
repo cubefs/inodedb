@@ -30,7 +30,7 @@ func TestNewEngine(t *testing.T) {
 	defer os.RemoveAll(path)
 	opt := new(Option)
 	opt.CreateIfMissing = true
-	eg, err := NewKV(ctx, path, RocksdbEngineType, opt)
+	eg, err := NewKVStore(ctx, path, RocksdbEngineType, opt)
 	require.NoError(t, err)
 	eg.Close()
 }

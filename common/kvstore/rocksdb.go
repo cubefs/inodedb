@@ -145,7 +145,7 @@ func newRocksdb(ctx context.Context, path string, option *Option) (Store, error)
 	return ins, nil
 }
 
-func newLruCache(ctx context.Context, size uint64) LruCache {
+func newRocksdbLruCache(ctx context.Context, size uint64) LruCache {
 	return &lruCache{
 		cache: rdb.NewLRUCache(size),
 	}
@@ -163,7 +163,7 @@ func (c *lruCache) Close() {
 	c.cache.Destroy()
 }
 
-func newWriteBufferManager(ctx context.Context, bufferSize uint64) WriteBufferManager {
+func newRocksdbWriteBufferManager(ctx context.Context, bufferSize uint64) WriteBufferManager {
 	return &writeBufferManager{
 		manager: rdb.NewWriteBufferManager(bufferSize),
 	}
@@ -173,13 +173,13 @@ func (m *writeBufferManager) Close() {
 	m.manager.Destroy()
 }
 
-func newRateLimiter(ctx context.Context, rate_bytes_per_sec int64) RateLimiter {
+func newRocksdbRateLimiter(ctx context.Context, rate_bytes_per_sec int64) RateLimiter {
 	return &rateLimiter{
 		limiter: rdb.NewRateLimiter(rate_bytes_per_sec, 10000, 3),
 	}
 }
 
-func newEnv(ctx context.Context) Env {
+func newRocksdbEnv(ctx context.Context) Env {
 	return &env{rdb.NewDefaultEnv()}
 }
 
@@ -191,7 +191,7 @@ func (e *env) Close() {
 	e.Destroy()
 }
 
-func newSstFileManager(ctx context.Context, e Env) SstFileManager {
+func newRocksdbSstFileManager(ctx context.Context, e Env) SstFileManager {
 	return &sstFileManager{rdb.NewSstFileManager(e.(*env).Env)}
 }
 

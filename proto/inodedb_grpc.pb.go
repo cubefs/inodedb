@@ -180,7 +180,7 @@ func (x *CreateSpaceRequest) GetType() SpaceType {
 	if x != nil {
 		return x.Type
 	}
-	return SpaceType_Normal
+	return SpaceType_Inode
 }
 
 func (x *CreateSpaceRequest) GetDesiredShards() uint32 {

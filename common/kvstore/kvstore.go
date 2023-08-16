@@ -192,7 +192,7 @@ type (
 	}
 )
 
-func NewKV(ctx context.Context, path string, lsmType LsmKVType, option *Option) (Store, error) {
+func NewKVStore(ctx context.Context, path string, lsmType LsmKVType, option *Option) (Store, error) {
 	switch lsmType {
 	case RocksdbEngineType:
 		return newRocksdb(ctx, path, option)
@@ -204,7 +204,7 @@ func NewKV(ctx context.Context, path string, lsmType LsmKVType, option *Option) 
 func NewCache(ctx context.Context, lsmType LsmKVType, size uint64) LruCache {
 	switch lsmType {
 	case RocksdbEngineType:
-		return newLruCache(ctx, size)
+		return newRocksdbLruCache(ctx, size)
 	default:
 		return nil
 	}
@@ -213,7 +213,7 @@ func NewCache(ctx context.Context, lsmType LsmKVType, size uint64) LruCache {
 func NewWriteBufferManager(ctx context.Context, lsmType LsmKVType, size uint64) WriteBufferManager {
 	switch lsmType {
 	case RocksdbEngineType:
-		return newWriteBufferManager(ctx, size)
+		return newRocksdbWriteBufferManager(ctx, size)
 	default:
 		return nil
 	}
@@ -222,7 +222,7 @@ func NewWriteBufferManager(ctx context.Context, lsmType LsmKVType, size uint64) 
 func NewRateLimiter(ctx context.Context, lsmType LsmKVType, value int64) RateLimiter {
 	switch lsmType {
 	case RocksdbEngineType:
-		return newRateLimiter(ctx, value)
+		return newRocksdbRateLimiter(ctx, value)
 	default:
 		return nil
 	}
@@ -231,7 +231,7 @@ func NewRateLimiter(ctx context.Context, lsmType LsmKVType, value int64) RateLim
 func NewEnv(ctx context.Context, lsmType LsmKVType) Env {
 	switch lsmType {
 	case RocksdbEngineType:
-		return newEnv(ctx)
+		return newRocksdbEnv(ctx)
 	default:
 		return nil
 	}
@@ -240,7 +240,7 @@ func NewEnv(ctx context.Context, lsmType LsmKVType) Env {
 func NewSstFileManager(ctx context.Context, lsmType LsmKVType, env Env) SstFileManager {
 	switch lsmType {
 	case RocksdbEngineType:
-		return newSstFileManager(ctx, env)
+		return newRocksdbSstFileManager(ctx, env)
 	default:
 		return nil
 	}

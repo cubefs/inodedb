@@ -8,13 +8,13 @@ import (
 
 	"github.com/cubefs/cubefs/blobstore/util/errors"
 	"github.com/cubefs/cubefs/util/btree"
-	"github.com/cubefs/inodedb/common/kvstore"
 	apierrors "github.com/cubefs/inodedb/errors"
 	"github.com/cubefs/inodedb/proto"
 	"github.com/cubefs/inodedb/shard/scalar"
 	"github.com/cubefs/inodedb/shard/store"
 	"github.com/cubefs/inodedb/shard/vector"
 	"github.com/cubefs/inodedb/util"
+	pb "google.golang.org/protobuf/proto"
 )
 
 const keyLocksNum = 1024
@@ -91,17 +91,10 @@ func (s *shard) InsertItem(ctx context.Context, i *proto.Item) (uint64, error) {
 		return 0, err
 	}
 
-	// transform into internal item
-	fields := externalFieldsToInternalFields(i.Fields)
-	data, err := (&item{
-		ino:    ino,
-		links:  i.Links,
-		fields: fields,
-	}).Marshal()
+	data, err := pb.Marshal(i)
 	if err != nil {
 		return 0, err
 	}
-
 	if _, err := s.raftGroup.Propose(ctx, &RaftProposeRequest{
 		Op:   RaftOpInsertItem,
 		Data: data,
@@ -109,7 +102,9 @@ func (s *shard) InsertItem(ctx context.Context, i *proto.Item) (uint64, error) {
 		return 0, err
 	}
 
-	return ino, nil
+	// TODO: remove this function call after invoke multi raft
+	_, err = s.Apply(ctx, RaftOpInsertItem, data, 0)
+	return ino, err
 }
 
 func (s *shard) UpdateItem(ctx context.Context, updateItem *proto.Item) error {
@@ -117,36 +112,21 @@ func (s *shard) UpdateItem(ctx context.Context, updateItem *proto.Item) error {
 		return apierrors.ErrInoMismatchShardRange
 	}
 
-	kvStore := s.store.KVStore()
-	key := s.shardKeys.encodeInoKey(updateItem.Ino)
-	data, err := kvStore.GetRaw(ctx, dataCF, key, nil)
-	if err != nil {
-		return err
-	}
-	item := &item{}
-	if err := item.Unmarshal(data); err != nil {
-		return err
-	}
-
-	fieldMap := make(map[string]int)
-	for i := range item.fields {
-		fieldMap[item.fields[i].name] = i
-	}
-	for _, updateField := range updateItem.Fields {
-		// update existed field or insert new field
-		if idx, ok := fieldMap[updateField.Name]; ok {
-			item.fields[idx].value = updateField.Value
-			continue
-		}
-		item.fields = append(item.fields, field{name: updateField.Name, value: updateField.Value})
-	}
-	data, err = item.Marshal()
+	data, err := pb.Marshal(updateItem)
 	if err != nil {
 		return err
 	}
 
-	// TODO: move into raft apply progress
-	return kvStore.SetRaw(ctx, dataCF, key, data, nil)
+	if _, err := s.raftGroup.Propose(ctx, &RaftProposeRequest{
+		Op:   RaftOpUpdateItem,
+		Data: data,
+	}); err != nil {
+		return err
+	}
+
+	// TODO: remove this function call after invoke multi raft
+	_, err = s.Apply(ctx, RaftOpUpdateItem, data, 0)
+	return err
 }
 
 func (s *shard) DeleteItem(ctx context.Context, ino uint64) error {
@@ -154,14 +134,18 @@ func (s *shard) DeleteItem(ctx context.Context, ino uint64) error {
 		return apierrors.ErrInoMismatchShardRange
 	}
 
-	// TODO: move into raft apply progress
-	kvStore := s.store.KVStore()
-	if err := kvStore.Delete(ctx, dataCF, s.shardKeys.encodeInoKey(ino), nil); err != nil {
+	data := make([]byte, 8)
+	encodeIno(ino, data)
+	if _, err := s.raftGroup.Propose(ctx, &RaftProposeRequest{
+		Op:   RaftOpDeleteItem,
+		Data: data,
+	}); err != nil {
 		return err
 	}
 
-	s.decreaseInoUsed()
-	return nil
+	// TODO: remove this function call after invoke multi raft
+	_, err := s.Apply(ctx, RaftOpDeleteItem, data, 0)
+	return err
 }
 
 func (s *shard) GetItem(ctx context.Context, ino uint64) (*proto.Item, error) {
@@ -180,7 +164,7 @@ func (s *shard) GetItem(ctx context.Context, ino uint64) (*proto.Item, error) {
 	}
 
 	// transform into external item
-	fields := internalFieldsToExternalFields(item.fields)
+	fields := internalFieldsToProtoFields(item.fields)
 	return &proto.Item{Ino: item.ino, Links: item.links, Fields: fields}, nil
 }
 
@@ -189,98 +173,43 @@ func (s *shard) Link(ctx context.Context, l *proto.Link) error {
 		return apierrors.ErrInoMismatchShardRange
 	}
 
-	kvStore := s.store.KVStore()
-	// transform into internal link
-	fields := externalFieldsToInternalFields(l.Fields)
-	link := &link{
-		parent: l.Parent,
-		name:   l.Name,
-		child:  l.Child,
-		fields: fields,
-	}
-	linkData, err := link.Marshal()
+	data, err := pb.Marshal(l)
 	if err != nil {
-		return errors.Info(err, "marshal link data failed")
+		return err
 	}
 
-	// TODO: move into raft apply progress
-	pKey := s.shardKeys.encodeInoKey(link.parent)
-	linkKey := s.shardKeys.encodeLinkKey(link.parent, link.name)
-	lock := s.getKeyLock(pKey)
-	lock.Lock()
-	defer lock.Unlock()
-
-	vg, err := kvStore.Get(ctx, dataCF, linkKey, nil)
-	if err != nil && err != kvstore.ErrNotFound {
-		return errors.Info(err, "get link data failed")
-	}
-	// independent check
-	if err == nil {
-		vg.Close()
-		return nil
+	if _, err := s.raftGroup.Propose(ctx, &RaftProposeRequest{
+		Op:   RaftOpLinkItem,
+		Data: data,
+	}); err != nil {
+		return err
 	}
 
-	raw, err := kvStore.GetRaw(ctx, dataCF, pKey, nil)
-	if err != nil {
-		return errors.Info(err, "get parent item data failed")
-	}
-	pItem := &item{}
-	if err := pItem.Unmarshal(raw); err != nil {
-		return errors.Info(err, "unmarshal parent item data failed")
-	}
-	pItem.links += 1
-	pData, err := pItem.Marshal()
-	if err != nil {
-		return errors.Info(err, "marshal parent item data failed")
-	}
-
-	batch := kvStore.NewWriteBatch()
-	batch.Put(dataCF, linkKey, linkData)
-	batch.Put(dataCF, pKey, pData)
-	return kvStore.Write(ctx, batch, nil)
+	// TODO: remove this function call after invoke multi raft
+	_, err = s.Apply(ctx, RaftOpLinkItem, data, 0)
+	return err
 }
 
-func (s *shard) Unlink(ctx context.Context, ino uint64, name string) error {
-	if !s.checkInoMatchRange(ino) {
+func (s *shard) Unlink(ctx context.Context, unlink *proto.Unlink) error {
+	if !s.checkInoMatchRange(unlink.Parent) {
 		return apierrors.ErrInoMismatchShardRange
 	}
 
-	// TODO: move into raft apply progress
-	kvStore := s.store.KVStore()
-	pKey := s.shardKeys.encodeInoKey(ino)
-	linkKey := s.shardKeys.encodeLinkKey(ino, name)
-	lock := s.getKeyLock(pKey)
-	lock.Lock()
-	defer lock.Unlock()
-
-	vg, err := kvStore.Get(ctx, dataCF, linkKey, nil)
-	if err != nil && err != kvstore.ErrNotFound {
-		return errors.Info(err, "get link data failed")
-	}
-	// independent check
-	if err == kvstore.ErrNotFound {
-		return nil
-	}
-	vg.Close()
-
-	raw, err := kvStore.GetRaw(ctx, dataCF, pKey, nil)
+	data, err := pb.Marshal(unlink)
 	if err != nil {
-		return errors.Info(err, "get parent item data failed")
-	}
-	pItem := &item{}
-	if err := pItem.Unmarshal(raw); err != nil {
-		return errors.Info(err, "unmarshal parent item data failed")
-	}
-	pItem.links -= 1
-	pData, err := pItem.Marshal()
-	if err != nil {
-		return errors.Info(err, "marshal parent item data failed")
+		return err
 	}
 
-	batch := kvStore.NewWriteBatch()
-	batch.Delete(dataCF, linkKey)
-	batch.Put(dataCF, pKey, pData)
-	return kvStore.Write(ctx, batch, nil)
+	if _, err := s.raftGroup.Propose(ctx, &RaftProposeRequest{
+		Op:   RaftOpUnlinkItem,
+		Data: data,
+	}); err != nil {
+		return err
+	}
+
+	// TODO: remove this function call after invoke multi raft
+	_, err = s.Apply(ctx, RaftOpUnlinkItem, data, 0)
+	return err
 }
 
 func (s *shard) List(ctx context.Context, ino uint64, start string, num uint32) (ret []*proto.Link, err error) {
@@ -309,7 +238,7 @@ func (s *shard) List(ctx context.Context, ino uint64, start string, num uint32) 
 
 		link.parent = ino
 		_, link.name = s.shardKeys.decodeLinkKey(kg.Key())
-		fields := internalFieldsToExternalFields(link.fields)
+		fields := internalFieldsToProtoFields(link.fields)
 		// transform to external link
 		ret = append(ret, &proto.Link{
 			Parent: link.parent,
@@ -423,7 +352,7 @@ func (s *shardKeys) encodeLinkKeyPrefix(ino uint64) []byte {
 	return keyPrefix
 }
 
-func externalFieldsToInternalFields(external []*proto.Field) []field {
+func protoFieldsToInternalFields(external []*proto.Field) []field {
 	ret := make([]field, len(external))
 	for i := range external {
 		ret[i] = field{
@@ -434,7 +363,7 @@ func externalFieldsToInternalFields(external []*proto.Field) []field {
 	return ret
 }
 
-func internalFieldsToExternalFields(internal []field) []*proto.Field {
+func internalFieldsToProtoFields(internal []field) []*proto.Field {
 	ret := make([]*proto.Field, len(internal))
 	for i := range internal {
 		ret[i] = &proto.Field{

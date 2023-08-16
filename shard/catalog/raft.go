@@ -84,7 +84,12 @@ type (
 		raft             Raft
 		proposeResponses sync.Map
 	}
+	RaftNoop struct{}
 )
+
+func (r *RaftNoop) Propose(ctx context.Context, data []byte) error {
+	return nil
+}
 
 func (req *RaftProposeRequest) Marshal() ([]byte, error) {
 	return nil, nil
@@ -114,6 +119,10 @@ func (r *RaftGroup) Propose(ctx context.Context, req *RaftProposeRequest) (*Raft
 	// propose to raft
 	if err := r.raft.Propose(ctx, data); err != nil {
 		return nil, err
+	}
+
+	if !req.WithResult {
+		return nil, nil
 	}
 	return &RaftProposeResponse{
 		Data:    r.proposeResponses.Load(req.respKey),
