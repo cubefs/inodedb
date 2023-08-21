@@ -31,4 +31,4 @@ Core operations:
 
 */
 
-package shard
+package shardserver

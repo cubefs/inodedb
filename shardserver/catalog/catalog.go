@@ -7,28 +7,70 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cubefs/inodedb/util"
+
+	"github.com/cubefs/inodedb/client"
+
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/inodedb/errors"
 	"github.com/cubefs/inodedb/proto"
-	"github.com/cubefs/inodedb/shard/store"
+	"github.com/cubefs/inodedb/shardserver/store"
 )
 
 type Config struct {
-	StorePath  string   `json:"store_path"`
-	MasterAddr []string `json:"master_addr"`
+	StoreConfig  store.Config        `json:"store_config"`
+	MasterConfig client.MasterConfig `json:"master_config"`
+	NodeConfig   proto.Node          `json:"node_config"`
 }
 
 type Catalog struct {
 	routeVersion uint64
-	transport    *transport
+	transport    *transporter
 	store        *store.Store
 
 	spaces sync.Map
 	done   chan struct{}
 }
 
-func NewCatalog(cfg Config) *Catalog {
-	return &Catalog{}
+func NewCatalog(ctx context.Context, cfg *Config) *Catalog {
+	span := trace.SpanFromContext(ctx)
+	masterClient, err := client.NewMasterClient(&cfg.MasterConfig)
+	if err != nil {
+		span.Fatalf("new master client failed: %s", err)
+	}
+
+	store, err := store.NewStore(ctx, &cfg.StoreConfig)
+	if err != nil {
+		span.Fatalf("new store instance failed: %s", err)
+	}
+
+	if cfg.NodeConfig.GrpcPort == 0 || cfg.NodeConfig.RaftPort == 0 {
+		span.Fatalf("invalid node[%+v] config port", cfg.NodeConfig)
+	}
+	if cfg.NodeConfig.Addr == "" {
+		cfg.NodeConfig.Addr, err = util.GetLocalIP()
+		if err != nil {
+			span.Fatalf("can't get local ip address, please set the ip address for the node config")
+		}
+	}
+
+	transport := newTransporter(masterClient, &cfg.NodeConfig)
+	if err := transport.Register(ctx); err != nil {
+		span.Fatalf("register shard server failed: %s", err)
+	}
+
+	catalog := &Catalog{
+		transport: transport,
+		store:     store,
+		done:      make(chan struct{}),
+	}
+	if err := catalog.updateRoute(ctx); err != nil {
+		span.Fatalf("update route failed: %s", err)
+	}
+
+	catalog.transport.StartHeartbeat(ctx)
+	go catalog.loop(ctx)
+	return catalog
 }
 
 func (c *Catalog) GetSpace(ctx context.Context, spaceName string) (*Space, error) {
@@ -38,21 +80,26 @@ func (c *Catalog) GetSpace(ctx context.Context, spaceName string) (*Space, error
 func (c *Catalog) AddShard(ctx context.Context, spaceName string, shardId uint32, routeVersion uint64, inoLimit uint64, replicates map[uint32]string) error {
 	span := trace.SpanFromContext(ctx)
 	v, ok := c.spaces.Load(spaceName)
-	if !ok {
-		if err := c.updateRoute(ctx); err != nil {
-			span.Warnf("update route failed: %s", err)
-			return errors.ErrSpaceDoesNotExist
-		}
-
-		v, ok = c.spaces.Load(spaceName)
-		if !ok {
-			span.Warnf("still can not get route update for Space[%s]", spaceName)
-			return errors.ErrSpaceDoesNotExist
-		}
+	if ok {
+		space := v.(*Space)
+		space.AddShard(ctx, shardId, routeVersion, inoLimit, replicates)
+		c.updateRouteVersion(routeVersion)
+		return nil
 	}
 
+	if err := c.updateRoute(ctx); err != nil {
+		span.Warnf("update route failed: %s", err)
+		return errors.ErrSpaceDoesNotExist
+	}
+
+	v, ok = c.spaces.Load(spaceName)
+	if !ok {
+		span.Warnf("still can not get route update for space[%s]", spaceName)
+		return errors.ErrSpaceDoesNotExist
+	}
 	space := v.(*Space)
 	space.AddShard(ctx, shardId, routeVersion, inoLimit, replicates)
+	c.updateRouteVersion(routeVersion)
 	return nil
 }
 
@@ -70,7 +117,7 @@ func (c *Catalog) GetShard(ctx context.Context, spaceName string, shardID uint32
 		if err != nil {
 			return nil, err
 		}
-		nodes = append(nodes, internalNodeInfoToExternalNode(nodeInfo))
+		nodes = append(nodes, nodeInfo)
 	}
 
 	return &proto.Shard{
@@ -139,13 +186,13 @@ func (c *Catalog) getAlteredShards() []*proto.ShardReport {
 }
 
 func (c *Catalog) updateRoute(ctx context.Context) error {
-	changes, err := c.transport.GetRouteUpdate(ctx, atomic.LoadUint64(&c.routeVersion))
+	changes, err := c.transport.GetRouteUpdate(ctx, c.getRouteVersion())
 	if err != nil {
 		return err
 	}
 
 	for _, routeItem := range changes {
-		if routeItem.RouteVersion <= atomic.LoadUint64(&c.routeVersion) {
+		if routeItem.RouteVersion <= c.getRouteVersion() {
 			continue
 		}
 		switch routeItem.Type {
@@ -180,12 +227,16 @@ func (c *Catalog) updateRoute(ctx context.Context) error {
 	return nil
 }
 
+func (c *Catalog) getRouteVersion() uint64 {
+	return atomic.LoadUint64(&c.routeVersion)
+}
+
 func (c *Catalog) updateRouteVersion(new uint64) {
 	old := atomic.LoadUint64(&c.routeVersion)
 	if old < new {
 		for {
 			// update success, break
-			if isSwap := atomic.CompareAndSwapUint64(&c.routeVersion, old, new); isSwap {
+			if atomic.CompareAndSwapUint64(&c.routeVersion, old, new) {
 				break
 			}
 			// already update, break
@@ -205,17 +256,4 @@ func (c *Catalog) getShard(ctx context.Context, spaceName string, shardId uint32
 	}
 
 	return space.GetShard(ctx, shardId)
-}
-
-func internalNodeInfoToExternalNode(info *nodeInfo) *proto.Node {
-	return &proto.Node{
-		Id:       info.id,
-		Addr:     info.addr,
-		GrpcPort: info.grpcPort,
-		HttpPort: info.httpPort,
-		RaftPort: info.raftPort,
-		Az:       info.az,
-		Role:     info.role,
-		State:    info.state,
-	}
 }

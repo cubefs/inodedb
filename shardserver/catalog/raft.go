@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"sync"
 	"sync/atomic"
 
@@ -124,8 +125,12 @@ func (r *RaftGroup) Propose(ctx context.Context, req *RaftProposeRequest) (*Raft
 	if !req.WithResult {
 		return nil, nil
 	}
+	ret, ok := r.proposeResponses.Load(req.respKey)
+	if !ok {
+		return nil, errors.New("no result return but with result expected")
+	}
 	return &RaftProposeResponse{
-		Data:    r.proposeResponses.Load(req.respKey),
+		Data:    ret,
 		respKey: req.respKey,
 	}, nil
 }

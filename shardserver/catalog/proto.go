@@ -2,6 +2,9 @@ package catalog
 
 import (
 	"encoding/binary"
+
+	"github.com/cubefs/inodedb/shardserver/catalog/internal"
+	pb "google.golang.org/protobuf/proto"
 )
 
 const (
@@ -20,42 +23,27 @@ type Timestamp struct{}
 
 // proto for storage encoding/decoding and function return value
 
-type item struct {
-	ino    uint64
-	links  uint64
-	fields []field
-}
+type item internal.Item
 
+// Marshal return marshaled data of item
+// TODO: As the flatbuffer unpacking data is more faster than protobuffer(10X above),
+// we may use flatbuffer for the internal encoding/decoding to avoid unpacking data time cost
 func (i *item) Marshal() ([]byte, error) {
-	// TODO: we may use flatbuffers as internal encoding/decoding to avoid packing and unpacking data
-	return nil, nil
+	return pb.Marshal((*internal.Item)(i))
 }
 
 func (i *item) Unmarshal(raw []byte) error {
-	// TODO
-	return nil
+	return pb.Unmarshal(raw, (*internal.Item)(i))
 }
 
-type link struct {
-	parent uint64
-	name   string
-	child  uint64
-	fields []field
-}
+type link internal.Link
 
 func (l *link) Marshal() ([]byte, error) {
-	// TODO
-	return nil, nil
+	return pb.Marshal((*internal.Link)(l))
 }
 
 func (l *link) Unmarshal(raw []byte) error {
-	// TODO
-	return nil
-}
-
-type field struct {
-	name  string
-	value []byte
+	return pb.Unmarshal(raw, (*internal.Link)(l))
 }
 
 func shardDataPrefixSize(sid uint64, shardId uint32) int {

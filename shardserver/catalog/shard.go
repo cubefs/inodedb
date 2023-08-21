@@ -6,13 +6,15 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/cubefs/inodedb/shardserver/catalog/internal"
+
 	"github.com/cubefs/cubefs/blobstore/util/errors"
 	"github.com/cubefs/cubefs/util/btree"
 	apierrors "github.com/cubefs/inodedb/errors"
 	"github.com/cubefs/inodedb/proto"
-	"github.com/cubefs/inodedb/shard/scalar"
-	"github.com/cubefs/inodedb/shard/store"
-	"github.com/cubefs/inodedb/shard/vector"
+	"github.com/cubefs/inodedb/shardserver/scalar"
+	"github.com/cubefs/inodedb/shardserver/store"
+	"github.com/cubefs/inodedb/shardserver/vector"
 	"github.com/cubefs/inodedb/util"
 	pb "google.golang.org/protobuf/proto"
 )
@@ -37,7 +39,7 @@ func newShard(cfg *shardConfig) *shard {
 		nodes:        cfg.nodes,
 		store:        cfg.store,
 		shardRange: &shardRange{
-			startIno: uint64(cfg.shardId-1) * proto.ShardFixedRange,
+			startIno: uint64(cfg.shardId-1) * proto.ShardRangeStepSize,
 		},
 	}
 	return shard
@@ -72,7 +74,7 @@ type shard struct {
 	spaceId      uint64
 	routeVersion uint64
 	nodes        map[uint32]string
-	shardKeys    *shardKeys
+	shardKeys    *shardKeysGenerator
 	vectorIndex  *vector.Index
 	scalarIndex  *scalar.Index
 	store        *store.Store
@@ -164,8 +166,8 @@ func (s *shard) GetItem(ctx context.Context, ino uint64) (*proto.Item, error) {
 	}
 
 	// transform into external item
-	fields := internalFieldsToProtoFields(item.fields)
-	return &proto.Item{Ino: item.ino, Links: item.links, Fields: fields}, nil
+	fields := internalFieldsToProtoFields(item.Fields)
+	return &proto.Item{Ino: item.Ino, Links: item.Links, Fields: fields}, nil
 }
 
 func (s *shard) Link(ctx context.Context, l *proto.Link) error {
@@ -217,11 +219,12 @@ func (s *shard) List(ctx context.Context, ino uint64, start string, num uint32) 
 		return nil, apierrors.ErrInoMismatchShardRange
 	}
 
-	kvStore := s.store.KVStore()
 	linkKeyPrefix := s.shardKeys.encodeLinkKeyPrefix(ino)
 	marker := make([]byte, len(linkKeyPrefix)+len(start))
 	copy(marker, linkKeyPrefix)
 	copy(marker[len(linkKeyPrefix):], start)
+
+	kvStore := s.store.KVStore()
 	lr := kvStore.List(ctx, dataCF, linkKeyPrefix, marker, nil)
 	for num == 0 {
 		kg, vg, err := lr.ReadNext()
@@ -236,18 +239,19 @@ func (s *shard) List(ctx context.Context, ino uint64, start string, num uint32) 
 			return nil, errors.Info(err, "unmarshal link data failed")
 		}
 
-		link.parent = ino
-		_, link.name = s.shardKeys.decodeLinkKey(kg.Key())
-		fields := internalFieldsToProtoFields(link.fields)
+		link.Parent = ino
+		_, link.Name = s.shardKeys.decodeLinkKey(kg.Key())
+		fields := internalFieldsToProtoFields(link.Fields)
 		// transform to external link
 		ret = append(ret, &proto.Link{
-			Parent: link.parent,
-			Name:   link.name,
-			Child:  link.child,
+			Parent: link.Parent,
+			Name:   link.Name,
+			Child:  link.Child,
 			Fields: fields,
 		})
 		kg.Close()
 		vg.Close()
+		num--
 	}
 	return
 }
@@ -282,19 +286,18 @@ func (s *shard) nextIno() (uint64, error) {
 
 	for {
 		cur := atomic.LoadUint64(&s.inoCursor)
-		if cur >= s.startIno+proto.ShardFixedRange {
+		if cur >= s.startIno+proto.ShardRangeStepSize {
 			return 0, apierrors.ErrInoOutOfRange
 		}
 		newId := cur + 1
 		if atomic.CompareAndSwapUint64(&s.inoCursor, cur, newId) {
-			s.increaseInoUsed()
 			return newId, nil
 		}
 	}
 }
 
 func (s *shard) checkInoMatchRange(ino uint64) bool {
-	return s.startIno >= ino && s.startIno+proto.ShardFixedRange > ino
+	return s.startIno >= ino && s.startIno+proto.ShardRangeStepSize > ino
 }
 
 func (s *shard) getKeyLock(key []byte) sync.Mutex {
@@ -309,22 +312,28 @@ func (s *shard) increaseInoUsed() {
 }
 
 func (s *shard) decreaseInoUsed() {
-	atomic.AddUint64(&s.inoUsed, -1)
+	for {
+		cur := atomic.LoadUint64(&s.inoUsed)
+		new := cur - 1
+		if atomic.CompareAndSwapUint64(&s.inoUsed, cur, new) {
+			return
+		}
+	}
 }
 
-type shardKeys struct {
+type shardKeysGenerator struct {
 	shardId uint32
 	spaceId uint64
 }
 
-func (s *shardKeys) encodeInoKey(ino uint64) []byte {
+func (s *shardKeysGenerator) encodeInoKey(ino uint64) []byte {
 	key := make([]byte, shardDataPrefixSize(s.spaceId, s.shardId)+8)
 	encodeShardDataPrefix(s.spaceId, s.shardId, key)
 	encodeIno(ino, key[len(key)-8:])
 	return key
 }
 
-func (s *shardKeys) encodeLinkKey(ino uint64, name string) []byte {
+func (s *shardKeysGenerator) encodeLinkKey(ino uint64, name string) []byte {
 	shardDataPrefixSize := shardDataPrefixSize(s.spaceId, s.shardId)
 	key := make([]byte, shardDataPrefixSize+8+len(infix)+len(name))
 	encodeShardDataPrefix(s.spaceId, s.shardId, key)
@@ -334,7 +343,7 @@ func (s *shardKeys) encodeLinkKey(ino uint64, name string) []byte {
 	return key
 }
 
-func (s *shardKeys) decodeLinkKey(key []byte) (ino uint64, name string) {
+func (s *shardKeysGenerator) decodeLinkKey(key []byte) (ino uint64, name string) {
 	shardDataPrefixSize := shardDataPrefixSize(s.spaceId, s.shardId)
 	ino = decodeIno(key[shardDataPrefixSize:])
 	nameRaw := make([]byte, len(key[shardDataPrefixSize+8+len(infix):]))
@@ -343,7 +352,7 @@ func (s *shardKeys) decodeLinkKey(key []byte) (ino uint64, name string) {
 	return
 }
 
-func (s *shardKeys) encodeLinkKeyPrefix(ino uint64) []byte {
+func (s *shardKeysGenerator) encodeLinkKeyPrefix(ino uint64) []byte {
 	shardDataPrefixSize := shardDataPrefixSize(s.spaceId, s.shardId)
 	keyPrefix := make([]byte, shardDataPrefixSize+8+len(infix))
 	encodeShardDataPrefix(s.spaceId, s.shardId, keyPrefix)
@@ -352,23 +361,23 @@ func (s *shardKeys) encodeLinkKeyPrefix(ino uint64) []byte {
 	return keyPrefix
 }
 
-func protoFieldsToInternalFields(external []*proto.Field) []field {
-	ret := make([]field, len(external))
+func protoFieldsToInternalFields(external []*proto.Field) []*internal.Field {
+	ret := make([]*internal.Field, len(external))
 	for i := range external {
-		ret[i] = field{
-			name:  external[i].Name,
-			value: external[i].Value,
+		ret[i] = &internal.Field{
+			Name:  external[i].Name,
+			Value: external[i].Value,
 		}
 	}
 	return ret
 }
 
-func internalFieldsToProtoFields(internal []field) []*proto.Field {
+func internalFieldsToProtoFields(internal []*internal.Field) []*proto.Field {
 	ret := make([]*proto.Field, len(internal))
 	for i := range internal {
 		ret[i] = &proto.Field{
-			Name:  internal[i].name,
-			Value: internal[i].value,
+			Name:  internal[i].Name,
+			Value: internal[i].Value,
 		}
 	}
 	return ret

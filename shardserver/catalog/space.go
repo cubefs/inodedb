@@ -7,7 +7,7 @@ import (
 	"github.com/cubefs/cubefs/util/btree"
 	"github.com/cubefs/inodedb/errors"
 	"github.com/cubefs/inodedb/proto"
-	"github.com/cubefs/inodedb/shard/store"
+	"github.com/cubefs/inodedb/shardserver/store"
 )
 
 type Space struct {
@@ -141,7 +141,7 @@ func (s *Space) locateShard(ctx context.Context, ino uint64) *shard {
 	if found == nil {
 		return nil
 	}
-	v, _ := s.shards.Load(found.(*shardRange).startIno / proto.ShardFixedRange)
+	v, _ := s.shards.Load(found.(*shardRange).startIno / proto.ShardRangeStepSize)
 	return v.(*shard)
 }
 

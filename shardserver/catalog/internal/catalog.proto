@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package internal;
+
+option go_package = "github.com/cubefs/inodedb/shard/catalog/internal";
+
+message Item {
+  uint64 ino = 1;
+  uint64 links = 2;
+  repeated Field fields = 3;
+}
+
+message Link {
+  uint64 parent = 1;
+  string name = 2;
+  uint64 child = 3;
+  repeated Field fields = 4;
+}
+
+message Field {
+  string name = 1;
+  bytes value = 2;
+}

@@ -8,6 +8,7 @@ import (
 	"github.com/cubefs/cubefs/blobstore/util/errors"
 	"github.com/cubefs/inodedb/common/kvstore"
 	"github.com/cubefs/inodedb/proto"
+	"github.com/cubefs/inodedb/shardserver/catalog/internal"
 	pb "google.golang.org/protobuf/proto"
 )
 
@@ -70,16 +71,20 @@ func (s *shard) applyInsertItem(ctx context.Context, data []byte) error {
 
 	// transform into internal item
 	fields := protoFieldsToInternalFields(protoItem.Fields)
-	data, err = (&item{
-		ino:    protoItem.Ino,
-		links:  protoItem.Links,
-		fields: fields,
+	value, err := (&item{
+		Ino:    protoItem.Ino,
+		Links:  protoItem.Links,
+		Fields: fields,
 	}).Marshal()
 	if err != nil {
 		return err
 	}
 
-	return kvStore.SetRaw(ctx, dataCF, key, data, nil)
+	if err := kvStore.SetRaw(ctx, dataCF, key, value, nil); err != nil {
+		return err
+	}
+	s.increaseInoUsed()
+	return nil
 }
 
 func (s *shard) applyUpdateItem(ctx context.Context, data []byte) error {
@@ -106,16 +111,16 @@ func (s *shard) applyUpdateItem(ctx context.Context, data []byte) error {
 	}
 
 	fieldMap := make(map[string]int)
-	for i := range item.fields {
-		fieldMap[item.fields[i].name] = i
+	for i := range item.Fields {
+		fieldMap[item.Fields[i].Name] = i
 	}
 	for _, updateField := range protoItem.Fields {
 		// update existed field or insert new field
 		if idx, ok := fieldMap[updateField.Name]; ok {
-			item.fields[idx].value = updateField.Value
+			item.Fields[idx].Value = updateField.Value
 			continue
 		}
-		item.fields = append(item.fields, field{name: updateField.Name, value: updateField.Value})
+		item.Fields = append(item.Fields, &internal.Field{Name: updateField.Name, Value: updateField.Value})
 	}
 
 	data, err = item.Marshal()
@@ -157,10 +162,10 @@ func (s *shard) applyLink(ctx context.Context, data []byte) error {
 	// transform into internal link
 	fields := protoFieldsToInternalFields(protoLink.Fields)
 	link := &link{
-		parent: protoLink.Parent,
-		name:   protoLink.Name,
-		child:  protoLink.Child,
-		fields: fields,
+		Parent: protoLink.Parent,
+		Name:   protoLink.Name,
+		Child:  protoLink.Child,
+		Fields: fields,
 	}
 	linkData, err := link.Marshal()
 	if err != nil {
@@ -177,7 +182,7 @@ func (s *shard) applyLink(ctx context.Context, data []byte) error {
 		return errors.Info(err, "unmarshal parent item data failed")
 	}
 
-	pItem.links += 1
+	pItem.Links += 1
 	pData, err := pItem.Marshal()
 	if err != nil {
 		return errors.Info(err, "marshal parent item data failed")
@@ -218,7 +223,7 @@ func (s *shard) applyUnlink(ctx context.Context, data []byte) error {
 		return errors.Info(err, "unmarshal parent item data failed")
 	}
 
-	pItem.links -= 1
+	pItem.Links -= 1
 	pData, err := pItem.Marshal()
 	if err != nil {
 		return errors.Info(err, "marshal parent item data failed")
