@@ -22,7 +22,7 @@ import (
 const (
 	defaultCF = "default"
 
-	RocksdbEngineType = LsmKVType("rocksdb")
+	RocksdbLsmKVType = LsmKVType("rocksdb")
 
 	FIFOStyle      = CompactionStyle("fifo")
 	LevelStyle     = CompactionStyle("level")
@@ -194,7 +194,7 @@ type (
 
 func NewKVStore(ctx context.Context, path string, lsmType LsmKVType, option *Option) (Store, error) {
 	switch lsmType {
-	case RocksdbEngineType:
+	case RocksdbLsmKVType:
 		return newRocksdb(ctx, path, option)
 	default:
 		return nil, ErrNotFound
@@ -203,7 +203,7 @@ func NewKVStore(ctx context.Context, path string, lsmType LsmKVType, option *Opt
 
 func NewCache(ctx context.Context, lsmType LsmKVType, size uint64) LruCache {
 	switch lsmType {
-	case RocksdbEngineType:
+	case RocksdbLsmKVType:
 		return newRocksdbLruCache(ctx, size)
 	default:
 		return nil
@@ -212,7 +212,7 @@ func NewCache(ctx context.Context, lsmType LsmKVType, size uint64) LruCache {
 
 func NewWriteBufferManager(ctx context.Context, lsmType LsmKVType, size uint64) WriteBufferManager {
 	switch lsmType {
-	case RocksdbEngineType:
+	case RocksdbLsmKVType:
 		return newRocksdbWriteBufferManager(ctx, size)
 	default:
 		return nil
@@ -221,7 +221,7 @@ func NewWriteBufferManager(ctx context.Context, lsmType LsmKVType, size uint64) 
 
 func NewRateLimiter(ctx context.Context, lsmType LsmKVType, value int64) RateLimiter {
 	switch lsmType {
-	case RocksdbEngineType:
+	case RocksdbLsmKVType:
 		return newRocksdbRateLimiter(ctx, value)
 	default:
 		return nil
@@ -230,7 +230,7 @@ func NewRateLimiter(ctx context.Context, lsmType LsmKVType, value int64) RateLim
 
 func NewEnv(ctx context.Context, lsmType LsmKVType) Env {
 	switch lsmType {
-	case RocksdbEngineType:
+	case RocksdbLsmKVType:
 		return newRocksdbEnv(ctx)
 	default:
 		return nil
@@ -239,7 +239,7 @@ func NewEnv(ctx context.Context, lsmType LsmKVType) Env {
 
 func NewSstFileManager(ctx context.Context, lsmType LsmKVType, env Env) SstFileManager {
 	switch lsmType {
-	case RocksdbEngineType:
+	case RocksdbLsmKVType:
 		return newRocksdbSstFileManager(ctx, env)
 	default:
 		return nil

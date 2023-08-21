@@ -17,12 +17,12 @@ package single
 import (
 	"sync"
 
-	"github.com/cubefs/inodedb/shard"
+	"github.com/cubefs/inodedb/shardserver"
 )
 
 type Space struct {
 	name   string
 	id     uint64
-	shards []*shard.Shard
+	shards []*shardserver.Shard
 	lock   sync.RWMutex
 }

@@ -1968,6 +1968,100 @@ func (x *GetCatalogChangesResponse) GetItems() []*CatalogChangeItem {
 	return nil
 }
 
+type GetRoleNodesRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Role NodeRole `protobuf:"varint,1,opt,name=role,proto3,enum=proto.NodeRole" json:"role,omitempty"`
+}
+
+func (x *GetRoleNodesRequest) Reset() {
+	*x = GetRoleNodesRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_inodedb_grpc_proto_msgTypes[38]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *GetRoleNodesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRoleNodesRequest) ProtoMessage() {}
+
+func (x *GetRoleNodesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_inodedb_grpc_proto_msgTypes[38]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRoleNodesRequest.ProtoReflect.Descriptor instead.
+func (*GetRoleNodesRequest) Descriptor() ([]byte, []int) {
+	return file_inodedb_grpc_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *GetRoleNodesRequest) GetRole() NodeRole {
+	if x != nil {
+		return x.Role
+	}
+	return NodeRole_Single
+}
+
+type GetRoleNodesResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Nodes []*Node `protobuf:"bytes,1,rep,name=nodes,proto3" json:"nodes,omitempty"`
+}
+
+func (x *GetRoleNodesResponse) Reset() {
+	*x = GetRoleNodesResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_inodedb_grpc_proto_msgTypes[39]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *GetRoleNodesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRoleNodesResponse) ProtoMessage() {}
+
+func (x *GetRoleNodesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_inodedb_grpc_proto_msgTypes[39]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRoleNodesResponse.ProtoReflect.Descriptor instead.
+func (*GetRoleNodesResponse) Descriptor() ([]byte, []int) {
+	return file_inodedb_grpc_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *GetRoleNodesResponse) GetNodes() []*Node {
+	if x != nil {
+		return x.Nodes
+	}
+	return nil
+}
+
 var File_inodedb_grpc_proto protoreflect.FileDescriptor
 
 var file_inodedb_grpc_proto_rawDesc = []byte{
@@ -2140,82 +2234,130 @@ var file_inodedb_grpc_proto_rawDesc = []byte{
 	0x6e, 0x12, 0x2e, 0x0a, 0x05, 0x69, 0x74, 0x65, 0x6d, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b,
 	0x32, 0x18, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x43, 0x61, 0x74, 0x61, 0x6c, 0x6f, 0x67,
 	0x43, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x49, 0x74, 0x65, 0x6d, 0x52, 0x05, 0x69, 0x74, 0x65, 0x6d,
-	0x73, 0x32, 0x86, 0x09, 0x0a, 0x07, 0x49, 0x6e, 0x6f, 0x64, 0x65, 0x44, 0x42, 0x12, 0x3a, 0x0a,
-	0x07, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x12, 0x15, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
-	0x2e, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a,
-	0x16, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x52,
-	0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x40, 0x0a, 0x09, 0x48, 0x65, 0x61,
-	0x72, 0x74, 0x62, 0x65, 0x61, 0x74, 0x12, 0x17, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x48,
-	0x65, 0x61, 0x72, 0x74, 0x62, 0x65, 0x61, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a,
-	0x18, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x48, 0x65, 0x61, 0x72, 0x74, 0x62, 0x65, 0x61,
-	0x74, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x37, 0x0a, 0x06, 0x52,
-	0x65, 0x70, 0x6f, 0x72, 0x74, 0x12, 0x14, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x52, 0x65,
-	0x70, 0x6f, 0x72, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x15, 0x2e, 0x70, 0x72,
-	0x6f, 0x74, 0x6f, 0x2e, 0x52, 0x65, 0x70, 0x6f, 0x72, 0x74, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
-	0x73, 0x65, 0x22, 0x00, 0x12, 0x3a, 0x0a, 0x07, 0x47, 0x65, 0x74, 0x4e, 0x6f, 0x64, 0x65, 0x12,
-	0x15, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x47, 0x65, 0x74, 0x4e, 0x6f, 0x64, 0x65, 0x52,
-	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x47,
-	0x65, 0x74, 0x4e, 0x6f, 0x64, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00,
-	0x12, 0x46, 0x0a, 0x0b, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x53, 0x70, 0x61, 0x63, 0x65, 0x12,
-	0x19, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x53, 0x70,
-	0x61, 0x63, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1a, 0x2e, 0x70, 0x72, 0x6f,
-	0x74, 0x6f, 0x2e, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x53, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65,
-	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x46, 0x0a, 0x0b, 0x44, 0x65, 0x6c, 0x65,
-	0x74, 0x65, 0x53, 0x70, 0x61, 0x63, 0x65, 0x12, 0x19, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e,
-	0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x53, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65,
-	0x73, 0x74, 0x1a, 0x1a, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x44, 0x65, 0x6c, 0x65, 0x74,
-	0x65, 0x53, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00,
-	0x12, 0x3d, 0x0a, 0x08, 0x47, 0x65, 0x74, 0x53, 0x70, 0x61, 0x63, 0x65, 0x12, 0x16, 0x2e, 0x70,
-	0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x47, 0x65, 0x74, 0x53, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x71,
-	0x75, 0x65, 0x73, 0x74, 0x1a, 0x17, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x47, 0x65, 0x74,
-	0x53, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12,
-	0x58, 0x0a, 0x11, 0x47, 0x65, 0x74, 0x43, 0x61, 0x74, 0x61, 0x6c, 0x6f, 0x67, 0x43, 0x68, 0x61,
-	0x6e, 0x67, 0x65, 0x73, 0x12, 0x1f, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x47, 0x65, 0x74,
-	0x43, 0x61, 0x74, 0x61, 0x6c, 0x6f, 0x67, 0x43, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x73, 0x52, 0x65,
-	0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x20, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x47, 0x65,
-	0x74, 0x43, 0x61, 0x74, 0x61, 0x6c, 0x6f, 0x67, 0x43, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x73, 0x52,
-	0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x3d, 0x0a, 0x08, 0x41, 0x64, 0x64,
-	0x53, 0x68, 0x61, 0x72, 0x64, 0x12, 0x16, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x41, 0x64,
-	0x64, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x17, 0x2e,
-	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x41, 0x64, 0x64, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65,
-	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x3d, 0x0a, 0x08, 0x47, 0x65, 0x74, 0x53,
-	0x68, 0x61, 0x72, 0x64, 0x12, 0x16, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x47, 0x65, 0x74,
-	0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x17, 0x2e, 0x70,
-	0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x47, 0x65, 0x74, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x73,
-	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x43, 0x0a, 0x0a, 0x49, 0x6e, 0x73, 0x65, 0x72,
-	0x74, 0x49, 0x74, 0x65, 0x6d, 0x12, 0x18, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x49, 0x6e,
-	0x73, 0x65, 0x72, 0x74, 0x49, 0x74, 0x65, 0x6d, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a,
-	0x19, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x49, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x49, 0x74,
-	0x65, 0x6d, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x43, 0x0a, 0x0a,
-	0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x49, 0x74, 0x65, 0x6d, 0x12, 0x18, 0x2e, 0x70, 0x72, 0x6f,
-	0x74, 0x6f, 0x2e, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x49, 0x74, 0x65, 0x6d, 0x52, 0x65, 0x71,
-	0x75, 0x65, 0x73, 0x74, 0x1a, 0x19, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x55, 0x70, 0x64,
-	0x61, 0x74, 0x65, 0x49, 0x74, 0x65, 0x6d, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22,
-	0x00, 0x12, 0x43, 0x0a, 0x0a, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x49, 0x74, 0x65, 0x6d, 0x12,
-	0x18, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x49, 0x74,
-	0x65, 0x6d, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x19, 0x2e, 0x70, 0x72, 0x6f, 0x74,
-	0x6f, 0x2e, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x49, 0x74, 0x65, 0x6d, 0x52, 0x65, 0x73, 0x70,
-	0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x3a, 0x0a, 0x07, 0x47, 0x65, 0x74, 0x49, 0x74, 0x65,
-	0x6d, 0x12, 0x15, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x47, 0x65, 0x74, 0x49, 0x74, 0x65,
-	0x6d, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
-	0x2e, 0x47, 0x65, 0x74, 0x49, 0x74, 0x65, 0x6d, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
-	0x22, 0x00, 0x12, 0x31, 0x0a, 0x04, 0x4c, 0x69, 0x6e, 0x6b, 0x12, 0x12, 0x2e, 0x70, 0x72, 0x6f,
-	0x74, 0x6f, 0x2e, 0x4c, 0x69, 0x6e, 0x6b, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x13,
-	0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x4c, 0x69, 0x6e, 0x6b, 0x52, 0x65, 0x73, 0x70, 0x6f,
-	0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x37, 0x0a, 0x06, 0x55, 0x6e, 0x6c, 0x69, 0x6e, 0x6b, 0x12,
-	0x14, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x55, 0x6e, 0x6c, 0x69, 0x6e, 0x6b, 0x52, 0x65,
-	0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x15, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x55, 0x6e,
-	0x6c, 0x69, 0x6e, 0x6b, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x31,
-	0x0a, 0x04, 0x4c, 0x69, 0x73, 0x74, 0x12, 0x12, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x4c,
-	0x69, 0x73, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x13, 0x2e, 0x70, 0x72, 0x6f,
-	0x74, 0x6f, 0x2e, 0x4c, 0x69, 0x73, 0x74, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22,
-	0x00, 0x12, 0x37, 0x0a, 0x06, 0x53, 0x65, 0x61, 0x72, 0x63, 0x68, 0x12, 0x14, 0x2e, 0x70, 0x72,
-	0x6f, 0x74, 0x6f, 0x2e, 0x53, 0x65, 0x61, 0x72, 0x63, 0x68, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
-	0x74, 0x1a, 0x15, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x53, 0x65, 0x61, 0x72, 0x63, 0x68,
-	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x42, 0x21, 0x5a, 0x1f, 0x67, 0x69,
-	0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x63, 0x75, 0x62, 0x65, 0x66, 0x73, 0x2f,
-	0x69, 0x6e, 0x6f, 0x64, 0x65, 0x64, 0x62, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70,
-	0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x73, 0x22, 0x3a, 0x0a, 0x13, 0x47, 0x65, 0x74, 0x52, 0x6f, 0x6c, 0x65, 0x4e, 0x6f, 0x64, 0x65,
+	0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x23, 0x0a, 0x04, 0x72, 0x6f, 0x6c, 0x65,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x0f, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x4e,
+	0x6f, 0x64, 0x65, 0x52, 0x6f, 0x6c, 0x65, 0x52, 0x04, 0x72, 0x6f, 0x6c, 0x65, 0x22, 0x39, 0x0a,
+	0x14, 0x47, 0x65, 0x74, 0x52, 0x6f, 0x6c, 0x65, 0x4e, 0x6f, 0x64, 0x65, 0x73, 0x52, 0x65, 0x73,
+	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x21, 0x0a, 0x05, 0x6e, 0x6f, 0x64, 0x65, 0x73, 0x18, 0x01,
+	0x20, 0x03, 0x28, 0x0b, 0x32, 0x0b, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x4e, 0x6f, 0x64,
+	0x65, 0x52, 0x05, 0x6e, 0x6f, 0x64, 0x65, 0x73, 0x32, 0xf6, 0x04, 0x0a, 0x0d, 0x49, 0x6e, 0x6f,
+	0x64, 0x65, 0x44, 0x42, 0x4d, 0x61, 0x73, 0x74, 0x65, 0x72, 0x12, 0x3a, 0x0a, 0x07, 0x43, 0x6c,
+	0x75, 0x73, 0x74, 0x65, 0x72, 0x12, 0x15, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x43, 0x6c,
+	0x75, 0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x73, 0x70,
+	0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x40, 0x0a, 0x09, 0x48, 0x65, 0x61, 0x72, 0x74, 0x62,
+	0x65, 0x61, 0x74, 0x12, 0x17, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x48, 0x65, 0x61, 0x72,
+	0x74, 0x62, 0x65, 0x61, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x18, 0x2e, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x48, 0x65, 0x61, 0x72, 0x74, 0x62, 0x65, 0x61, 0x74, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x37, 0x0a, 0x06, 0x52, 0x65, 0x70, 0x6f,
+	0x72, 0x74, 0x12, 0x14, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x52, 0x65, 0x70, 0x6f, 0x72,
+	0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x15, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+	0x2e, 0x52, 0x65, 0x70, 0x6f, 0x72, 0x74, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22,
+	0x00, 0x12, 0x3a, 0x0a, 0x07, 0x47, 0x65, 0x74, 0x4e, 0x6f, 0x64, 0x65, 0x12, 0x15, 0x2e, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x47, 0x65, 0x74, 0x4e, 0x6f, 0x64, 0x65, 0x52, 0x65, 0x71, 0x75,
+	0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x47, 0x65, 0x74, 0x4e,
+	0x6f, 0x64, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x46, 0x0a,
+	0x0b, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x53, 0x70, 0x61, 0x63, 0x65, 0x12, 0x19, 0x2e, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x53, 0x70, 0x61, 0x63, 0x65,
+	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1a, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e,
+	0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x53, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f,
+	0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x46, 0x0a, 0x0b, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x53,
+	0x70, 0x61, 0x63, 0x65, 0x12, 0x19, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x44, 0x65, 0x6c,
+	0x65, 0x74, 0x65, 0x53, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a,
+	0x1a, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x53, 0x70,
+	0x61, 0x63, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x3d, 0x0a,
+	0x08, 0x47, 0x65, 0x74, 0x53, 0x70, 0x61, 0x63, 0x65, 0x12, 0x16, 0x2e, 0x70, 0x72, 0x6f, 0x74,
+	0x6f, 0x2e, 0x47, 0x65, 0x74, 0x53, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
+	0x74, 0x1a, 0x17, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x47, 0x65, 0x74, 0x53, 0x70, 0x61,
+	0x63, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x58, 0x0a, 0x11,
+	0x47, 0x65, 0x74, 0x43, 0x61, 0x74, 0x61, 0x6c, 0x6f, 0x67, 0x43, 0x68, 0x61, 0x6e, 0x67, 0x65,
+	0x73, 0x12, 0x1f, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x47, 0x65, 0x74, 0x43, 0x61, 0x74,
+	0x61, 0x6c, 0x6f, 0x67, 0x43, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65,
+	0x73, 0x74, 0x1a, 0x20, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x47, 0x65, 0x74, 0x43, 0x61,
+	0x74, 0x61, 0x6c, 0x6f, 0x67, 0x43, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x73, 0x52, 0x65, 0x73, 0x70,
+	0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x49, 0x0a, 0x0c, 0x47, 0x65, 0x74, 0x52, 0x6f, 0x6c,
+	0x65, 0x4e, 0x6f, 0x64, 0x65, 0x73, 0x12, 0x1a, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x47,
+	0x65, 0x74, 0x52, 0x6f, 0x6c, 0x65, 0x4e, 0x6f, 0x64, 0x65, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65,
+	0x73, 0x74, 0x1a, 0x1b, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x47, 0x65, 0x74, 0x52, 0x6f,
+	0x6c, 0x65, 0x4e, 0x6f, 0x64, 0x65, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22,
+	0x00, 0x32, 0xf2, 0x03, 0x0a, 0x0d, 0x49, 0x6e, 0x6f, 0x64, 0x65, 0x44, 0x42, 0x52, 0x6f, 0x75,
+	0x74, 0x65, 0x72, 0x12, 0x43, 0x0a, 0x0a, 0x49, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x49, 0x74, 0x65,
+	0x6d, 0x12, 0x18, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x49, 0x6e, 0x73, 0x65, 0x72, 0x74,
+	0x49, 0x74, 0x65, 0x6d, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x19, 0x2e, 0x70, 0x72,
+	0x6f, 0x74, 0x6f, 0x2e, 0x49, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x49, 0x74, 0x65, 0x6d, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x43, 0x0a, 0x0a, 0x55, 0x70, 0x64, 0x61,
+	0x74, 0x65, 0x49, 0x74, 0x65, 0x6d, 0x12, 0x18, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x55,
+	0x70, 0x64, 0x61, 0x74, 0x65, 0x49, 0x74, 0x65, 0x6d, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
+	0x1a, 0x19, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x49,
+	0x74, 0x65, 0x6d, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x43, 0x0a,
+	0x0a, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x49, 0x74, 0x65, 0x6d, 0x12, 0x18, 0x2e, 0x70, 0x72,
+	0x6f, 0x74, 0x6f, 0x2e, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x49, 0x74, 0x65, 0x6d, 0x52, 0x65,
+	0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x19, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x44, 0x65,
+	0x6c, 0x65, 0x74, 0x65, 0x49, 0x74, 0x65, 0x6d, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x22, 0x00, 0x12, 0x3a, 0x0a, 0x07, 0x47, 0x65, 0x74, 0x49, 0x74, 0x65, 0x6d, 0x12, 0x15, 0x2e,
+	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x47, 0x65, 0x74, 0x49, 0x74, 0x65, 0x6d, 0x52, 0x65, 0x71,
+	0x75, 0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x47, 0x65, 0x74,
+	0x49, 0x74, 0x65, 0x6d, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x31,
+	0x0a, 0x04, 0x4c, 0x69, 0x6e, 0x6b, 0x12, 0x12, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x4c,
+	0x69, 0x6e, 0x6b, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x13, 0x2e, 0x70, 0x72, 0x6f,
+	0x74, 0x6f, 0x2e, 0x4c, 0x69, 0x6e, 0x6b, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22,
+	0x00, 0x12, 0x37, 0x0a, 0x06, 0x55, 0x6e, 0x6c, 0x69, 0x6e, 0x6b, 0x12, 0x14, 0x2e, 0x70, 0x72,
+	0x6f, 0x74, 0x6f, 0x2e, 0x55, 0x6e, 0x6c, 0x69, 0x6e, 0x6b, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
+	0x74, 0x1a, 0x15, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x55, 0x6e, 0x6c, 0x69, 0x6e, 0x6b,
+	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x31, 0x0a, 0x04, 0x4c, 0x69,
+	0x73, 0x74, 0x12, 0x12, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x4c, 0x69, 0x73, 0x74, 0x52,
+	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x13, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x4c,
+	0x69, 0x73, 0x74, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x37, 0x0a,
+	0x06, 0x53, 0x65, 0x61, 0x72, 0x63, 0x68, 0x12, 0x14, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e,
+	0x53, 0x65, 0x61, 0x72, 0x63, 0x68, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x15, 0x2e,
+	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x53, 0x65, 0x61, 0x72, 0x63, 0x68, 0x52, 0x65, 0x73, 0x70,
+	0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x32, 0x9d, 0x05, 0x0a, 0x12, 0x49, 0x6e, 0x6f, 0x64, 0x65,
+	0x44, 0x42, 0x53, 0x68, 0x61, 0x72, 0x64, 0x53, 0x65, 0x72, 0x76, 0x65, 0x72, 0x12, 0x3d, 0x0a,
+	0x08, 0x41, 0x64, 0x64, 0x53, 0x68, 0x61, 0x72, 0x64, 0x12, 0x16, 0x2e, 0x70, 0x72, 0x6f, 0x74,
+	0x6f, 0x2e, 0x41, 0x64, 0x64, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
+	0x74, 0x1a, 0x17, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x41, 0x64, 0x64, 0x53, 0x68, 0x61,
+	0x72, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x3d, 0x0a, 0x08,
+	0x47, 0x65, 0x74, 0x53, 0x68, 0x61, 0x72, 0x64, 0x12, 0x16, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+	0x2e, 0x47, 0x65, 0x74, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
+	0x1a, 0x17, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x47, 0x65, 0x74, 0x53, 0x68, 0x61, 0x72,
+	0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x48, 0x0a, 0x0f, 0x53,
+	0x68, 0x61, 0x72, 0x64, 0x49, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x49, 0x74, 0x65, 0x6d, 0x12, 0x18,
+	0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x49, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x49, 0x74, 0x65,
+	0x6d, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x19, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+	0x2e, 0x49, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x49, 0x74, 0x65, 0x6d, 0x52, 0x65, 0x73, 0x70, 0x6f,
+	0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x48, 0x0a, 0x0f, 0x53, 0x68, 0x61, 0x72, 0x64, 0x55, 0x70,
+	0x64, 0x61, 0x74, 0x65, 0x49, 0x74, 0x65, 0x6d, 0x12, 0x18, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+	0x2e, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x49, 0x74, 0x65, 0x6d, 0x52, 0x65, 0x71, 0x75, 0x65,
+	0x73, 0x74, 0x1a, 0x19, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x55, 0x70, 0x64, 0x61, 0x74,
+	0x65, 0x49, 0x74, 0x65, 0x6d, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12,
+	0x48, 0x0a, 0x0f, 0x53, 0x68, 0x61, 0x72, 0x64, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x49, 0x74,
+	0x65, 0x6d, 0x12, 0x18, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x44, 0x65, 0x6c, 0x65, 0x74,
+	0x65, 0x49, 0x74, 0x65, 0x6d, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x19, 0x2e, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x49, 0x74, 0x65, 0x6d, 0x52,
+	0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x3f, 0x0a, 0x0c, 0x53, 0x68, 0x61,
+	0x72, 0x64, 0x47, 0x65, 0x74, 0x49, 0x74, 0x65, 0x6d, 0x12, 0x15, 0x2e, 0x70, 0x72, 0x6f, 0x74,
+	0x6f, 0x2e, 0x47, 0x65, 0x74, 0x49, 0x74, 0x65, 0x6d, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
+	0x1a, 0x16, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x47, 0x65, 0x74, 0x49, 0x74, 0x65, 0x6d,
+	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x36, 0x0a, 0x09, 0x53, 0x68,
+	0x61, 0x72, 0x64, 0x4c, 0x69, 0x6e, 0x6b, 0x12, 0x12, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e,
+	0x4c, 0x69, 0x6e, 0x6b, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x13, 0x2e, 0x70, 0x72,
+	0x6f, 0x74, 0x6f, 0x2e, 0x4c, 0x69, 0x6e, 0x6b, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x22, 0x00, 0x12, 0x3c, 0x0a, 0x0b, 0x53, 0x68, 0x61, 0x72, 0x64, 0x55, 0x6e, 0x6c, 0x69, 0x6e,
+	0x6b, 0x12, 0x14, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x55, 0x6e, 0x6c, 0x69, 0x6e, 0x6b,
+	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x15, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e,
+	0x55, 0x6e, 0x6c, 0x69, 0x6e, 0x6b, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00,
+	0x12, 0x36, 0x0a, 0x09, 0x53, 0x68, 0x61, 0x72, 0x64, 0x4c, 0x69, 0x73, 0x74, 0x12, 0x12, 0x2e,
+	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x4c, 0x69, 0x73, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
+	0x74, 0x1a, 0x13, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x4c, 0x69, 0x73, 0x74, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x3c, 0x0a, 0x0b, 0x53, 0x68, 0x61, 0x72,
+	0x64, 0x53, 0x65, 0x61, 0x72, 0x63, 0x68, 0x12, 0x14, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e,
+	0x53, 0x65, 0x61, 0x72, 0x63, 0x68, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x15, 0x2e,
+	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x53, 0x65, 0x61, 0x72, 0x63, 0x68, 0x52, 0x65, 0x73, 0x70,
+	0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x42, 0x21, 0x5a, 0x1f, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62,
+	0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x63, 0x75, 0x62, 0x65, 0x66, 0x73, 0x2f, 0x69, 0x6e, 0x6f, 0x64,
+	0x65, 0x64, 0x62, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+	0x33,
 }
 
 var (
@@ -2230,7 +2372,7 @@ func file_inodedb_grpc_proto_rawDescGZIP() []byte {
 	return file_inodedb_grpc_proto_rawDescData
 }
 
-var file_inodedb_grpc_proto_msgTypes = make([]protoimpl.MessageInfo, 39)
+var file_inodedb_grpc_proto_msgTypes = make([]protoimpl.MessageInfo, 41)
 var file_inodedb_grpc_proto_goTypes = []interface{}{
 	(*ClusterRequest)(nil),            // 0: proto.ClusterRequest
 	(*ClusterResponse)(nil),           // 1: proto.ClusterResponse
@@ -2270,80 +2412,103 @@ var file_inodedb_grpc_proto_goTypes = []interface{}{
 	(*SearchResponse)(nil),            // 35: proto.SearchResponse
 	(*GetCatalogChangesRequest)(nil),  // 36: proto.GetCatalogChangesRequest
 	(*GetCatalogChangesResponse)(nil), // 37: proto.GetCatalogChangesResponse
-	nil,                               // 38: proto.AddShardRequest.ReplicatesEntry
-	(ClusterOperation)(0),             // 39: proto.ClusterOperation
-	(*Node)(nil),                      // 40: proto.Node
-	(SpaceType)(0),                    // 41: proto.SpaceType
-	(*FieldMeta)(nil),                 // 42: proto.FieldMeta
-	(*ShardReport)(nil),               // 43: proto.ShardReport
-	(*SpaceMeta)(nil),                 // 44: proto.SpaceMeta
-	(*Shard)(nil),                     // 45: proto.Shard
-	(*Item)(nil),                      // 46: proto.Item
-	(*Link)(nil),                      // 47: proto.Link
-	(*Unlink)(nil),                    // 48: proto.Unlink
-	(*CatalogChangeItem)(nil),         // 49: proto.CatalogChangeItem
+	(*GetRoleNodesRequest)(nil),       // 38: proto.GetRoleNodesRequest
+	(*GetRoleNodesResponse)(nil),      // 39: proto.GetRoleNodesResponse
+	nil,                               // 40: proto.AddShardRequest.ReplicatesEntry
+	(ClusterOperation)(0),             // 41: proto.ClusterOperation
+	(*Node)(nil),                      // 42: proto.Node
+	(SpaceType)(0),                    // 43: proto.SpaceType
+	(*FieldMeta)(nil),                 // 44: proto.FieldMeta
+	(*ShardReport)(nil),               // 45: proto.ShardReport
+	(*SpaceMeta)(nil),                 // 46: proto.SpaceMeta
+	(*Shard)(nil),                     // 47: proto.Shard
+	(*Item)(nil),                      // 48: proto.Item
+	(*Link)(nil),                      // 49: proto.Link
+	(*Unlink)(nil),                    // 50: proto.Unlink
+	(*CatalogChangeItem)(nil),         // 51: proto.CatalogChangeItem
+	(NodeRole)(0),                     // 52: proto.NodeRole
 }
 var file_inodedb_grpc_proto_depIdxs = []int32{
-	39, // 0: proto.ClusterRequest.operation:type_name -> proto.ClusterOperation
-	40, // 1: proto.ClusterRequest.node_info:type_name -> proto.Node
-	41, // 2: proto.CreateSpaceRequest.type:type_name -> proto.SpaceType
-	42, // 3: proto.CreateSpaceRequest.fixed_fields:type_name -> proto.FieldMeta
-	43, // 4: proto.ReportRequest.infos:type_name -> proto.ShardReport
-	40, // 5: proto.GetNodeResponse.node_info:type_name -> proto.Node
-	44, // 6: proto.CreateSpaceResponse.info:type_name -> proto.SpaceMeta
-	44, // 7: proto.GetSpaceResponse.info:type_name -> proto.SpaceMeta
-	38, // 8: proto.AddShardRequest.replicates:type_name -> proto.AddShardRequest.ReplicatesEntry
-	45, // 9: proto.GetShardResponse.shard:type_name -> proto.Shard
-	46, // 10: proto.InsertItemRequest.item:type_name -> proto.Item
-	46, // 11: proto.UpdateItemRequest.item:type_name -> proto.Item
-	46, // 12: proto.GetItemResponse.item:type_name -> proto.Item
-	47, // 13: proto.LinkRequest.link:type_name -> proto.Link
-	48, // 14: proto.UnlinkRequest.unlink:type_name -> proto.Unlink
-	47, // 15: proto.ListResponse.links:type_name -> proto.Link
+	41, // 0: proto.ClusterRequest.operation:type_name -> proto.ClusterOperation
+	42, // 1: proto.ClusterRequest.node_info:type_name -> proto.Node
+	43, // 2: proto.CreateSpaceRequest.type:type_name -> proto.SpaceType
+	44, // 3: proto.CreateSpaceRequest.fixed_fields:type_name -> proto.FieldMeta
+	45, // 4: proto.ReportRequest.infos:type_name -> proto.ShardReport
+	42, // 5: proto.GetNodeResponse.node_info:type_name -> proto.Node
+	46, // 6: proto.CreateSpaceResponse.info:type_name -> proto.SpaceMeta
+	46, // 7: proto.GetSpaceResponse.info:type_name -> proto.SpaceMeta
+	40, // 8: proto.AddShardRequest.replicates:type_name -> proto.AddShardRequest.ReplicatesEntry
+	47, // 9: proto.GetShardResponse.shard:type_name -> proto.Shard
+	48, // 10: proto.InsertItemRequest.item:type_name -> proto.Item
+	48, // 11: proto.UpdateItemRequest.item:type_name -> proto.Item
+	48, // 12: proto.GetItemResponse.item:type_name -> proto.Item
+	49, // 13: proto.LinkRequest.link:type_name -> proto.Link
+	50, // 14: proto.UnlinkRequest.unlink:type_name -> proto.Unlink
+	49, // 15: proto.ListResponse.links:type_name -> proto.Link
 	32, // 16: proto.SearchRequest.query:type_name -> proto.Query
-	46, // 17: proto.SearchResponse.items:type_name -> proto.Item
-	49, // 18: proto.GetCatalogChangesResponse.items:type_name -> proto.CatalogChangeItem
-	0,  // 19: proto.InodeDB.Cluster:input_type -> proto.ClusterRequest
-	3,  // 20: proto.InodeDB.Heartbeat:input_type -> proto.HeartbeatRequest
-	5,  // 21: proto.InodeDB.Report:input_type -> proto.ReportRequest
-	7,  // 22: proto.InodeDB.GetNode:input_type -> proto.GetNodeRequest
-	2,  // 23: proto.InodeDB.CreateSpace:input_type -> proto.CreateSpaceRequest
-	10, // 24: proto.InodeDB.DeleteSpace:input_type -> proto.DeleteSpaceRequest
-	12, // 25: proto.InodeDB.GetSpace:input_type -> proto.GetSpaceRequest
-	36, // 26: proto.InodeDB.GetCatalogChanges:input_type -> proto.GetCatalogChangesRequest
-	14, // 27: proto.InodeDB.AddShard:input_type -> proto.AddShardRequest
-	16, // 28: proto.InodeDB.GetShard:input_type -> proto.GetShardRequest
-	18, // 29: proto.InodeDB.InsertItem:input_type -> proto.InsertItemRequest
-	20, // 30: proto.InodeDB.UpdateItem:input_type -> proto.UpdateItemRequest
-	22, // 31: proto.InodeDB.DeleteItem:input_type -> proto.DeleteItemRequest
-	24, // 32: proto.InodeDB.GetItem:input_type -> proto.GetItemRequest
-	26, // 33: proto.InodeDB.Link:input_type -> proto.LinkRequest
-	28, // 34: proto.InodeDB.Unlink:input_type -> proto.UnlinkRequest
-	30, // 35: proto.InodeDB.List:input_type -> proto.ListRequest
-	34, // 36: proto.InodeDB.Search:input_type -> proto.SearchRequest
-	1,  // 37: proto.InodeDB.Cluster:output_type -> proto.ClusterResponse
-	4,  // 38: proto.InodeDB.Heartbeat:output_type -> proto.HeartbeatResponse
-	6,  // 39: proto.InodeDB.Report:output_type -> proto.ReportResponse
-	8,  // 40: proto.InodeDB.GetNode:output_type -> proto.GetNodeResponse
-	9,  // 41: proto.InodeDB.CreateSpace:output_type -> proto.CreateSpaceResponse
-	11, // 42: proto.InodeDB.DeleteSpace:output_type -> proto.DeleteSpaceResponse
-	13, // 43: proto.InodeDB.GetSpace:output_type -> proto.GetSpaceResponse
-	37, // 44: proto.InodeDB.GetCatalogChanges:output_type -> proto.GetCatalogChangesResponse
-	15, // 45: proto.InodeDB.AddShard:output_type -> proto.AddShardResponse
-	17, // 46: proto.InodeDB.GetShard:output_type -> proto.GetShardResponse
-	19, // 47: proto.InodeDB.InsertItem:output_type -> proto.InsertItemResponse
-	21, // 48: proto.InodeDB.UpdateItem:output_type -> proto.UpdateItemResponse
-	23, // 49: proto.InodeDB.DeleteItem:output_type -> proto.DeleteItemResponse
-	25, // 50: proto.InodeDB.GetItem:output_type -> proto.GetItemResponse
-	27, // 51: proto.InodeDB.Link:output_type -> proto.LinkResponse
-	29, // 52: proto.InodeDB.Unlink:output_type -> proto.UnlinkResponse
-	31, // 53: proto.InodeDB.List:output_type -> proto.ListResponse
-	35, // 54: proto.InodeDB.Search:output_type -> proto.SearchResponse
-	37, // [37:55] is the sub-list for method output_type
-	19, // [19:37] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	48, // 17: proto.SearchResponse.items:type_name -> proto.Item
+	51, // 18: proto.GetCatalogChangesResponse.items:type_name -> proto.CatalogChangeItem
+	52, // 19: proto.GetRoleNodesRequest.role:type_name -> proto.NodeRole
+	42, // 20: proto.GetRoleNodesResponse.nodes:type_name -> proto.Node
+	0,  // 21: proto.InodeDBMaster.Cluster:input_type -> proto.ClusterRequest
+	3,  // 22: proto.InodeDBMaster.Heartbeat:input_type -> proto.HeartbeatRequest
+	5,  // 23: proto.InodeDBMaster.Report:input_type -> proto.ReportRequest
+	7,  // 24: proto.InodeDBMaster.GetNode:input_type -> proto.GetNodeRequest
+	2,  // 25: proto.InodeDBMaster.CreateSpace:input_type -> proto.CreateSpaceRequest
+	10, // 26: proto.InodeDBMaster.DeleteSpace:input_type -> proto.DeleteSpaceRequest
+	12, // 27: proto.InodeDBMaster.GetSpace:input_type -> proto.GetSpaceRequest
+	36, // 28: proto.InodeDBMaster.GetCatalogChanges:input_type -> proto.GetCatalogChangesRequest
+	38, // 29: proto.InodeDBMaster.GetRoleNodes:input_type -> proto.GetRoleNodesRequest
+	18, // 30: proto.InodeDBRouter.InsertItem:input_type -> proto.InsertItemRequest
+	20, // 31: proto.InodeDBRouter.UpdateItem:input_type -> proto.UpdateItemRequest
+	22, // 32: proto.InodeDBRouter.DeleteItem:input_type -> proto.DeleteItemRequest
+	24, // 33: proto.InodeDBRouter.GetItem:input_type -> proto.GetItemRequest
+	26, // 34: proto.InodeDBRouter.Link:input_type -> proto.LinkRequest
+	28, // 35: proto.InodeDBRouter.Unlink:input_type -> proto.UnlinkRequest
+	30, // 36: proto.InodeDBRouter.List:input_type -> proto.ListRequest
+	34, // 37: proto.InodeDBRouter.Search:input_type -> proto.SearchRequest
+	14, // 38: proto.InodeDBShardServer.AddShard:input_type -> proto.AddShardRequest
+	16, // 39: proto.InodeDBShardServer.GetShard:input_type -> proto.GetShardRequest
+	18, // 40: proto.InodeDBShardServer.ShardInsertItem:input_type -> proto.InsertItemRequest
+	20, // 41: proto.InodeDBShardServer.ShardUpdateItem:input_type -> proto.UpdateItemRequest
+	22, // 42: proto.InodeDBShardServer.ShardDeleteItem:input_type -> proto.DeleteItemRequest
+	24, // 43: proto.InodeDBShardServer.ShardGetItem:input_type -> proto.GetItemRequest
+	26, // 44: proto.InodeDBShardServer.ShardLink:input_type -> proto.LinkRequest
+	28, // 45: proto.InodeDBShardServer.ShardUnlink:input_type -> proto.UnlinkRequest
+	30, // 46: proto.InodeDBShardServer.ShardList:input_type -> proto.ListRequest
+	34, // 47: proto.InodeDBShardServer.ShardSearch:input_type -> proto.SearchRequest
+	1,  // 48: proto.InodeDBMaster.Cluster:output_type -> proto.ClusterResponse
+	4,  // 49: proto.InodeDBMaster.Heartbeat:output_type -> proto.HeartbeatResponse
+	6,  // 50: proto.InodeDBMaster.Report:output_type -> proto.ReportResponse
+	8,  // 51: proto.InodeDBMaster.GetNode:output_type -> proto.GetNodeResponse
+	9,  // 52: proto.InodeDBMaster.CreateSpace:output_type -> proto.CreateSpaceResponse
+	11, // 53: proto.InodeDBMaster.DeleteSpace:output_type -> proto.DeleteSpaceResponse
+	13, // 54: proto.InodeDBMaster.GetSpace:output_type -> proto.GetSpaceResponse
+	37, // 55: proto.InodeDBMaster.GetCatalogChanges:output_type -> proto.GetCatalogChangesResponse
+	39, // 56: proto.InodeDBMaster.GetRoleNodes:output_type -> proto.GetRoleNodesResponse
+	19, // 57: proto.InodeDBRouter.InsertItem:output_type -> proto.InsertItemResponse
+	21, // 58: proto.InodeDBRouter.UpdateItem:output_type -> proto.UpdateItemResponse
+	23, // 59: proto.InodeDBRouter.DeleteItem:output_type -> proto.DeleteItemResponse
+	25, // 60: proto.InodeDBRouter.GetItem:output_type -> proto.GetItemResponse
+	27, // 61: proto.InodeDBRouter.Link:output_type -> proto.LinkResponse
+	29, // 62: proto.InodeDBRouter.Unlink:output_type -> proto.UnlinkResponse
+	31, // 63: proto.InodeDBRouter.List:output_type -> proto.ListResponse
+	35, // 64: proto.InodeDBRouter.Search:output_type -> proto.SearchResponse
+	15, // 65: proto.InodeDBShardServer.AddShard:output_type -> proto.AddShardResponse
+	17, // 66: proto.InodeDBShardServer.GetShard:output_type -> proto.GetShardResponse
+	19, // 67: proto.InodeDBShardServer.ShardInsertItem:output_type -> proto.InsertItemResponse
+	21, // 68: proto.InodeDBShardServer.ShardUpdateItem:output_type -> proto.UpdateItemResponse
+	23, // 69: proto.InodeDBShardServer.ShardDeleteItem:output_type -> proto.DeleteItemResponse
+	25, // 70: proto.InodeDBShardServer.ShardGetItem:output_type -> proto.GetItemResponse
+	27, // 71: proto.InodeDBShardServer.ShardLink:output_type -> proto.LinkResponse
+	29, // 72: proto.InodeDBShardServer.ShardUnlink:output_type -> proto.UnlinkResponse
+	31, // 73: proto.InodeDBShardServer.ShardList:output_type -> proto.ListResponse
+	35, // 74: proto.InodeDBShardServer.ShardSearch:output_type -> proto.SearchResponse
+	48, // [48:75] is the sub-list for method output_type
+	21, // [21:48] is the sub-list for method input_type
+	21, // [21:21] is the sub-list for extension type_name
+	21, // [21:21] is the sub-list for extension extendee
+	0,  // [0:21] is the sub-list for field type_name
 }
 
 func init() { file_inodedb_grpc_proto_init() }
@@ -2809,6 +2974,30 @@ func file_inodedb_grpc_proto_init() {
 				return nil
 			}
 		}
+		file_inodedb_grpc_proto_msgTypes[38].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*GetRoleNodesRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_inodedb_grpc_proto_msgTypes[39].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*GetRoleNodesResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
 	file_inodedb_grpc_proto_msgTypes[10].OneofWrappers = []interface{}{}
 	file_inodedb_grpc_proto_msgTypes[12].OneofWrappers = []interface{}{}
@@ -2819,9 +3008,9 @@ func file_inodedb_grpc_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_inodedb_grpc_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   39,
+			NumMessages:   41,
 			NumExtensions: 0,
-			NumServices:   1,
+			NumServices:   3,
 		},
 		GoTypes:           file_inodedb_grpc_proto_goTypes,
 		DependencyIndexes: file_inodedb_grpc_proto_depIdxs,
@@ -2841,10 +3030,10 @@ var _ grpc.ClientConnInterface
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion6
 
-// InodeDBClient is the client API for InodeDB service.
+// InodeDBMasterClient is the client API for InodeDBMaster service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
-type InodeDBClient interface {
+type InodeDBMasterClient interface {
 	Cluster(ctx context.Context, in *ClusterRequest, opts ...grpc.CallOption) (*ClusterResponse, error)
 	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
 	Report(ctx context.Context, in *ReportRequest, opts ...grpc.CallOption) (*ReportResponse, error)
@@ -2853,8 +3042,358 @@ type InodeDBClient interface {
 	DeleteSpace(ctx context.Context, in *DeleteSpaceRequest, opts ...grpc.CallOption) (*DeleteSpaceResponse, error)
 	GetSpace(ctx context.Context, in *GetSpaceRequest, opts ...grpc.CallOption) (*GetSpaceResponse, error)
 	GetCatalogChanges(ctx context.Context, in *GetCatalogChangesRequest, opts ...grpc.CallOption) (*GetCatalogChangesResponse, error)
-	AddShard(ctx context.Context, in *AddShardRequest, opts ...grpc.CallOption) (*AddShardResponse, error)
-	GetShard(ctx context.Context, in *GetShardRequest, opts ...grpc.CallOption) (*GetShardResponse, error)
+	GetRoleNodes(ctx context.Context, in *GetRoleNodesRequest, opts ...grpc.CallOption) (*GetRoleNodesResponse, error)
+}
+
+type inodeDBMasterClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewInodeDBMasterClient(cc grpc.ClientConnInterface) InodeDBMasterClient {
+	return &inodeDBMasterClient{cc}
+}
+
+func (c *inodeDBMasterClient) Cluster(ctx context.Context, in *ClusterRequest, opts ...grpc.CallOption) (*ClusterResponse, error) {
+	out := new(ClusterResponse)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBMaster/Cluster", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inodeDBMasterClient) Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error) {
+	out := new(HeartbeatResponse)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBMaster/Heartbeat", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inodeDBMasterClient) Report(ctx context.Context, in *ReportRequest, opts ...grpc.CallOption) (*ReportResponse, error) {
+	out := new(ReportResponse)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBMaster/Report", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inodeDBMasterClient) GetNode(ctx context.Context, in *GetNodeRequest, opts ...grpc.CallOption) (*GetNodeResponse, error) {
+	out := new(GetNodeResponse)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBMaster/GetNode", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inodeDBMasterClient) CreateSpace(ctx context.Context, in *CreateSpaceRequest, opts ...grpc.CallOption) (*CreateSpaceResponse, error) {
+	out := new(CreateSpaceResponse)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBMaster/CreateSpace", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inodeDBMasterClient) DeleteSpace(ctx context.Context, in *DeleteSpaceRequest, opts ...grpc.CallOption) (*DeleteSpaceResponse, error) {
+	out := new(DeleteSpaceResponse)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBMaster/DeleteSpace", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inodeDBMasterClient) GetSpace(ctx context.Context, in *GetSpaceRequest, opts ...grpc.CallOption) (*GetSpaceResponse, error) {
+	out := new(GetSpaceResponse)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBMaster/GetSpace", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inodeDBMasterClient) GetCatalogChanges(ctx context.Context, in *GetCatalogChangesRequest, opts ...grpc.CallOption) (*GetCatalogChangesResponse, error) {
+	out := new(GetCatalogChangesResponse)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBMaster/GetCatalogChanges", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inodeDBMasterClient) GetRoleNodes(ctx context.Context, in *GetRoleNodesRequest, opts ...grpc.CallOption) (*GetRoleNodesResponse, error) {
+	out := new(GetRoleNodesResponse)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBMaster/GetRoleNodes", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// InodeDBMasterServer is the server API for InodeDBMaster service.
+type InodeDBMasterServer interface {
+	Cluster(context.Context, *ClusterRequest) (*ClusterResponse, error)
+	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
+	Report(context.Context, *ReportRequest) (*ReportResponse, error)
+	GetNode(context.Context, *GetNodeRequest) (*GetNodeResponse, error)
+	CreateSpace(context.Context, *CreateSpaceRequest) (*CreateSpaceResponse, error)
+	DeleteSpace(context.Context, *DeleteSpaceRequest) (*DeleteSpaceResponse, error)
+	GetSpace(context.Context, *GetSpaceRequest) (*GetSpaceResponse, error)
+	GetCatalogChanges(context.Context, *GetCatalogChangesRequest) (*GetCatalogChangesResponse, error)
+	GetRoleNodes(context.Context, *GetRoleNodesRequest) (*GetRoleNodesResponse, error)
+}
+
+// UnimplementedInodeDBMasterServer can be embedded to have forward compatible implementations.
+type UnimplementedInodeDBMasterServer struct {
+}
+
+func (*UnimplementedInodeDBMasterServer) Cluster(context.Context, *ClusterRequest) (*ClusterResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Cluster not implemented")
+}
+func (*UnimplementedInodeDBMasterServer) Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Heartbeat not implemented")
+}
+func (*UnimplementedInodeDBMasterServer) Report(context.Context, *ReportRequest) (*ReportResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Report not implemented")
+}
+func (*UnimplementedInodeDBMasterServer) GetNode(context.Context, *GetNodeRequest) (*GetNodeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetNode not implemented")
+}
+func (*UnimplementedInodeDBMasterServer) CreateSpace(context.Context, *CreateSpaceRequest) (*CreateSpaceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateSpace not implemented")
+}
+func (*UnimplementedInodeDBMasterServer) DeleteSpace(context.Context, *DeleteSpaceRequest) (*DeleteSpaceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteSpace not implemented")
+}
+func (*UnimplementedInodeDBMasterServer) GetSpace(context.Context, *GetSpaceRequest) (*GetSpaceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSpace not implemented")
+}
+func (*UnimplementedInodeDBMasterServer) GetCatalogChanges(context.Context, *GetCatalogChangesRequest) (*GetCatalogChangesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCatalogChanges not implemented")
+}
+func (*UnimplementedInodeDBMasterServer) GetRoleNodes(context.Context, *GetRoleNodesRequest) (*GetRoleNodesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetRoleNodes not implemented")
+}
+
+func RegisterInodeDBMasterServer(s *grpc.Server, srv InodeDBMasterServer) {
+	s.RegisterService(&_InodeDBMaster_serviceDesc, srv)
+}
+
+func _InodeDBMaster_Cluster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClusterRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InodeDBMasterServer).Cluster(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.InodeDBMaster/Cluster",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InodeDBMasterServer).Cluster(ctx, req.(*ClusterRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InodeDBMaster_Heartbeat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HeartbeatRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InodeDBMasterServer).Heartbeat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.InodeDBMaster/Heartbeat",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InodeDBMasterServer).Heartbeat(ctx, req.(*HeartbeatRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InodeDBMaster_Report_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InodeDBMasterServer).Report(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.InodeDBMaster/Report",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InodeDBMasterServer).Report(ctx, req.(*ReportRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InodeDBMaster_GetNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InodeDBMasterServer).GetNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.InodeDBMaster/GetNode",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InodeDBMasterServer).GetNode(ctx, req.(*GetNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InodeDBMaster_CreateSpace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateSpaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InodeDBMasterServer).CreateSpace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.InodeDBMaster/CreateSpace",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InodeDBMasterServer).CreateSpace(ctx, req.(*CreateSpaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InodeDBMaster_DeleteSpace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteSpaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InodeDBMasterServer).DeleteSpace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.InodeDBMaster/DeleteSpace",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InodeDBMasterServer).DeleteSpace(ctx, req.(*DeleteSpaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InodeDBMaster_GetSpace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSpaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InodeDBMasterServer).GetSpace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.InodeDBMaster/GetSpace",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InodeDBMasterServer).GetSpace(ctx, req.(*GetSpaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InodeDBMaster_GetCatalogChanges_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCatalogChangesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InodeDBMasterServer).GetCatalogChanges(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.InodeDBMaster/GetCatalogChanges",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InodeDBMasterServer).GetCatalogChanges(ctx, req.(*GetCatalogChangesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InodeDBMaster_GetRoleNodes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRoleNodesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InodeDBMasterServer).GetRoleNodes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.InodeDBMaster/GetRoleNodes",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InodeDBMasterServer).GetRoleNodes(ctx, req.(*GetRoleNodesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+var _InodeDBMaster_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "proto.InodeDBMaster",
+	HandlerType: (*InodeDBMasterServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Cluster",
+			Handler:    _InodeDBMaster_Cluster_Handler,
+		},
+		{
+			MethodName: "Heartbeat",
+			Handler:    _InodeDBMaster_Heartbeat_Handler,
+		},
+		{
+			MethodName: "Report",
+			Handler:    _InodeDBMaster_Report_Handler,
+		},
+		{
+			MethodName: "GetNode",
+			Handler:    _InodeDBMaster_GetNode_Handler,
+		},
+		{
+			MethodName: "CreateSpace",
+			Handler:    _InodeDBMaster_CreateSpace_Handler,
+		},
+		{
+			MethodName: "DeleteSpace",
+			Handler:    _InodeDBMaster_DeleteSpace_Handler,
+		},
+		{
+			MethodName: "GetSpace",
+			Handler:    _InodeDBMaster_GetSpace_Handler,
+		},
+		{
+			MethodName: "GetCatalogChanges",
+			Handler:    _InodeDBMaster_GetCatalogChanges_Handler,
+		},
+		{
+			MethodName: "GetRoleNodes",
+			Handler:    _InodeDBMaster_GetRoleNodes_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "inodedb_grpc.proto",
+}
+
+// InodeDBRouterClient is the client API for InodeDBRouter service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
+type InodeDBRouterClient interface {
 	InsertItem(ctx context.Context, in *InsertItemRequest, opts ...grpc.CallOption) (*InsertItemResponse, error)
 	UpdateItem(ctx context.Context, in *UpdateItemRequest, opts ...grpc.CallOption) (*UpdateItemResponse, error)
 	DeleteItem(ctx context.Context, in *DeleteItemRequest, opts ...grpc.CallOption) (*DeleteItemResponse, error)
@@ -2865,188 +3404,88 @@ type InodeDBClient interface {
 	Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error)
 }
 
-type inodeDBClient struct {
+type inodeDBRouterClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewInodeDBClient(cc grpc.ClientConnInterface) InodeDBClient {
-	return &inodeDBClient{cc}
+func NewInodeDBRouterClient(cc grpc.ClientConnInterface) InodeDBRouterClient {
+	return &inodeDBRouterClient{cc}
 }
 
-func (c *inodeDBClient) Cluster(ctx context.Context, in *ClusterRequest, opts ...grpc.CallOption) (*ClusterResponse, error) {
-	out := new(ClusterResponse)
-	err := c.cc.Invoke(ctx, "/proto.InodeDB/Cluster", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *inodeDBClient) Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error) {
-	out := new(HeartbeatResponse)
-	err := c.cc.Invoke(ctx, "/proto.InodeDB/Heartbeat", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *inodeDBClient) Report(ctx context.Context, in *ReportRequest, opts ...grpc.CallOption) (*ReportResponse, error) {
-	out := new(ReportResponse)
-	err := c.cc.Invoke(ctx, "/proto.InodeDB/Report", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *inodeDBClient) GetNode(ctx context.Context, in *GetNodeRequest, opts ...grpc.CallOption) (*GetNodeResponse, error) {
-	out := new(GetNodeResponse)
-	err := c.cc.Invoke(ctx, "/proto.InodeDB/GetNode", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *inodeDBClient) CreateSpace(ctx context.Context, in *CreateSpaceRequest, opts ...grpc.CallOption) (*CreateSpaceResponse, error) {
-	out := new(CreateSpaceResponse)
-	err := c.cc.Invoke(ctx, "/proto.InodeDB/CreateSpace", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *inodeDBClient) DeleteSpace(ctx context.Context, in *DeleteSpaceRequest, opts ...grpc.CallOption) (*DeleteSpaceResponse, error) {
-	out := new(DeleteSpaceResponse)
-	err := c.cc.Invoke(ctx, "/proto.InodeDB/DeleteSpace", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *inodeDBClient) GetSpace(ctx context.Context, in *GetSpaceRequest, opts ...grpc.CallOption) (*GetSpaceResponse, error) {
-	out := new(GetSpaceResponse)
-	err := c.cc.Invoke(ctx, "/proto.InodeDB/GetSpace", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *inodeDBClient) GetCatalogChanges(ctx context.Context, in *GetCatalogChangesRequest, opts ...grpc.CallOption) (*GetCatalogChangesResponse, error) {
-	out := new(GetCatalogChangesResponse)
-	err := c.cc.Invoke(ctx, "/proto.InodeDB/GetCatalogChanges", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *inodeDBClient) AddShard(ctx context.Context, in *AddShardRequest, opts ...grpc.CallOption) (*AddShardResponse, error) {
-	out := new(AddShardResponse)
-	err := c.cc.Invoke(ctx, "/proto.InodeDB/AddShard", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *inodeDBClient) GetShard(ctx context.Context, in *GetShardRequest, opts ...grpc.CallOption) (*GetShardResponse, error) {
-	out := new(GetShardResponse)
-	err := c.cc.Invoke(ctx, "/proto.InodeDB/GetShard", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *inodeDBClient) InsertItem(ctx context.Context, in *InsertItemRequest, opts ...grpc.CallOption) (*InsertItemResponse, error) {
+func (c *inodeDBRouterClient) InsertItem(ctx context.Context, in *InsertItemRequest, opts ...grpc.CallOption) (*InsertItemResponse, error) {
 	out := new(InsertItemResponse)
-	err := c.cc.Invoke(ctx, "/proto.InodeDB/InsertItem", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBRouter/InsertItem", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *inodeDBClient) UpdateItem(ctx context.Context, in *UpdateItemRequest, opts ...grpc.CallOption) (*UpdateItemResponse, error) {
+func (c *inodeDBRouterClient) UpdateItem(ctx context.Context, in *UpdateItemRequest, opts ...grpc.CallOption) (*UpdateItemResponse, error) {
 	out := new(UpdateItemResponse)
-	err := c.cc.Invoke(ctx, "/proto.InodeDB/UpdateItem", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBRouter/UpdateItem", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *inodeDBClient) DeleteItem(ctx context.Context, in *DeleteItemRequest, opts ...grpc.CallOption) (*DeleteItemResponse, error) {
+func (c *inodeDBRouterClient) DeleteItem(ctx context.Context, in *DeleteItemRequest, opts ...grpc.CallOption) (*DeleteItemResponse, error) {
 	out := new(DeleteItemResponse)
-	err := c.cc.Invoke(ctx, "/proto.InodeDB/DeleteItem", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBRouter/DeleteItem", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *inodeDBClient) GetItem(ctx context.Context, in *GetItemRequest, opts ...grpc.CallOption) (*GetItemResponse, error) {
+func (c *inodeDBRouterClient) GetItem(ctx context.Context, in *GetItemRequest, opts ...grpc.CallOption) (*GetItemResponse, error) {
 	out := new(GetItemResponse)
-	err := c.cc.Invoke(ctx, "/proto.InodeDB/GetItem", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBRouter/GetItem", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *inodeDBClient) Link(ctx context.Context, in *LinkRequest, opts ...grpc.CallOption) (*LinkResponse, error) {
+func (c *inodeDBRouterClient) Link(ctx context.Context, in *LinkRequest, opts ...grpc.CallOption) (*LinkResponse, error) {
 	out := new(LinkResponse)
-	err := c.cc.Invoke(ctx, "/proto.InodeDB/Link", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBRouter/Link", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *inodeDBClient) Unlink(ctx context.Context, in *UnlinkRequest, opts ...grpc.CallOption) (*UnlinkResponse, error) {
+func (c *inodeDBRouterClient) Unlink(ctx context.Context, in *UnlinkRequest, opts ...grpc.CallOption) (*UnlinkResponse, error) {
 	out := new(UnlinkResponse)
-	err := c.cc.Invoke(ctx, "/proto.InodeDB/Unlink", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBRouter/Unlink", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *inodeDBClient) List(ctx context.Context, in *ListRequest, opts ...grpc.CallOption) (*ListResponse, error) {
+func (c *inodeDBRouterClient) List(ctx context.Context, in *ListRequest, opts ...grpc.CallOption) (*ListResponse, error) {
 	out := new(ListResponse)
-	err := c.cc.Invoke(ctx, "/proto.InodeDB/List", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBRouter/List", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *inodeDBClient) Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error) {
+func (c *inodeDBRouterClient) Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error) {
 	out := new(SearchResponse)
-	err := c.cc.Invoke(ctx, "/proto.InodeDB/Search", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBRouter/Search", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// InodeDBServer is the server API for InodeDB service.
-type InodeDBServer interface {
-	Cluster(context.Context, *ClusterRequest) (*ClusterResponse, error)
-	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
-	Report(context.Context, *ReportRequest) (*ReportResponse, error)
-	GetNode(context.Context, *GetNodeRequest) (*GetNodeResponse, error)
-	CreateSpace(context.Context, *CreateSpaceRequest) (*CreateSpaceResponse, error)
-	DeleteSpace(context.Context, *DeleteSpaceRequest) (*DeleteSpaceResponse, error)
-	GetSpace(context.Context, *GetSpaceRequest) (*GetSpaceResponse, error)
-	GetCatalogChanges(context.Context, *GetCatalogChangesRequest) (*GetCatalogChangesResponse, error)
-	AddShard(context.Context, *AddShardRequest) (*AddShardResponse, error)
-	GetShard(context.Context, *GetShardRequest) (*GetShardResponse, error)
+// InodeDBRouterServer is the server API for InodeDBRouter service.
+type InodeDBRouterServer interface {
 	InsertItem(context.Context, *InsertItemRequest) (*InsertItemResponse, error)
 	UpdateItem(context.Context, *UpdateItemRequest) (*UpdateItemResponse, error)
 	DeleteItem(context.Context, *DeleteItemRequest) (*DeleteItemResponse, error)
@@ -3057,468 +3496,614 @@ type InodeDBServer interface {
 	Search(context.Context, *SearchRequest) (*SearchResponse, error)
 }
 
-// UnimplementedInodeDBServer can be embedded to have forward compatible implementations.
-type UnimplementedInodeDBServer struct {
+// UnimplementedInodeDBRouterServer can be embedded to have forward compatible implementations.
+type UnimplementedInodeDBRouterServer struct {
 }
 
-func (*UnimplementedInodeDBServer) Cluster(context.Context, *ClusterRequest) (*ClusterResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Cluster not implemented")
-}
-func (*UnimplementedInodeDBServer) Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Heartbeat not implemented")
-}
-func (*UnimplementedInodeDBServer) Report(context.Context, *ReportRequest) (*ReportResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Report not implemented")
-}
-func (*UnimplementedInodeDBServer) GetNode(context.Context, *GetNodeRequest) (*GetNodeResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetNode not implemented")
-}
-func (*UnimplementedInodeDBServer) CreateSpace(context.Context, *CreateSpaceRequest) (*CreateSpaceResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CreateSpace not implemented")
-}
-func (*UnimplementedInodeDBServer) DeleteSpace(context.Context, *DeleteSpaceRequest) (*DeleteSpaceResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DeleteSpace not implemented")
-}
-func (*UnimplementedInodeDBServer) GetSpace(context.Context, *GetSpaceRequest) (*GetSpaceResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetSpace not implemented")
-}
-func (*UnimplementedInodeDBServer) GetCatalogChanges(context.Context, *GetCatalogChangesRequest) (*GetCatalogChangesResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetCatalogChanges not implemented")
-}
-func (*UnimplementedInodeDBServer) AddShard(context.Context, *AddShardRequest) (*AddShardResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method AddShard not implemented")
-}
-func (*UnimplementedInodeDBServer) GetShard(context.Context, *GetShardRequest) (*GetShardResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetShard not implemented")
-}
-func (*UnimplementedInodeDBServer) InsertItem(context.Context, *InsertItemRequest) (*InsertItemResponse, error) {
+func (*UnimplementedInodeDBRouterServer) InsertItem(context.Context, *InsertItemRequest) (*InsertItemResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method InsertItem not implemented")
 }
-func (*UnimplementedInodeDBServer) UpdateItem(context.Context, *UpdateItemRequest) (*UpdateItemResponse, error) {
+func (*UnimplementedInodeDBRouterServer) UpdateItem(context.Context, *UpdateItemRequest) (*UpdateItemResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateItem not implemented")
 }
-func (*UnimplementedInodeDBServer) DeleteItem(context.Context, *DeleteItemRequest) (*DeleteItemResponse, error) {
+func (*UnimplementedInodeDBRouterServer) DeleteItem(context.Context, *DeleteItemRequest) (*DeleteItemResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteItem not implemented")
 }
-func (*UnimplementedInodeDBServer) GetItem(context.Context, *GetItemRequest) (*GetItemResponse, error) {
+func (*UnimplementedInodeDBRouterServer) GetItem(context.Context, *GetItemRequest) (*GetItemResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetItem not implemented")
 }
-func (*UnimplementedInodeDBServer) Link(context.Context, *LinkRequest) (*LinkResponse, error) {
+func (*UnimplementedInodeDBRouterServer) Link(context.Context, *LinkRequest) (*LinkResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Link not implemented")
 }
-func (*UnimplementedInodeDBServer) Unlink(context.Context, *UnlinkRequest) (*UnlinkResponse, error) {
+func (*UnimplementedInodeDBRouterServer) Unlink(context.Context, *UnlinkRequest) (*UnlinkResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Unlink not implemented")
 }
-func (*UnimplementedInodeDBServer) List(context.Context, *ListRequest) (*ListResponse, error) {
+func (*UnimplementedInodeDBRouterServer) List(context.Context, *ListRequest) (*ListResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method List not implemented")
 }
-func (*UnimplementedInodeDBServer) Search(context.Context, *SearchRequest) (*SearchResponse, error) {
+func (*UnimplementedInodeDBRouterServer) Search(context.Context, *SearchRequest) (*SearchResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Search not implemented")
 }
 
-func RegisterInodeDBServer(s *grpc.Server, srv InodeDBServer) {
-	s.RegisterService(&_InodeDB_serviceDesc, srv)
+func RegisterInodeDBRouterServer(s *grpc.Server, srv InodeDBRouterServer) {
+	s.RegisterService(&_InodeDBRouter_serviceDesc, srv)
 }
 
-func _InodeDB_Cluster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ClusterRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(InodeDBServer).Cluster(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/proto.InodeDB/Cluster",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(InodeDBServer).Cluster(ctx, req.(*ClusterRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _InodeDB_Heartbeat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(HeartbeatRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(InodeDBServer).Heartbeat(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/proto.InodeDB/Heartbeat",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(InodeDBServer).Heartbeat(ctx, req.(*HeartbeatRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _InodeDB_Report_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReportRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(InodeDBServer).Report(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/proto.InodeDB/Report",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(InodeDBServer).Report(ctx, req.(*ReportRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _InodeDB_GetNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetNodeRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(InodeDBServer).GetNode(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/proto.InodeDB/GetNode",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(InodeDBServer).GetNode(ctx, req.(*GetNodeRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _InodeDB_CreateSpace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CreateSpaceRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(InodeDBServer).CreateSpace(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/proto.InodeDB/CreateSpace",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(InodeDBServer).CreateSpace(ctx, req.(*CreateSpaceRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _InodeDB_DeleteSpace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeleteSpaceRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(InodeDBServer).DeleteSpace(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/proto.InodeDB/DeleteSpace",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(InodeDBServer).DeleteSpace(ctx, req.(*DeleteSpaceRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _InodeDB_GetSpace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetSpaceRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(InodeDBServer).GetSpace(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/proto.InodeDB/GetSpace",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(InodeDBServer).GetSpace(ctx, req.(*GetSpaceRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _InodeDB_GetCatalogChanges_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetCatalogChangesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(InodeDBServer).GetCatalogChanges(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/proto.InodeDB/GetCatalogChanges",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(InodeDBServer).GetCatalogChanges(ctx, req.(*GetCatalogChangesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _InodeDB_AddShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AddShardRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(InodeDBServer).AddShard(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/proto.InodeDB/AddShard",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(InodeDBServer).AddShard(ctx, req.(*AddShardRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _InodeDB_GetShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetShardRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(InodeDBServer).GetShard(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/proto.InodeDB/GetShard",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(InodeDBServer).GetShard(ctx, req.(*GetShardRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _InodeDB_InsertItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _InodeDBRouter_InsertItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(InsertItemRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(InodeDBServer).InsertItem(ctx, in)
+		return srv.(InodeDBRouterServer).InsertItem(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/proto.InodeDB/InsertItem",
+		FullMethod: "/proto.InodeDBRouter/InsertItem",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(InodeDBServer).InsertItem(ctx, req.(*InsertItemRequest))
+		return srv.(InodeDBRouterServer).InsertItem(ctx, req.(*InsertItemRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _InodeDB_UpdateItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _InodeDBRouter_UpdateItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(UpdateItemRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(InodeDBServer).UpdateItem(ctx, in)
+		return srv.(InodeDBRouterServer).UpdateItem(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/proto.InodeDB/UpdateItem",
+		FullMethod: "/proto.InodeDBRouter/UpdateItem",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(InodeDBServer).UpdateItem(ctx, req.(*UpdateItemRequest))
+		return srv.(InodeDBRouterServer).UpdateItem(ctx, req.(*UpdateItemRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _InodeDB_DeleteItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _InodeDBRouter_DeleteItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeleteItemRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(InodeDBServer).DeleteItem(ctx, in)
+		return srv.(InodeDBRouterServer).DeleteItem(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/proto.InodeDB/DeleteItem",
+		FullMethod: "/proto.InodeDBRouter/DeleteItem",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(InodeDBServer).DeleteItem(ctx, req.(*DeleteItemRequest))
+		return srv.(InodeDBRouterServer).DeleteItem(ctx, req.(*DeleteItemRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _InodeDB_GetItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _InodeDBRouter_GetItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetItemRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(InodeDBServer).GetItem(ctx, in)
+		return srv.(InodeDBRouterServer).GetItem(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/proto.InodeDB/GetItem",
+		FullMethod: "/proto.InodeDBRouter/GetItem",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(InodeDBServer).GetItem(ctx, req.(*GetItemRequest))
+		return srv.(InodeDBRouterServer).GetItem(ctx, req.(*GetItemRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _InodeDB_Link_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _InodeDBRouter_Link_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(LinkRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(InodeDBServer).Link(ctx, in)
+		return srv.(InodeDBRouterServer).Link(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/proto.InodeDB/Link",
+		FullMethod: "/proto.InodeDBRouter/Link",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(InodeDBServer).Link(ctx, req.(*LinkRequest))
+		return srv.(InodeDBRouterServer).Link(ctx, req.(*LinkRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _InodeDB_Unlink_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _InodeDBRouter_Unlink_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(UnlinkRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(InodeDBServer).Unlink(ctx, in)
+		return srv.(InodeDBRouterServer).Unlink(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/proto.InodeDB/Unlink",
+		FullMethod: "/proto.InodeDBRouter/Unlink",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(InodeDBServer).Unlink(ctx, req.(*UnlinkRequest))
+		return srv.(InodeDBRouterServer).Unlink(ctx, req.(*UnlinkRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _InodeDB_List_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _InodeDBRouter_List_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(InodeDBServer).List(ctx, in)
+		return srv.(InodeDBRouterServer).List(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/proto.InodeDB/List",
+		FullMethod: "/proto.InodeDBRouter/List",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(InodeDBServer).List(ctx, req.(*ListRequest))
+		return srv.(InodeDBRouterServer).List(ctx, req.(*ListRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _InodeDB_Search_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _InodeDBRouter_Search_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SearchRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(InodeDBServer).Search(ctx, in)
+		return srv.(InodeDBRouterServer).Search(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/proto.InodeDB/Search",
+		FullMethod: "/proto.InodeDBRouter/Search",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(InodeDBServer).Search(ctx, req.(*SearchRequest))
+		return srv.(InodeDBRouterServer).Search(ctx, req.(*SearchRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-var _InodeDB_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "proto.InodeDB",
-	HandlerType: (*InodeDBServer)(nil),
+var _InodeDBRouter_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "proto.InodeDBRouter",
+	HandlerType: (*InodeDBRouterServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Cluster",
-			Handler:    _InodeDB_Cluster_Handler,
-		},
-		{
-			MethodName: "Heartbeat",
-			Handler:    _InodeDB_Heartbeat_Handler,
-		},
-		{
-			MethodName: "Report",
-			Handler:    _InodeDB_Report_Handler,
-		},
-		{
-			MethodName: "GetNode",
-			Handler:    _InodeDB_GetNode_Handler,
-		},
-		{
-			MethodName: "CreateSpace",
-			Handler:    _InodeDB_CreateSpace_Handler,
-		},
-		{
-			MethodName: "DeleteSpace",
-			Handler:    _InodeDB_DeleteSpace_Handler,
-		},
-		{
-			MethodName: "GetSpace",
-			Handler:    _InodeDB_GetSpace_Handler,
-		},
-		{
-			MethodName: "GetCatalogChanges",
-			Handler:    _InodeDB_GetCatalogChanges_Handler,
-		},
-		{
-			MethodName: "AddShard",
-			Handler:    _InodeDB_AddShard_Handler,
-		},
-		{
-			MethodName: "GetShard",
-			Handler:    _InodeDB_GetShard_Handler,
-		},
-		{
 			MethodName: "InsertItem",
-			Handler:    _InodeDB_InsertItem_Handler,
+			Handler:    _InodeDBRouter_InsertItem_Handler,
 		},
 		{
 			MethodName: "UpdateItem",
-			Handler:    _InodeDB_UpdateItem_Handler,
+			Handler:    _InodeDBRouter_UpdateItem_Handler,
 		},
 		{
 			MethodName: "DeleteItem",
-			Handler:    _InodeDB_DeleteItem_Handler,
+			Handler:    _InodeDBRouter_DeleteItem_Handler,
 		},
 		{
 			MethodName: "GetItem",
-			Handler:    _InodeDB_GetItem_Handler,
+			Handler:    _InodeDBRouter_GetItem_Handler,
 		},
 		{
 			MethodName: "Link",
-			Handler:    _InodeDB_Link_Handler,
+			Handler:    _InodeDBRouter_Link_Handler,
 		},
 		{
 			MethodName: "Unlink",
-			Handler:    _InodeDB_Unlink_Handler,
+			Handler:    _InodeDBRouter_Unlink_Handler,
 		},
 		{
 			MethodName: "List",
-			Handler:    _InodeDB_List_Handler,
+			Handler:    _InodeDBRouter_List_Handler,
 		},
 		{
 			MethodName: "Search",
-			Handler:    _InodeDB_Search_Handler,
+			Handler:    _InodeDBRouter_Search_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "inodedb_grpc.proto",
+}
+
+// InodeDBShardServerClient is the client API for InodeDBShardServer service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
+type InodeDBShardServerClient interface {
+	AddShard(ctx context.Context, in *AddShardRequest, opts ...grpc.CallOption) (*AddShardResponse, error)
+	GetShard(ctx context.Context, in *GetShardRequest, opts ...grpc.CallOption) (*GetShardResponse, error)
+	ShardInsertItem(ctx context.Context, in *InsertItemRequest, opts ...grpc.CallOption) (*InsertItemResponse, error)
+	ShardUpdateItem(ctx context.Context, in *UpdateItemRequest, opts ...grpc.CallOption) (*UpdateItemResponse, error)
+	ShardDeleteItem(ctx context.Context, in *DeleteItemRequest, opts ...grpc.CallOption) (*DeleteItemResponse, error)
+	ShardGetItem(ctx context.Context, in *GetItemRequest, opts ...grpc.CallOption) (*GetItemResponse, error)
+	ShardLink(ctx context.Context, in *LinkRequest, opts ...grpc.CallOption) (*LinkResponse, error)
+	ShardUnlink(ctx context.Context, in *UnlinkRequest, opts ...grpc.CallOption) (*UnlinkResponse, error)
+	ShardList(ctx context.Context, in *ListRequest, opts ...grpc.CallOption) (*ListResponse, error)
+	ShardSearch(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error)
+}
+
+type inodeDBShardServerClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewInodeDBShardServerClient(cc grpc.ClientConnInterface) InodeDBShardServerClient {
+	return &inodeDBShardServerClient{cc}
+}
+
+func (c *inodeDBShardServerClient) AddShard(ctx context.Context, in *AddShardRequest, opts ...grpc.CallOption) (*AddShardResponse, error) {
+	out := new(AddShardResponse)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBShardServer/AddShard", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inodeDBShardServerClient) GetShard(ctx context.Context, in *GetShardRequest, opts ...grpc.CallOption) (*GetShardResponse, error) {
+	out := new(GetShardResponse)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBShardServer/GetShard", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inodeDBShardServerClient) ShardInsertItem(ctx context.Context, in *InsertItemRequest, opts ...grpc.CallOption) (*InsertItemResponse, error) {
+	out := new(InsertItemResponse)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBShardServer/ShardInsertItem", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inodeDBShardServerClient) ShardUpdateItem(ctx context.Context, in *UpdateItemRequest, opts ...grpc.CallOption) (*UpdateItemResponse, error) {
+	out := new(UpdateItemResponse)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBShardServer/ShardUpdateItem", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inodeDBShardServerClient) ShardDeleteItem(ctx context.Context, in *DeleteItemRequest, opts ...grpc.CallOption) (*DeleteItemResponse, error) {
+	out := new(DeleteItemResponse)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBShardServer/ShardDeleteItem", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inodeDBShardServerClient) ShardGetItem(ctx context.Context, in *GetItemRequest, opts ...grpc.CallOption) (*GetItemResponse, error) {
+	out := new(GetItemResponse)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBShardServer/ShardGetItem", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inodeDBShardServerClient) ShardLink(ctx context.Context, in *LinkRequest, opts ...grpc.CallOption) (*LinkResponse, error) {
+	out := new(LinkResponse)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBShardServer/ShardLink", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inodeDBShardServerClient) ShardUnlink(ctx context.Context, in *UnlinkRequest, opts ...grpc.CallOption) (*UnlinkResponse, error) {
+	out := new(UnlinkResponse)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBShardServer/ShardUnlink", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inodeDBShardServerClient) ShardList(ctx context.Context, in *ListRequest, opts ...grpc.CallOption) (*ListResponse, error) {
+	out := new(ListResponse)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBShardServer/ShardList", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inodeDBShardServerClient) ShardSearch(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error) {
+	out := new(SearchResponse)
+	err := c.cc.Invoke(ctx, "/proto.InodeDBShardServer/ShardSearch", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// InodeDBShardServerServer is the server API for InodeDBShardServer service.
+type InodeDBShardServerServer interface {
+	AddShard(context.Context, *AddShardRequest) (*AddShardResponse, error)
+	GetShard(context.Context, *GetShardRequest) (*GetShardResponse, error)
+	ShardInsertItem(context.Context, *InsertItemRequest) (*InsertItemResponse, error)
+	ShardUpdateItem(context.Context, *UpdateItemRequest) (*UpdateItemResponse, error)
+	ShardDeleteItem(context.Context, *DeleteItemRequest) (*DeleteItemResponse, error)
+	ShardGetItem(context.Context, *GetItemRequest) (*GetItemResponse, error)
+	ShardLink(context.Context, *LinkRequest) (*LinkResponse, error)
+	ShardUnlink(context.Context, *UnlinkRequest) (*UnlinkResponse, error)
+	ShardList(context.Context, *ListRequest) (*ListResponse, error)
+	ShardSearch(context.Context, *SearchRequest) (*SearchResponse, error)
+}
+
+// UnimplementedInodeDBShardServerServer can be embedded to have forward compatible implementations.
+type UnimplementedInodeDBShardServerServer struct {
+}
+
+func (*UnimplementedInodeDBShardServerServer) AddShard(context.Context, *AddShardRequest) (*AddShardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddShard not implemented")
+}
+func (*UnimplementedInodeDBShardServerServer) GetShard(context.Context, *GetShardRequest) (*GetShardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetShard not implemented")
+}
+func (*UnimplementedInodeDBShardServerServer) ShardInsertItem(context.Context, *InsertItemRequest) (*InsertItemResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ShardInsertItem not implemented")
+}
+func (*UnimplementedInodeDBShardServerServer) ShardUpdateItem(context.Context, *UpdateItemRequest) (*UpdateItemResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ShardUpdateItem not implemented")
+}
+func (*UnimplementedInodeDBShardServerServer) ShardDeleteItem(context.Context, *DeleteItemRequest) (*DeleteItemResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ShardDeleteItem not implemented")
+}
+func (*UnimplementedInodeDBShardServerServer) ShardGetItem(context.Context, *GetItemRequest) (*GetItemResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ShardGetItem not implemented")
+}
+func (*UnimplementedInodeDBShardServerServer) ShardLink(context.Context, *LinkRequest) (*LinkResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ShardLink not implemented")
+}
+func (*UnimplementedInodeDBShardServerServer) ShardUnlink(context.Context, *UnlinkRequest) (*UnlinkResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ShardUnlink not implemented")
+}
+func (*UnimplementedInodeDBShardServerServer) ShardList(context.Context, *ListRequest) (*ListResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ShardList not implemented")
+}
+func (*UnimplementedInodeDBShardServerServer) ShardSearch(context.Context, *SearchRequest) (*SearchResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ShardSearch not implemented")
+}
+
+func RegisterInodeDBShardServerServer(s *grpc.Server, srv InodeDBShardServerServer) {
+	s.RegisterService(&_InodeDBShardServer_serviceDesc, srv)
+}
+
+func _InodeDBShardServer_AddShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddShardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InodeDBShardServerServer).AddShard(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.InodeDBShardServer/AddShard",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InodeDBShardServerServer).AddShard(ctx, req.(*AddShardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InodeDBShardServer_GetShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetShardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InodeDBShardServerServer).GetShard(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.InodeDBShardServer/GetShard",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InodeDBShardServerServer).GetShard(ctx, req.(*GetShardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InodeDBShardServer_ShardInsertItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InsertItemRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InodeDBShardServerServer).ShardInsertItem(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.InodeDBShardServer/ShardInsertItem",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InodeDBShardServerServer).ShardInsertItem(ctx, req.(*InsertItemRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InodeDBShardServer_ShardUpdateItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateItemRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InodeDBShardServerServer).ShardUpdateItem(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.InodeDBShardServer/ShardUpdateItem",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InodeDBShardServerServer).ShardUpdateItem(ctx, req.(*UpdateItemRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InodeDBShardServer_ShardDeleteItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteItemRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InodeDBShardServerServer).ShardDeleteItem(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.InodeDBShardServer/ShardDeleteItem",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InodeDBShardServerServer).ShardDeleteItem(ctx, req.(*DeleteItemRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InodeDBShardServer_ShardGetItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetItemRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InodeDBShardServerServer).ShardGetItem(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.InodeDBShardServer/ShardGetItem",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InodeDBShardServerServer).ShardGetItem(ctx, req.(*GetItemRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InodeDBShardServer_ShardLink_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LinkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InodeDBShardServerServer).ShardLink(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.InodeDBShardServer/ShardLink",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InodeDBShardServerServer).ShardLink(ctx, req.(*LinkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InodeDBShardServer_ShardUnlink_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnlinkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InodeDBShardServerServer).ShardUnlink(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.InodeDBShardServer/ShardUnlink",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InodeDBShardServerServer).ShardUnlink(ctx, req.(*UnlinkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InodeDBShardServer_ShardList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InodeDBShardServerServer).ShardList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.InodeDBShardServer/ShardList",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InodeDBShardServerServer).ShardList(ctx, req.(*ListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InodeDBShardServer_ShardSearch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SearchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InodeDBShardServerServer).ShardSearch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.InodeDBShardServer/ShardSearch",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InodeDBShardServerServer).ShardSearch(ctx, req.(*SearchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+var _InodeDBShardServer_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "proto.InodeDBShardServer",
+	HandlerType: (*InodeDBShardServerServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "AddShard",
+			Handler:    _InodeDBShardServer_AddShard_Handler,
+		},
+		{
+			MethodName: "GetShard",
+			Handler:    _InodeDBShardServer_GetShard_Handler,
+		},
+		{
+			MethodName: "ShardInsertItem",
+			Handler:    _InodeDBShardServer_ShardInsertItem_Handler,
+		},
+		{
+			MethodName: "ShardUpdateItem",
+			Handler:    _InodeDBShardServer_ShardUpdateItem_Handler,
+		},
+		{
+			MethodName: "ShardDeleteItem",
+			Handler:    _InodeDBShardServer_ShardDeleteItem_Handler,
+		},
+		{
+			MethodName: "ShardGetItem",
+			Handler:    _InodeDBShardServer_ShardGetItem_Handler,
+		},
+		{
+			MethodName: "ShardLink",
+			Handler:    _InodeDBShardServer_ShardLink_Handler,
+		},
+		{
+			MethodName: "ShardUnlink",
+			Handler:    _InodeDBShardServer_ShardUnlink_Handler,
+		},
+		{
+			MethodName: "ShardList",
+			Handler:    _InodeDBShardServer_ShardList_Handler,
+		},
+		{
+			MethodName: "ShardSearch",
+			Handler:    _InodeDBShardServer_ShardSearch_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

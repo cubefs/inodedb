@@ -1,5 +1,7 @@
 package proto
 
 const (
-	ShardFixedRange = uint64(2 << 40)
+	ShardRangeStepSize = uint64(2 << 40)
 )
+
+type InodeDB interface{}

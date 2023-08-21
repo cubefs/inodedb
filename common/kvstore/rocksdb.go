@@ -29,12 +29,12 @@ import (
 
 type (
 	rocksdb struct {
-		db        *rdb.DB
 		path      string
+		db        *rdb.DB
 		optHelper *optHelper
 		opt       *rdb.Options
-		ro        *rdb.ReadOptions
-		wo        *rdb.WriteOptions
+		readOpt   *rdb.ReadOptions
+		writeOpt  *rdb.WriteOptions
 		flushOpt  *rdb.FlushOptions
 		cfHandles map[CF]*rdb.ColumnFamilyHandle
 		lock      sync.RWMutex
@@ -128,17 +128,15 @@ func newRocksdb(ctx context.Context, path string, option *Option) (Store, error)
 	if option.Sync {
 		wo.SetSync(option.Sync)
 	}
-
 	ro := rdb.NewDefaultReadOptions()
 
-	optHelper := &optHelper{db: db, opt: option}
 	ins := &rocksdb{
 		db:        db,
 		path:      path,
-		optHelper: optHelper,
+		optHelper: &optHelper{db: db, opt: option},
 		opt:       dbOpt,
-		ro:        ro,
-		wo:        wo,
+		readOpt:   ro,
+		writeOpt:  wo,
 		flushOpt:  rdb.NewDefaultFlushOptions(),
 		cfHandles: cfhMap,
 	}
@@ -477,7 +475,7 @@ func (s *rocksdb) GetAllColumns() (ret []CF) {
 func (s *rocksdb) Get(ctx context.Context, col CF, key []byte, readOpt ReadOption) (value ValueGetter, err error) {
 	var v *rdb.Slice
 	cf := s.getColumnFamily(col)
-	ro := s.ro
+	ro := s.readOpt
 	if readOpt != nil {
 		ro = readOpt.(*readOption).opt
 	}
@@ -494,7 +492,7 @@ func (s *rocksdb) Get(ctx context.Context, col CF, key []byte, readOpt ReadOptio
 func (s *rocksdb) GetRaw(ctx context.Context, col CF, key []byte, readOpt ReadOption) (value []byte, err error) {
 	var v *rdb.Slice
 	cf := s.getColumnFamily(col)
-	ro := s.ro
+	ro := s.readOpt
 	if readOpt != nil {
 		ro = readOpt.(*readOption).opt
 	}
@@ -511,7 +509,7 @@ func (s *rocksdb) GetRaw(ctx context.Context, col CF, key []byte, readOpt ReadOp
 }
 
 func (s *rocksdb) SetRaw(ctx context.Context, col CF, key []byte, value []byte, writeOpt WriteOption) error {
-	wo := s.wo
+	wo := s.writeOpt
 	cf := s.getColumnFamily(col)
 	if writeOpt != nil {
 		wo = writeOpt.(*writeOption).opt
@@ -523,7 +521,7 @@ func (s *rocksdb) SetRaw(ctx context.Context, col CF, key []byte, value []byte, 
 }
 
 func (s *rocksdb) Delete(ctx context.Context, col CF, key []byte, writeOpt WriteOption) error {
-	wo := s.wo
+	wo := s.writeOpt
 	cf := s.getColumnFamily(col)
 	if writeOpt != nil {
 		wo = writeOpt.(*writeOption).opt
@@ -537,7 +535,7 @@ func (s *rocksdb) Delete(ctx context.Context, col CF, key []byte, writeOpt Write
 func (s *rocksdb) List(ctx context.Context, col CF, prefix []byte, marker []byte, readOpt ReadOption) ListReader {
 	cf := s.getColumnFamily(col)
 
-	ro := s.ro
+	ro := s.readOpt
 	if readOpt != nil {
 		ro = readOpt.(*readOption).opt
 	}
@@ -561,7 +559,7 @@ func (s *rocksdb) List(ctx context.Context, col CF, prefix []byte, marker []byte
 }
 
 func (s *rocksdb) Write(ctx context.Context, batch WriteBatch, writeOpt WriteOption) error {
-	wo := s.wo
+	wo := s.writeOpt
 	if writeOpt != nil {
 		wo = writeOpt.(*writeOption).opt
 	}
@@ -570,7 +568,7 @@ func (s *rocksdb) Write(ctx context.Context, batch WriteBatch, writeOpt WriteOpt
 }
 
 func (s *rocksdb) Read(ctx context.Context, cols []CF, keys [][]byte, readOpt ReadOption) (values []ValueGetter, err error) {
-	ro := s.ro
+	ro := s.readOpt
 	if readOpt != nil {
 		ro = readOpt.(*readOption).opt
 	}
@@ -631,8 +629,8 @@ func (s *rocksdb) Stats(ctx context.Context) (stats Stats, err error) {
 }
 
 func (s *rocksdb) Close() {
-	s.wo.Destroy()
-	s.ro.Destroy()
+	s.writeOpt.Destroy()
+	s.readOpt.Destroy()
 	s.opt.Destroy()
 	s.flushOpt.Destroy()
 	for i := range s.cfHandles {

@@ -30,13 +30,13 @@ func TestNewEngine(t *testing.T) {
 	defer os.RemoveAll(path)
 	opt := new(Option)
 	opt.CreateIfMissing = true
-	eg, err := NewKVStore(ctx, path, RocksdbEngineType, opt)
+	eg, err := NewKVStore(ctx, path, RocksdbLsmKVType, opt)
 	require.NoError(t, err)
 	eg.Close()
 }
 
 func TestNewWriteBufferManager(t *testing.T) {
-	mgr1 := NewWriteBufferManager(context.TODO(), RocksdbEngineType, 1<<10)
+	mgr1 := NewWriteBufferManager(context.TODO(), RocksdbLsmKVType, 1<<10)
 	mgr1.Close()
 
 	mgr2 := NewWriteBufferManager(context.TODO(), "", 1<<10)
@@ -44,7 +44,7 @@ func TestNewWriteBufferManager(t *testing.T) {
 }
 
 func TestNewCache(t *testing.T) {
-	cache1 := NewCache(context.TODO(), RocksdbEngineType, 1<<10)
+	cache1 := NewCache(context.TODO(), RocksdbLsmKVType, 1<<10)
 	cache1.Close()
 
 	cache2 := NewCache(context.TODO(), "", 1<<10)
@@ -52,7 +52,7 @@ func TestNewCache(t *testing.T) {
 }
 
 func TestNewRateLimiter(t *testing.T) {
-	lmt1 := NewRateLimiter(context.TODO(), RocksdbEngineType, 1<<10)
+	lmt1 := NewRateLimiter(context.TODO(), RocksdbLsmKVType, 1<<10)
 	lmt1.Close()
 
 	lmt2 := NewRateLimiter(context.TODO(), "", 1<<10)
@@ -61,11 +61,11 @@ func TestNewRateLimiter(t *testing.T) {
 
 func TestNewEnv(t *testing.T) {
 	ctx := context.TODO()
-	NewEnv(ctx, RocksdbEngineType)
+	NewEnv(ctx, RocksdbLsmKVType)
 }
 
 func TestNewSstFileManager(t *testing.T) {
 	ctx := context.TODO()
-	env := NewEnv(ctx, RocksdbEngineType)
-	NewSstFileManager(ctx, RocksdbEngineType, env)
+	env := NewEnv(ctx, RocksdbLsmKVType)
+	NewSstFileManager(ctx, RocksdbLsmKVType, env)
 }

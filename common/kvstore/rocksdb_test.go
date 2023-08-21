@@ -187,7 +187,7 @@ func Test_ShareCache(t *testing.T) {
 	ctx := context.TODO()
 	opt1 := new(Option)
 	opt2 := new(Option)
-	cache := NewCache(ctx, RocksdbEngineType, 1<<20)
+	cache := NewCache(ctx, RocksdbLsmKVType, 1<<20)
 	defer cache.Close()
 	opt1.Cache = cache
 	opt2.Cache = cache
@@ -204,7 +204,7 @@ func Test_ShareWriteBufferManager(t *testing.T) {
 	ctx := context.TODO()
 	opt1 := new(Option)
 	opt2 := new(Option)
-	manager := NewWriteBufferManager(ctx, RocksdbEngineType, 1<<20)
+	manager := NewWriteBufferManager(ctx, RocksdbLsmKVType, 1<<20)
 	defer manager.Close()
 	opt1.WriteBufferManager = manager
 	opt2.WriteBufferManager = manager
@@ -220,7 +220,7 @@ func Test_ShareWriteBufferManager(t *testing.T) {
 func Test_RateLimiter(t *testing.T) {
 	ctx := context.TODO()
 	opt := new(Option)
-	rl := NewRateLimiter(ctx, RocksdbEngineType, 1<<20)
+	rl := NewRateLimiter(ctx, RocksdbLsmKVType, 1<<20)
 	defer rl.Close()
 	opt.IOWriteRateLimiter = rl
 	eg, err := newEngine(ctx, opt)
@@ -431,14 +431,14 @@ func TestInstance_Stats(t *testing.T) {
 
 func TestEnv_SetLowPriorityBackgroundThreads(t *testing.T) {
 	ctx := context.TODO()
-	env := NewEnv(ctx, RocksdbEngineType)
+	env := NewEnv(ctx, RocksdbLsmKVType)
 	env.SetLowPriorityBackgroundThreads(1)
 	env.Close()
 }
 
 func TestSstFileManager_Close(t *testing.T) {
 	ctx := context.TODO()
-	mgr := NewSstFileManager(ctx, RocksdbEngineType, NewEnv(ctx, RocksdbEngineType))
+	mgr := NewSstFileManager(ctx, RocksdbLsmKVType, NewEnv(ctx, RocksdbLsmKVType))
 	mgr.Close()
 }
 
@@ -468,7 +468,7 @@ func TestInstance_DeleteRange(t *testing.T) {
 	t.Log("start: ", start, " end: ", end)
 	t.Log("start: ", string(start), " end: ", string(end))
 	batch.DeleteRangeCF(rocksdb.getColumnFamily(defaultCF), start, end)
-	err = rocksdb.db.Write(rocksdb.wo, batch)
+	err = rocksdb.db.Write(rocksdb.writeOpt, batch)
 	require.NoError(t, err)
 
 	for _, key := range [][]byte{[]byte("/k1/a"), []byte("/k1/b"), []byte("/k1/c")} {

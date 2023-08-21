@@ -6,7 +6,43 @@ package proto;
 
 option go_package = "github.com/cubefs/inodedb/proto";
 
-service InodeDB {
+service InodeDBMaster {
+	rpc Cluster (ClusterRequest) returns (ClusterResponse) {}
+	rpc Heartbeat (HeartbeatRequest) returns (HeartbeatResponse) {}
+	rpc Report (ReportRequest) returns (ReportResponse) {}
+	rpc GetNode (GetNodeRequest) returns (GetNodeResponse) {}
+	rpc CreateSpace (CreateSpaceRequest) returns (CreateSpaceResponse) {}
+	rpc DeleteSpace (DeleteSpaceRequest) returns (DeleteSpaceResponse) {}
+	rpc GetSpace (GetSpaceRequest) returns (GetSpaceResponse) {}
+	rpc GetCatalogChanges(GetCatalogChangesRequest) returns (GetCatalogChangesResponse) {}
+	rpc GetRoleNodes (GetRoleNodesRequest) returns (GetRoleNodesResponse) {}
+}
+
+service InodeDBRouter {
+	rpc InsertItem (InsertItemRequest) returns (InsertItemResponse) {}
+	rpc UpdateItem (UpdateItemRequest) returns (UpdateItemResponse) {}
+	rpc DeleteItem (DeleteItemRequest) returns (DeleteItemResponse) {}
+	rpc GetItem (GetItemRequest) returns (GetItemResponse) {}
+	rpc Link (LinkRequest) returns (LinkResponse) {}
+	rpc Unlink (UnlinkRequest) returns (UnlinkResponse) {}
+	rpc List (ListRequest) returns (ListResponse) {}
+	rpc Search (SearchRequest) returns (SearchResponse) {}
+}
+
+service InodeDBShardServer {
+	rpc AddShard (AddShardRequest) returns (AddShardResponse) {}
+	rpc GetShard (GetShardRequest) returns (GetShardResponse) {}
+	rpc ShardInsertItem (InsertItemRequest) returns (InsertItemResponse) {}
+	rpc ShardUpdateItem (UpdateItemRequest) returns (UpdateItemResponse) {}
+	rpc ShardDeleteItem (DeleteItemRequest) returns (DeleteItemResponse) {}
+	rpc ShardGetItem (GetItemRequest) returns (GetItemResponse) {}
+	rpc ShardLink (LinkRequest) returns (LinkResponse) {}
+	rpc ShardUnlink (UnlinkRequest) returns (UnlinkResponse) {}
+	rpc ShardList (ListRequest) returns (ListResponse) {}
+	rpc ShardSearch (SearchRequest) returns (SearchResponse) {}
+}
+
+/*service InodeDB {
 	rpc Cluster (ClusterRequest) returns (ClusterResponse) {}
 	rpc Heartbeat (HeartbeatRequest) returns (HeartbeatResponse) {}
 	rpc Report (ReportRequest) returns (ReportResponse) {}
@@ -27,7 +63,7 @@ service InodeDB {
 	rpc Unlink (UnlinkRequest) returns (UnlinkResponse) {}
 	rpc List (ListRequest) returns (ListResponse) {}
 	rpc Search (SearchRequest) returns (SearchResponse) {}
-}
+}*/
 
 message ClusterRequest {
 	ClusterOperation operation = 1;
@@ -195,4 +231,12 @@ message GetCatalogChangesRequest {
 message GetCatalogChangesResponse {
 	uint64 route_version = 1;
 	repeated CatalogChangeItem items = 2;
+}
+
+message GetRoleNodesRequest {
+	NodeRole role = 1;
+}
+
+message GetRoleNodesResponse {
+	repeated Node nodes = 1;
 }

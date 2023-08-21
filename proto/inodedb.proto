@@ -57,7 +57,7 @@ message Node {
 	uint32 http_port = 4;
 	uint32 raft_port = 5;
 	string az = 6;
-	NodeRole role = 7;
+	repeated NodeRole roles = 7;
 	NodeState state = 8;
 }
 
@@ -74,7 +74,8 @@ message Shard {
 	uint32 id = 2;
 	uint64 ino_limit = 3;
 	uint64 ino_used = 4;
-	repeated Node nodes = 5; // nodes related to replicate nodes or stripe nodes
+	uint32 leader_id = 5;
+	repeated Node nodes = 6; // nodes related to replicate nodes or stripe nodes
 }
 
 message Item {
@@ -112,7 +113,8 @@ message Unlink {
 }
 
 message ShardReport {
-	Shard shard = 1;
+	uint64 sid = 1;
+	Shard shard = 2;
 }
 
 message CatalogChangeItem {

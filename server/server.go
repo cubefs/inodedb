@@ -15,21 +15,37 @@
 package server
 
 import (
+	"github.com/cubefs/inodedb/client"
 	"github.com/cubefs/inodedb/master"
+	"github.com/cubefs/inodedb/proto"
 	"github.com/cubefs/inodedb/router"
-	"github.com/cubefs/inodedb/shard"
+	"github.com/cubefs/inodedb/shardserver"
+	"github.com/cubefs/inodedb/shardserver/store"
 )
 
 const (
 	maxListNum = 1000
 )
 
+type Config struct {
+	Role []proto.NodeRole
+
+	MasterConfig client.MasterConfig `json:"master_config"`
+	NodeConfig   proto.Node          `json:"node_config"`
+	StoreConfig  store.Config        `json:"store_config"`
+}
+
 type Server struct {
 	master      *master.Master
 	router      *router.Router
-	shardServer *shard.Shard
+	shardServer *shardserver.ShardServer
 }
 
-func NewServer() *Server {
-	return &Server{}
+func NewServer(cfg *Config) *Server {
+	shardServer := shardserver.NewShardServer(&shardserver.Config{
+		StoreConfig:  cfg.StoreConfig,
+		MasterConfig: cfg.MasterConfig,
+		NodeConfig:   cfg.NodeConfig,
+	})
+	return &Server{shardServer: shardServer}
 }
