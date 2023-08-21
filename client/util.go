@@ -6,26 +6,16 @@ import (
 	"math"
 	"time"
 
+	"github.com/cubefs/inodedb/proto"
+
+	"github.com/cubefs/cubefs/blobstore/common/trace"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
-
-	"github.com/cubefs/cubefs/blobstore/common/trace"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
-
-func unaryInterceptorWithTracer(ctx context.Context, method string, req, reply interface{},
-	cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption,
-) error {
-	span := trace.SpanFromContextSafe(ctx)
-	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs(
-		"req-id", span.TraceID(),
-	))
-
-	return invoker(ctx, method, req, reply, cc, opts...)
-}
 
 func generateDialOpts(cfg *TransportConfig) []grpc.DialOption {
 	dialOpts := []grpc.DialOption{
@@ -52,4 +42,15 @@ func generateDialOpts(cfg *TransportConfig) []grpc.DialOption {
 		grpc.WithBlock(),
 	}
 	return dialOpts
+}
+
+func unaryInterceptorWithTracer(ctx context.Context, method string, req, reply interface{},
+	cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption,
+) error {
+	span := trace.SpanFromContextSafe(ctx)
+	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs(
+		proto.ReqIdKey, span.TraceID(),
+	))
+
+	return invoker(ctx, method, req, reply, cc, opts...)
 }

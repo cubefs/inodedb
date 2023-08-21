@@ -15,6 +15,7 @@
 package server
 
 import (
+	"github.com/cubefs/cubefs/blobstore/common/rpc/auditlog"
 	"github.com/cubefs/inodedb/client"
 	"github.com/cubefs/inodedb/master"
 	"github.com/cubefs/inodedb/proto"
@@ -36,9 +37,10 @@ type Config struct {
 }
 
 type Server struct {
-	master      *master.Master
-	router      *router.Router
-	shardServer *shardserver.ShardServer
+	master           *master.Master
+	router           *router.Router
+	shardServer      *shardserver.ShardServer
+	auditLogRecorder map[proto.NodeRole]auditlog.LogCloser
 }
 
 func NewServer(cfg *Config) *Server {

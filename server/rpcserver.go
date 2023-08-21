@@ -15,30 +15,44 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"strconv"
+	"sync"
+	"time"
 
-	"google.golang.org/grpc"
-
+	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/inodedb/errors"
 	"github.com/cubefs/inodedb/proto"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
+
+var auditLogPool = sync.Pool{
+	New: func() interface{} {
+		return new(bytes.Buffer)
+	},
+}
 
 type RPCServer struct {
 	*Server
 }
 
 func NewRPCServer(server *Server) *RPCServer {
-	rpcServer := &RPCServer{Server: server}
+	rs := &RPCServer{Server: server}
 
-	s := grpc.NewServer()
-	if rpcServer.master != nil {
-		proto.RegisterInodeDBMasterServer(s, rpcServer)
+	s := grpc.NewServer(grpc.ChainUnaryInterceptor(rs.unaryInterceptorWithTracer, rs.unaryInterceptorWithTracer))
+	if rs.master != nil {
+		proto.RegisterInodeDBMasterServer(s, rs)
 	}
-	if rpcServer.router != nil {
-		proto.RegisterInodeDBRouterServer(s, rpcServer)
+	if rs.router != nil {
+		proto.RegisterInodeDBRouterServer(s, rs)
 	}
-	if rpcServer.shardServer != nil {
-		proto.RegisterInodeDBShardServerServer(s, rpcServer)
+	if rs.shardServer != nil {
+		proto.RegisterInodeDBShardServerServer(s, rs)
 	}
 	return nil
 }
@@ -74,6 +88,10 @@ func (r *RPCServer) GetNode(context.Context, *proto.GetNodeRequest) (*proto.GetN
 }
 
 func (r *RPCServer) GetCatalogChanges(context.Context, *proto.GetCatalogChangesRequest) (*proto.GetCatalogChangesResponse, error) {
+	return nil, nil
+}
+
+func (r *RPCServer) GetRoleNodes(context.Context, *proto.GetRoleNodesRequest) (*proto.GetRoleNodesResponse, error) {
 	return nil, nil
 }
 
@@ -236,4 +254,52 @@ func (r *RPCServer) List(context.Context, *proto.ListRequest) (*proto.ListRespon
 
 func (r *RPCServer) Search(context.Context, *proto.SearchRequest) (*proto.SearchResponse, error) {
 	return nil, nil
+}
+
+// util function
+
+func (r *RPCServer) unaryInterceptorWithTracer(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Internal, "failed to get metadata")
+	}
+	reqId, ok := md[proto.ReqIdKey]
+	if ok {
+		trace.StartSpanFromContextWithTraceID(ctx, "", reqId[0])
+	} else {
+		trace.SpanFromContextSafe(ctx)
+	}
+
+	resp, err = handler(ctx, req)
+	return
+}
+
+func (r *RPCServer) unaryInterceptorWithAuditLog(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+	// TODO: decode into node role
+	nodeRole := proto.NodeRole_Router
+	start := time.Now()
+
+	resp, err = handler(ctx, req)
+
+	// TODO: record audit log only in specified method
+
+	if info.FullMethod == "" {
+		// TODO: fulfill audit log format and content, optimized time cost
+		in, _ := json.Marshal(req)
+		out, _ := json.Marshal(resp)
+		duration := int64(time.Since(start) / time.Millisecond)
+		bw := auditLogPool.Get().(*bytes.Buffer)
+		defer auditLogPool.Put(bw)
+		bw.Reset()
+		bw.Write([]byte(info.FullMethod))
+		bw.Write([]byte("\t"))
+		bw.Write(in)
+		bw.Write([]byte("\t"))
+		bw.Write(out)
+		bw.Write([]byte("\t"))
+		bw.Write([]byte(strconv.FormatInt(duration, 10)))
+		r.auditLogRecorder[nodeRole].Log([]byte("XX"))
+	}
+
+	return
 }
