@@ -6,9 +6,8 @@ import (
 	"math"
 	"time"
 
-	"github.com/cubefs/inodedb/proto"
-
 	"github.com/cubefs/cubefs/blobstore/common/trace"
+	"github.com/cubefs/inodedb/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/balancer/roundrobin"

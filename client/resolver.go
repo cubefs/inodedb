@@ -8,9 +8,7 @@ import (
 	"time"
 
 	"github.com/cubefs/cubefs/blobstore/common/trace"
-
 	"github.com/cubefs/inodedb/proto"
-
 	"google.golang.org/grpc/resolver"
 )
 
