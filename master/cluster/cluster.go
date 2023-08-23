@@ -8,11 +8,10 @@ import (
 	"time"
 
 	"github.com/cubefs/cubefs/blobstore/common/trace"
-
 	sclient "github.com/cubefs/inodedb/client"
+	"github.com/cubefs/inodedb/common/raft"
 	"github.com/cubefs/inodedb/errors"
 	"github.com/cubefs/inodedb/master/cluster/client"
-	"github.com/cubefs/inodedb/master/raft"
 	"github.com/cubefs/inodedb/master/store"
 	"github.com/cubefs/inodedb/proto"
 )
@@ -37,10 +36,10 @@ type cluster struct {
 	allNodes  sync.Map
 	allHosts  sync.Map
 
-	raft   raft.Raft
-	store  *store.Store
-	cfg    *Config
-	client client.Client
+	cfg       *Config
+	client    client.Client
+	raftGroup raft.Group
+	store     *store.Store
 
 	nodeRoles map[proto.NodeRole]struct{}
 	azs       map[string]struct{}
@@ -103,6 +102,7 @@ func (c *cluster) Alloc(ctx context.Context, args *AllocArgs) ([]*NodeInfo, erro
 		span.Warnf("alloc args az[%s] invalid", args.Az)
 		return nil, errors.ErrInvalidAz
 	}
+
 	if !c.isValidRole(args.Role) {
 		span.Warnf("alloc args role[%d] invalid", args.Role)
 		return nil, errors.ErrInvalidNodeRole
