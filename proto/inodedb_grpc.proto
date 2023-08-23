@@ -83,6 +83,7 @@ message CreateSpaceRequest {
 
 message HeartbeatRequest {
 	uint32 id = 1;
+	uint32 shard_count = 2;
 }
 
 message HeartbeatResponse {
