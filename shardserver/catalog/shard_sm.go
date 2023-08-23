@@ -8,7 +8,7 @@ import (
 	"github.com/cubefs/cubefs/blobstore/util/errors"
 	"github.com/cubefs/inodedb/common/kvstore"
 	"github.com/cubefs/inodedb/proto"
-	"github.com/cubefs/inodedb/shardserver/catalog/internal"
+	"github.com/cubefs/inodedb/shardserver/catalog/persistent"
 	pb "google.golang.org/protobuf/proto"
 )
 
@@ -120,7 +120,7 @@ func (s *shard) applyUpdateItem(ctx context.Context, data []byte) error {
 			item.Fields[idx].Value = updateField.Value
 			continue
 		}
-		item.Fields = append(item.Fields, &internal.Field{Name: updateField.Name, Value: updateField.Value})
+		item.Fields = append(item.Fields, &persistent.Field{Name: updateField.Name, Value: updateField.Value})
 	}
 
 	data, err = item.Marshal()

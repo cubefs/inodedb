@@ -6,7 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/cubefs/inodedb/shardserver/catalog/internal"
+	"github.com/cubefs/inodedb/shardserver/catalog/persistent"
 
 	"github.com/cubefs/cubefs/blobstore/util/errors"
 	"github.com/cubefs/cubefs/util/btree"
@@ -361,10 +361,10 @@ func (s *shardKeysGenerator) encodeLinkKeyPrefix(ino uint64) []byte {
 	return keyPrefix
 }
 
-func protoFieldsToInternalFields(external []*proto.Field) []*internal.Field {
-	ret := make([]*internal.Field, len(external))
+func protoFieldsToInternalFields(external []*proto.Field) []*persistent.Field {
+	ret := make([]*persistent.Field, len(external))
 	for i := range external {
-		ret[i] = &internal.Field{
+		ret[i] = &persistent.Field{
 			Name:  external[i].Name,
 			Value: external[i].Value,
 		}
@@ -372,7 +372,7 @@ func protoFieldsToInternalFields(external []*proto.Field) []*internal.Field {
 	return ret
 }
 
-func internalFieldsToProtoFields(internal []*internal.Field) []*proto.Field {
+func internalFieldsToProtoFields(internal []*persistent.Field) []*proto.Field {
 	ret := make([]*proto.Field, len(internal))
 	for i := range internal {
 		ret[i] = &proto.Field{

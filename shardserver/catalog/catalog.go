@@ -25,7 +25,7 @@ type Config struct {
 
 type Catalog struct {
 	routeVersion uint64
-	transport    *transporter
+	transporter  *transporter
 	store        *store.Store
 
 	spaces sync.Map
@@ -54,21 +54,21 @@ func NewCatalog(ctx context.Context, cfg *Config) *Catalog {
 		}
 	}
 
-	transport := newTransporter(masterClient, &cfg.NodeConfig)
-	if err := transport.Register(ctx); err != nil {
+	transporter := newTransporter(masterClient, &cfg.NodeConfig)
+	if err := transporter.Register(ctx); err != nil {
 		span.Fatalf("register shard server failed: %s", err)
 	}
 
 	catalog := &Catalog{
-		transport: transport,
-		store:     store,
-		done:      make(chan struct{}),
+		transporter: transporter,
+		store:       store,
+		done:        make(chan struct{}),
 	}
 	if err := catalog.updateRoute(ctx); err != nil {
 		span.Fatalf("update route failed: %s", err)
 	}
 
-	catalog.transport.StartHeartbeat(ctx)
+	catalog.transporter.StartHeartbeat(ctx)
 	go catalog.loop(ctx)
 	return catalog
 }
@@ -113,7 +113,7 @@ func (c *Catalog) GetShard(ctx context.Context, spaceName string, shardID uint32
 	// transform into external nodes
 	nodes := make([]*proto.Node, 0, len(shardStat.nodes))
 	for _, nodeId := range shardStat.nodes {
-		nodeInfo, err := c.transport.GetNode(ctx, nodeId)
+		nodeInfo, err := c.transporter.GetNode(ctx, nodeId)
 		if err != nil {
 			return nil, err
 		}
@@ -137,7 +137,7 @@ func (c *Catalog) loop(ctx context.Context) {
 		select {
 		case <-reportTicker.C:
 			shardReports := c.getAlteredShards()
-			if err := c.transport.Report(ctx, shardReports); err != nil {
+			if err := c.transporter.Report(ctx, shardReports); err != nil {
 				span.Warnf("shard report failed: %s", err)
 			}
 			reportTicker.Reset(time.Duration(60+rand.Intn(10)) * time.Second)
@@ -186,7 +186,7 @@ func (c *Catalog) getAlteredShards() []*proto.ShardReport {
 }
 
 func (c *Catalog) updateRoute(ctx context.Context) error {
-	changes, err := c.transport.GetRouteUpdate(ctx, c.getRouteVersion())
+	changes, err := c.transporter.GetRouteUpdate(ctx, c.getRouteVersion())
 	if err != nil {
 		return err
 	}
