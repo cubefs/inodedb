@@ -45,6 +45,23 @@ func (s *NodeInfo) ToDBNode(node *proto.Node) {
 	s.State = node.State
 }
 
+func (s *NodeInfo) Clone() *NodeInfo {
+	info := &NodeInfo{}
+
+	info.Id = s.Id
+	info.Addr = s.Addr
+	info.GrpcPort = s.GrpcPort
+	info.HttpPort = s.HttpPort
+	info.Az = s.Az
+	info.State = s.State
+
+	roles := make([]proto.NodeRole, len(s.Roles))
+	copy(roles, s.Roles)
+	info.Roles = roles
+
+	return info
+}
+
 func (s *NodeInfo) Marshal() ([]byte, error) {
 	return json.Marshal(s)
 }
@@ -53,7 +70,18 @@ func (s *NodeInfo) Unmarshal(data []byte) error {
 	return json.Unmarshal(data, s)
 }
 
+type ShardAddArgs struct {
+	NodeId       uint32            `json:"node_id"`
+	Sid          *uint64           `json:"sid"`
+	SpaceName    string            `json:"space_name"`
+	ShardId      uint32            `json:"shard_id"`
+	InoLimit     uint64            `json:"ino_limit"`
+	Replicates   map[uint32]string `json:"replicates"`
+	RouteVersion uint64            `json:"route_version"`
+}
+
 type AllocArgs struct {
-	Count int    `json:"count"`
-	Az    string `json:"az"`
+	Count int            `json:"count"`
+	Az    string         `json:"az"`
+	Role  proto.NodeRole `json:"role"`
 }

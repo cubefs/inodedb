@@ -1,10 +1,11 @@
 package cluster
 
 import (
-	"github.com/stretchr/testify/require"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func BenchmarkVolumes_Put(b *testing.B) {
@@ -16,7 +17,7 @@ func BenchmarkVolumes_Put(b *testing.B) {
 			nodeId: uint32(x),
 			info:   &NodeInfo{Id: uint32(x)},
 		}
-		n.Put(nodeInfo)
+		n.put(nodeInfo)
 	}
 }
 
@@ -29,11 +30,11 @@ func BenchmarkVolumes_Delete(b *testing.B) {
 			nodeId: uint32(x),
 			info:   &NodeInfo{Id: uint32(x)},
 		}
-		n.Put(nodeInfo)
+		n.put(nodeInfo)
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		n.Delete(uint32(i))
+		n.delete(uint32(i))
 	}
 }
 
@@ -44,7 +45,7 @@ func TestVolumes_Put(t *testing.T) {
 			nodeId: uint32(i),
 			info:   &NodeInfo{Id: uint32(i)},
 		}
-		n.Put(nodeInfo)
+		n.put(nodeInfo)
 	}
 
 	idx, ok := search(n.nodes, 3)
@@ -63,9 +64,9 @@ func TestVolumes_Delete(t *testing.T) {
 			nodeId: uint32(i),
 			info:   &NodeInfo{Id: uint32(i)},
 		}
-		n.Put(nodeInfo)
+		n.put(nodeInfo)
 	}
-	n.Delete(uint32(2))
+	n.delete(uint32(2))
 
 	idx, ok := search(n.nodes, uint32(2))
 	require.Equal(t, 1, idx)

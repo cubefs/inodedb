@@ -52,6 +52,8 @@ func (n *node) updateLoad(ctx context.Context, delta int32) int32 {
 }
 
 func (n *node) contains(ctx context.Context, role proto.NodeRole) bool {
+	n.lock.RLock()
+	defer n.lock.RUnlock()
 	for _, r := range n.info.Roles {
 		if r == role {
 			return true
