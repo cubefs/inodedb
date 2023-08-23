@@ -2,10 +2,11 @@ package catalog
 
 import (
 	"context"
-	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"sort"
 	"sync"
 	"sync/atomic"
+
+	"github.com/cubefs/cubefs/blobstore/common/trace"
 
 	"github.com/cubefs/inodedb/errors"
 	"github.com/cubefs/inodedb/master/store"
@@ -42,7 +43,6 @@ func NewRouter() Router {
 }
 
 func (r *router) AddRouter(ctx context.Context, item *ChangeItem) error {
-
 	span := trace.SpanFromContextSafe(ctx)
 	span.Infof("add router")
 
@@ -53,7 +53,7 @@ func (r *router) AddRouter(ctx context.Context, item *ChangeItem) error {
 
 	// todo raft propose
 
-	//todo  move to raft apply process
+	// todo  move to raft apply process
 	kvStore := r.store.KVStore()
 	value, err := item.Value()
 	if err != nil {
@@ -169,7 +169,7 @@ func search(changes []*ChangeItem, version uint64) (int, bool) {
 	return idx, true
 }
 
-// shardedShards is an effective data struct
+// concurrentShards is an effective data struct
 type shardedItems struct {
 	num  uint64
 	m    []*items
@@ -184,7 +184,7 @@ func newShardedItems() *shardedItems {
 	return m
 }
 
-// get shard from shardedShards
+// get shard from concurrentShards
 func (s *shardedItems) getItems(version uint64) (*ChangeItem, bool) {
 	idx := version / s.num
 	s.lock.RLock()
@@ -192,7 +192,7 @@ func (s *shardedItems) getItems(version uint64) (*ChangeItem, bool) {
 	return s.m[idx].Get(version)
 }
 
-// put new shard into shardedShards
+// put new shard into concurrentShards
 func (s *shardedItems) putItems(v *ChangeItem) {
 	idx := v.RouteVersion / s.num
 	s.lock.Lock()

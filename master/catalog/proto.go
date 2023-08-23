@@ -3,56 +3,43 @@ package catalog
 import (
 	"encoding/binary"
 	"encoding/json"
+
 	"google.golang.org/protobuf/types/known/anypb"
 
 	"github.com/cubefs/inodedb/master/cluster"
 	"github.com/cubefs/inodedb/proto"
 )
 
-// proto for storage encoding/decoding and function return value
-
-type CatalogInfo struct {
-	Name       string   `json:"name"`
-	CreateTime int64    `json:"create_time"`
-	SpaceIDs   []uint64 `json:"space_id_s"`
-}
-
-type SpaceState int
-
 const (
 	SpaceStateExpanding = SpaceState(0)
 	SpaceStateNormal    = SpaceState(1)
 )
+
 const (
 	routerCF = "router"
 	shardCF  = "shard"
 )
 
-func (c *CatalogInfo) Marshal() ([]byte, error) {
-	return json.Marshal(c)
-}
+// proto for storage encoding/decoding and function return value
 
-func (c *CatalogInfo) Unmarshal(data []byte) error {
-	return json.Unmarshal(data, c)
-}
+type SpaceState int
 
-type SpaceInfo struct {
+type spaceInfo struct {
 	Sid         uint64          `json:"sid"`
 	Name        string          `json:"name"`
 	Type        proto.SpaceType `json:"type"`
 	FixedFields []*FieldMeta    `json:"fixed_fields"`
-	ShardIDs    []*uint32       `json:"shard_id_s"`
 }
 
-func (s *SpaceInfo) Marshal() ([]byte, error) {
+func (s *spaceInfo) Marshal() ([]byte, error) {
 	return json.Marshal(s)
 }
 
-func (s *SpaceInfo) Unmarshal(data []byte) error {
+func (s *spaceInfo) Unmarshal(data []byte) error {
 	return json.Unmarshal(data, s)
 }
 
-type ShardInfo struct {
+type shardInfo struct {
 	RouteVersion uint64              `json:"route_version"`
 	ShardId      uint32              `json:"shard_id"`
 	InoLimit     uint64              `json:"ino_limit"`
@@ -60,17 +47,12 @@ type ShardInfo struct {
 	Replicates   []*cluster.NodeInfo `json:"replicates"`
 }
 
-func (s *ShardInfo) Marshal() ([]byte, error) {
+func (s *shardInfo) Marshal() ([]byte, error) {
 	return json.Marshal(s)
 }
 
-func (s *ShardInfo) Unmarshal(data []byte) error {
+func (s *shardInfo) Unmarshal(data []byte) error {
 	return json.Unmarshal(data, s)
-}
-
-func (s *ShardInfo) Equal(info *ShardInfo) bool {
-
-	return false
 }
 
 type ChangeItem struct {
@@ -120,14 +102,10 @@ type ChangeSpaceAdd struct {
 	ChangeType   proto.CatalogChangeType `json:"change_type"`
 }
 
-type HeartBeatArgs struct {
-	Id uint32 `json:"id"` // node id
-}
-
 type ShardReport struct {
 	SpaceID  uint64
 	LeaderId uint32
-	Info     *ShardInfo
+	Info     *shardInfo
 }
 
 type ReportArgs struct {

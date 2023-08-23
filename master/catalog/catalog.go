@@ -2,37 +2,34 @@ package catalog
 
 import (
 	"context"
-	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"sync"
-	"sync/atomic"
-	"time"
 
-	"github.com/cubefs/inodedb/errors"
-	"github.com/cubefs/inodedb/master/raft"
+	"github.com/cubefs/inodedb/common/raft"
 	"github.com/cubefs/inodedb/proto"
 )
 
+type CreateSpaceArgs struct {
+	SpaceName     string
+	SpaceType     proto.SpaceType
+	DesiredShards uint32
+	FixedFields   []proto.FieldMeta
+}
+
 type catalog struct {
-	info      *CatalogInfo
-	allSpaces *shardedSpaces
+	spaces *concurrentSpaces
 
-	cache sync.Map
-
-	raft      raft.Raft
-	routerMgr Router
-
-	closeChan      chan struct{}
-	expChan        chan Space
-	currentSpaceID uint64
+	done      chan struct{}
+	raftGroup raft.Group
 
 	lock sync.RWMutex
 }
 
 type Catalog interface {
-	CreateSpace(ctx context.Context, Name string) error
-	DeleteSpace(ctx context.Context, spaceID uint64) error
-	GetSpace(ctx context.Context, spaceID uint64) (*proto.SpaceMeta, error)
-	Report(ctx context.Context, args *ReportArgs) error
+	CreateSpace(ctx context.Context, args *CreateSpaceArgs) error
+	DeleteSpace(ctx context.Context, sid uint64) error
+	GetSpace(ctx context.Context, sid uint64) (*proto.SpaceMeta, error)
+	Report(ctx context.Context, nodeId uint32, infos []*proto.ShardReport) error
+	GetCatalogChanges(ctx context.Context, routerVersion uint64, nodeId uint32) ([]*proto.CatalogChangeItem, error)
 	Close()
 }
 
@@ -42,111 +39,100 @@ type Config struct {
 }
 
 func NewCatalog(ctx context.Context, cfg *Config) Catalog {
-	c := &catalog{
-		info: &CatalogInfo{
-			Name:       cfg.Name,
-			CreateTime: time.Now().UnixMilli(),
-		},
-		currentSpaceID: cfg.CurrentSpaceID,
-	}
-	c.loop(ctx)
-	c.loopAddShard()
-	return c
-}
-
-func (c *catalog) CreateSpace(ctx context.Context, name string) error {
-	spaceID := c.generateSpaceID()
-	// todo 1. raft
-	sp, err := NewSpace(ctx, &SpaceConfig{Name: name, ID: spaceID}, c.expChan)
-	if err != nil {
-		return err
-	}
-	// todo 2. persistent
-
-	// todo 3. add router
-	c.allSpaces.putSpace(ctx, sp)
-
 	return nil
 }
 
-func (c *catalog) List(ctx context.Context) []*SpaceInfo {
+func (c *catalog) CreateSpace(ctx context.Context, args *CreateSpaceArgs) error {
 	return nil
 }
 
 func (c *catalog) DeleteSpace(ctx context.Context, spaceID uint64) error {
-	// todo 1. raft
-	c.allSpaces.deleteSpace(spaceID)
 	return nil
 }
 
 func (c *catalog) GetSpace(ctx context.Context, spaceID uint64) (*proto.SpaceMeta, error) {
-
-	if store, loaded := c.cache.Load(spaceID); loaded {
-		return store.(Space).GetMeta(ctx)
-	}
-	getSpace := c.allSpaces.getSpace(spaceID)
-	if getSpace == nil {
-		return nil, errors.ErrSpaceNotExist
-	}
-	c.cache.Store(spaceID, getSpace)
-	return getSpace.GetMeta(ctx)
+	return nil, nil
 }
 
-func (c *catalog) Report(ctx context.Context, args *ReportArgs) error {
-	span := trace.SpanFromContextSafe(ctx)
-	span.Infof("receive report info from node[%d]", args.Id)
-	sm := make(map[uint64][]*ShardReport)
-	for _, info := range args.Infos {
-		sm[info.SpaceID] = append(sm[info.SpaceID], info)
-	}
-	for id, shards := range sm {
-		getSpace := c.allSpaces.getSpace(id)
-		if getSpace == nil {
-			return errors.ErrSpaceDoesNotExist
-		}
-		err := getSpace.Report(ctx, shards)
-		if err != nil {
-			span.Errorf("handle report from node[%d], space[%d] failed, err: %s", args.Id, id, err)
-			continue
-		}
-	}
+func (c *catalog) Report(ctx context.Context, nodeId uint32, infos []*proto.ShardReport) error {
 	return nil
 }
 
-func (c *catalog) generateSpaceID() uint64 {
-	return atomic.AddUint64(&c.currentSpaceID, 1)
+func (c *catalog) GetCatalogChanges(ctx context.Context, routerVersion uint64, nodeId uint32) ([]*proto.CatalogChangeItem, error) {
+	return nil, nil
 }
 
 func (c *catalog) Close() {
-	close(c.closeChan)
+	close(c.done)
 }
 
-// background task
-func (c *catalog) loop(ctx context.Context) {
-	ticker := time.NewTicker(time.Second)
-	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				// todo background task
+func (c *catalog) generateSpaceID() uint64 {
+	return 0
+}
 
-			case <-c.closeChan:
+// concurrentSpaces is an effective data struct (concurrent map implements)
+type concurrentSpaces struct {
+	num   uint32
+	m     map[uint32]map[uint64]*space
+	locks map[uint32]*sync.RWMutex
+}
+
+func newConcurrentSpaces(splitMapNum uint32) *concurrentSpaces {
+	spaces := &concurrentSpaces{
+		num:   splitMapNum,
+		m:     make(map[uint32]map[uint64]*space),
+		locks: make(map[uint32]*sync.RWMutex),
+	}
+	for i := uint32(0); i < splitMapNum; i++ {
+		spaces.locks[i] = &sync.RWMutex{}
+		spaces.m[i] = make(map[uint64]*space)
+	}
+	return spaces
+}
+
+// Get space from concurrentSpaces
+func (s *concurrentSpaces) Get(sid uint64) *space {
+	idx := uint32(sid) % s.num
+	s.locks[idx].RLock()
+	defer s.locks[idx].RUnlock()
+	return s.m[idx][sid]
+}
+
+// Put new space into shardedSpace
+func (s *concurrentSpaces) Put(v *space) {
+	id := v.id
+	idx := uint32(id) % s.num
+	s.locks[idx].Lock()
+	defer s.locks[idx].Unlock()
+	_, ok := s.m[idx][id]
+	// space already exist
+	if ok {
+		return
+	}
+	s.m[idx][id] = v
+}
+
+// Delete space into shardedSpace
+func (s *concurrentSpaces) Delete(id uint64) {
+	idx := uint32(id) % s.num
+	s.locks[idx].Lock()
+	defer s.locks[idx].Unlock()
+	delete(s.m[idx], id)
+}
+
+// Range concurrentSpaces, it only use in flush atomic switch situation.
+// in other situation, it may occupy the read lock for a long time
+func (s *concurrentSpaces) Range(f func(v *space) error) {
+	for i := uint32(0); i < s.num; i++ {
+		l := s.locks[i]
+		l.RLock()
+		for _, v := range s.m[i] {
+			err := f(v)
+			if err != nil {
+				l.RUnlock()
 				return
 			}
 		}
-	}()
-}
-
-func (c *catalog) loopAddShard() {
-	span, ctx := trace.StartSpanFromContext(context.Background(), "add shard")
-	go func() {
-		for {
-			select {
-			case sp := <-c.expChan:
-				if err := sp.AddShard(ctx); err != nil {
-					span.Errorf("add shard failed for space[%d]", sp.ID(ctx))
-				}
-			}
-		}
-	}()
+		l.RUnlock()
+	}
 }
