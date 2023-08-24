@@ -9,7 +9,8 @@ import (
 // proto for storage encoding/decoding and function return value
 
 const (
-	nodeCF = "node"
+	clusterCF       = "cluster"
+	IDGeneratorName = "NODE"
 )
 
 type NodeInfo struct {
@@ -24,24 +25,30 @@ type NodeInfo struct {
 }
 
 func (s *NodeInfo) ToProtoNode() *proto.Node {
+	roles := make([]proto.NodeRole, len(s.Roles))
+	copy(roles, s.Roles)
+
 	return &proto.Node{
 		Id:       s.Id,
 		Addr:     s.Addr,
 		GrpcPort: s.GrpcPort,
 		HttpPort: s.HttpPort,
 		Az:       s.Az,
-		Roles:    s.Roles,
+		Roles:    roles,
 		State:    s.State,
 	}
 }
 
 func (s *NodeInfo) ToDBNode(node *proto.Node) {
+	roles := make([]proto.NodeRole, len(s.Roles))
+	copy(roles, node.Roles)
+
 	s.Id = node.Id
 	s.Addr = node.Addr
 	s.GrpcPort = node.GrpcPort
 	s.HttpPort = node.HttpPort
 	s.Az = node.Az
-	s.Roles = node.Roles
+	s.Roles = roles
 	s.State = node.State
 }
 
@@ -84,4 +91,9 @@ type AllocArgs struct {
 	Count int            `json:"count"`
 	Az    string         `json:"az"`
 	Role  proto.NodeRole `json:"role"`
+}
+
+type HeartbeatArgs struct {
+	NodeID     uint32 `json:"node_id"`
+	ShardCount int32  `json:"shard_count"`
 }

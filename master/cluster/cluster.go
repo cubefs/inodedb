@@ -3,15 +3,15 @@ package cluster
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/cubefs/cubefs/blobstore/common/trace"
-	sclient "github.com/cubefs/inodedb/client"
 	"github.com/cubefs/inodedb/common/raft"
 	"github.com/cubefs/inodedb/errors"
 	"github.com/cubefs/inodedb/master/cluster/client"
+	idGenerator "github.com/cubefs/inodedb/master/idgenerator"
 	"github.com/cubefs/inodedb/master/store"
 	"github.com/cubefs/inodedb/proto"
 )
@@ -19,34 +19,33 @@ import (
 type Cluster interface {
 	GetNode(ctx context.Context, nodeId uint32) (*proto.Node, error)
 	Alloc(ctx context.Context, args *AllocArgs) ([]*NodeInfo, error)
-	AddShard(ctx context.Context, args *ShardAddArgs) error
+	GetClient(ctx context.Context, nodeId uint32) (client.Client, error)
 	Register(ctx context.Context, args *proto.Node) error
 	Unregister(ctx context.Context, nodeID uint32) error
 	ListNodeInfo(ctx context.Context, role proto.NodeRole) ([]*proto.Node, error)
-	HandleHeartbeat(ctx context.Context, nodeId uint32) error
+	HandleHeartbeat(ctx context.Context, args *HeartbeatArgs) error
 	Load(ctx context.Context) error
 	Close()
 }
 
 type cluster struct {
-	clusterID     uint32
-	currentNodeID uint32
+	clusterID uint32
 
 	allocator sync.Map
 	allNodes  sync.Map
 	allHosts  sync.Map
 
-	cfg       *Config
-	client    client.Client
-	raftGroup raft.Group
-	store     *store.Store
+	cfg         *Config
+	client      client.ClientMgr
+	raftGroup   raft.Group
+	store       *storage
+	idGenerator *idGenerator.IDGenerator
 
-	nodeRoles map[proto.NodeRole]struct{}
+	nodeRoles map[proto.NodeRole]struct{} // use to manage alloc different node role
 	azs       map[string]struct{}
 
 	closeChan chan struct{}
-
-	lock sync.RWMutex
+	lock      sync.RWMutex
 }
 
 type Config struct {
@@ -58,28 +57,43 @@ type Config struct {
 	HeartbeatTimeoutS int   `json:"heartbeat_timeout_s"`
 	RefreshIntervalS  int   `json:"refresh_interval_s"`
 
-	AllocConfig
-	sclient.ShardServerConfig
+	client.Config
 }
 
 func NewCluster(ctx context.Context, cfg *Config) Cluster {
-	// open db
 	span := trace.SpanFromContext(ctx)
 	db, err := store.NewStore(ctx, &store.DBConfig{Path: cfg.DBPath})
 	if err != nil {
 		span.Fatalf("new store instance failed: %s", err)
 	}
+	generator, err := idGenerator.NewIDGenerator(db)
+	if err != nil {
+		span.Fatalf("new id generator failed: %s", err)
+	}
+
+	sc, err := client.NewClient(ctx, &cfg.Config)
+	if err != nil {
+		span.Fatalf("new shard server client failed: %s", err)
+	}
+
 	c := &cluster{
-		clusterID: cfg.ClusterID,
-		store:     db,
-		cfg:       cfg,
-		closeChan: make(chan struct{}),
-		azs:       make(map[string]struct{}),
+		clusterID:   cfg.ClusterID,
+		cfg:         cfg,
+		idGenerator: generator,
+		client:      sc,
+		store:       &storage{kvStore: db.KVStore()},
+		closeChan:   make(chan struct{}),
+		azs:         make(map[string]struct{}),
 	}
 	for _, az := range cfg.Azs {
 		c.azs[az] = struct{}{}
 	}
+	c.nodeRoles[proto.NodeRole_ShardServer] = struct{}{}
 	return c
+}
+
+func (c *cluster) SetRaftGroup(raftGroup raft.Group) {
+	c.raftGroup = raftGroup
 }
 
 func (c *cluster) GetNode(ctx context.Context, nodeId uint32) (*proto.Node, error) {
@@ -93,6 +107,14 @@ func (c *cluster) GetNode(ctx context.Context, nodeId uint32) (*proto.Node, erro
 	n.lock.RUnlock()
 
 	return info, nil
+}
+
+func (c *cluster) GetClient(ctx context.Context, nodeId uint32) (client.Client, error) {
+	_, ok := c.allNodes.Load(nodeId)
+	if !ok {
+		return nil, errors.ErrNotFound
+	}
+	return c.client.GetClient(ctx, nodeId)
 }
 
 func (c *cluster) Alloc(ctx context.Context, args *AllocArgs) ([]*NodeInfo, error) {
@@ -120,31 +142,8 @@ func (c *cluster) Alloc(ctx context.Context, args *AllocArgs) ([]*NodeInfo, erro
 	return alloc, err
 }
 
-func (c *cluster) AddShard(ctx context.Context, args *ShardAddArgs) error {
-	span := trace.SpanFromContextSafe(ctx)
-
-	value, ok := c.allNodes.Load(args.NodeId)
-	if !ok {
-		span.Errorf("node[%d] not found", args.NodeId)
-		return errors.ErrNotFound
-	}
-	newNode := value.(*node)
-	if !newNode.contains(ctx, proto.NodeRole_ShardServer) {
-		span.Errorf("the node[%d] not shard server, can not add shard", args.NodeId)
-		return errors.ErrInvalidNodeRole
-	}
-
-	err := c.client.AddShard(ctx, args)
-	if err != nil {
-		span.Errorf("add shard failed at node[%d], err: %s", args.NodeId, err)
-		return err
-	}
-	return nil
-}
-
 func (c *cluster) Register(ctx context.Context, args *proto.Node) error {
 	span := trace.SpanFromContextSafe(ctx)
-
 	if !c.isValidAz(args.Az) {
 		span.Warnf("register node az[%s] not match", args.Az)
 		return errors.ErrInvalidAz
@@ -160,16 +159,30 @@ func (c *cluster) Register(ctx context.Context, args *proto.Node) error {
 		return errors.ErrNodeAlreadyExist
 	}
 
-	nodeID := c.generateNodeID()
+	base, _, err := c.idGenerator.Alloc(ctx, IDGeneratorName, 1)
+	if err != nil {
+		span.Errorf("get node[%s] id failed, err: %s", args.Addr, err)
+		return err
+	}
+	nodeID := base
 	newInfo := &NodeInfo{}
 	newInfo.ToDBNode(args)
-	newInfo.Id = nodeID
+	newInfo.Id = uint32(nodeID)
 
 	data, err := newInfo.Marshal()
 	if err != nil {
 		return err
 	}
-	// raft propose
+
+	_, err = c.raftGroup.Propose(ctx, &raft.ProposeRequest{
+		Module:     module,
+		Op:         RaftOpRegisterNode,
+		Data:       data,
+		WithResult: false,
+	})
+	if err != nil {
+		return err
+	}
 	return c.handleRegister(ctx, data)
 }
 
@@ -178,10 +191,20 @@ func (c *cluster) Unregister(ctx context.Context, nodeId uint32) error {
 
 	if _, hit := c.allNodes.Load(nodeId); !hit {
 		span.Errorf("node[%d] not found", nodeId)
-		return errors.ErrNotFound
+		return errors.ErrNodeDoesNotFound
 	}
 	data := c.encodeNodeId(nodeId)
 	// todo 1. raft
+
+	_, err := c.raftGroup.Propose(ctx, &raft.ProposeRequest{
+		Module:     module,
+		Op:         RaftOpUnregisterNode,
+		Data:       data,
+		WithResult: false,
+	})
+	if err != nil {
+		return err
+	}
 	return c.handleUnregister(ctx, data)
 }
 
@@ -205,18 +228,49 @@ func (c *cluster) ListNodeInfo(ctx context.Context, role proto.NodeRole) ([]*pro
 	return res, nil
 }
 
-func (c *cluster) HandleHeartbeat(ctx context.Context, nodeId uint32) error {
+func (c *cluster) HandleHeartbeat(ctx context.Context, args *HeartbeatArgs) error {
 	span := trace.SpanFromContextSafe(ctx)
 
-	if _, hit := c.allNodes.Load(nodeId); !hit {
-		span.Errorf("node[%d] not found", nodeId)
+	if _, hit := c.allNodes.Load(args.NodeID); !hit {
+		span.Errorf("node[%d] not found", args.NodeID)
 		return errors.ErrNotFound
 	}
-
-	data := c.encodeNodeId(nodeId)
-
+	data, err := json.Marshal(args)
+	if err != nil {
+		return err
+	}
+	_, err = c.raftGroup.Propose(ctx, &raft.ProposeRequest{
+		Module:     module,
+		Op:         RaftOpHeartbeat,
+		Data:       data,
+		WithResult: false,
+	})
+	if err != nil {
+		return err
+	}
 	// todo raft propose
 	return c.handleHeartbeat(ctx, data)
+}
+
+func (c *cluster) Load(ctx context.Context) error {
+	span := trace.SpanFromContextSafe(ctx)
+	infos, err := c.store.Load(ctx)
+	if err != nil {
+		span.Fatalf("read node data from rocksdb failed, err: %s", err)
+	}
+
+	for _, info := range infos {
+		newNode := &node{
+			info:             info,
+			nodeId:           info.Id,
+			heartbeatTimeout: c.cfg.HeartbeatTimeoutS,
+		}
+		c.allNodes.Store(info.Id, newNode)
+		c.allHosts.Store(info.Addr, nil)
+	}
+
+	c.refresh(ctx)
+	return nil
 }
 
 func (c *cluster) refresh(ctx context.Context) {
@@ -227,12 +281,10 @@ func (c *cluster) refresh(ctx context.Context) {
 		return true
 	})
 
-	c.lock.RLock()
 	mgrs := make(map[proto.NodeRole]AllocMgr, len(c.nodeRoles))
 	for role := range c.nodeRoles {
-		mgrs[role] = NewAllocMgr(ctx, &AllocConfig{NodeLoadThreshold: c.cfg.NodeLoadThreshold})
+		mgrs[role] = NewAllocMgr(ctx)
 	}
-	c.lock.RUnlock()
 
 	for _, n := range allNodes {
 		if !n.isAvailable() {
@@ -254,53 +306,8 @@ func (c *cluster) refresh(ctx context.Context) {
 	}
 }
 
-func (c *cluster) Load(ctx context.Context) error {
-	span := trace.SpanFromContextSafe(ctx)
-	kvStore := c.store.KVStore()
-	list := kvStore.List(ctx, nodeCF, nil, nil, nil)
-
-	key, value, err := list.ReadNext()
-	if err != nil {
-		span.Errorf("read node data from rocksdb failed, err: %s", err)
-		return err
-	}
-	maxId := uint32(0)
-	for key != nil {
-		data := value.Value()
-		info := &NodeInfo{}
-		err = info.Unmarshal(data)
-		if err != nil {
-			span.Errorf("unmarshal data from rocksdb to node info failed, err: %s", err)
-			return err
-		}
-		newNode := &node{
-			info:             info,
-			nodeId:           info.Id,
-			load:             c.cfg.NodeMaxLoad,
-			heartbeatTimeout: c.cfg.HeartbeatTimeoutS,
-		}
-		c.allNodes.Store(info.Id, newNode)
-		if maxId < info.Id {
-			maxId = info.Id
-		}
-		key, value, err = list.ReadNext()
-		if err != nil {
-			span.Errorf("read node data from rocksdb failed, err: %s", err)
-			return err
-		}
-	}
-	atomic.StoreUint32(&c.currentNodeID, maxId)
-
-	c.refresh(ctx)
-	return nil
-}
-
 func (c *cluster) Close() {
 	close(c.closeChan)
-}
-
-func (c *cluster) generateNodeID() uint32 {
-	return atomic.AddUint32(&c.currentNodeID, 1)
 }
 
 func (c *cluster) loop() {

@@ -13,13 +13,13 @@ type node struct {
 	info   *NodeInfo
 	nodeId uint32
 
-	load             int32
+	shardCount       int32
 	heartbeatTimeout int
 	expires          time.Time
 	lock             sync.RWMutex
 }
 
-func (n *node) handleHeartbeat(ctx context.Context) {
+func (n *node) handleHeartbeat(ctx context.Context, shardCount int32) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
@@ -28,6 +28,7 @@ func (n *node) handleHeartbeat(ctx context.Context) {
 	if n.info.State != proto.NodeState_Alive {
 		n.info.State = proto.NodeState_Alive
 	}
+	atomic.StoreInt32(&n.shardCount, shardCount)
 }
 
 func (n *node) isExpire() bool {
@@ -47,10 +48,6 @@ func (n *node) isAvailable() bool {
 	return n.info.State == proto.NodeState_Alive
 }
 
-func (n *node) updateLoad(ctx context.Context, delta int32) int32 {
-	return atomic.AddInt32(&n.load, delta)
-}
-
 func (n *node) contains(ctx context.Context, role proto.NodeRole) bool {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
@@ -60,4 +57,8 @@ func (n *node) contains(ctx context.Context, role proto.NodeRole) bool {
 		}
 	}
 	return false
+}
+
+func (n *node) updateShardCount(delta int32) {
+	atomic.AddInt32(&n.shardCount, delta)
 }
