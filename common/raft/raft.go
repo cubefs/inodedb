@@ -47,6 +47,7 @@ type (
 	}
 	Group interface {
 		Propose(ctx context.Context, req *ProposeRequest) (*ProposeResponse, error)
+		Stat() *Stat
 		Start()
 		Close()
 	}
@@ -55,6 +56,18 @@ type (
 		Propose(ctx context.Context, data []byte) error
 	}
 
+	Stat struct {
+		Id             uint64   `json:"nodeId"`
+		Term           uint64   `json:"term"`
+		Vote           uint64   `json:"vote"`
+		Commit         uint64   `json:"commit"`
+		Leader         uint64   `json:"leader"`
+		RaftState      string   `json:"raftState"`
+		Applied        uint64   `json:"applied"`
+		RaftApplied    uint64   `json:"raftApplied"`
+		LeadTransferee uint64   `json:"transferee"`
+		Peers          []uint64 `json:"peers"`
+	}
 	ConfChange struct {
 		Type    ConfChangeType
 		NodeID  uint64

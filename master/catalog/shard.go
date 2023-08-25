@@ -2,6 +2,8 @@ package catalog
 
 import (
 	"sync"
+
+	"github.com/cubefs/inodedb/proto"
 )
 
 type shard struct {
@@ -11,19 +13,13 @@ type shard struct {
 	lock   sync.RWMutex
 }
 
-// Update Statistics to incrementally calculate the water level of the current space
-func (s *shard) Update(info *shardInfo, leader uint32) int64 {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	var sub int64
+func (s *shard) GetInfo() *shardInfo {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 
-	s.leader = leader
-	if info.InoUsed >= s.info.InoUsed {
-		sub = int64(info.InoUsed - s.info.InoUsed)
-		s.info = info
-		return sub
-	}
-	sub = -int64(s.info.InoUsed - info.InoUsed)
-	s.info = info
-	return sub
+	return &(*s.info)
+}
+
+func (s *shard) UpdateReportInfoNoLock(info *proto.Shard) {
+	s.info.InoUsed = info.InoUsed
 }

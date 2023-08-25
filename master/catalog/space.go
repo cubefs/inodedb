@@ -2,38 +2,11 @@ package catalog
 
 import (
 	"context"
-	"encoding/binary"
 	"sync"
 	"sync/atomic"
 
-	"github.com/cubefs/cubefs/blobstore/common/trace"
-	"github.com/cubefs/inodedb/errors"
-	"github.com/cubefs/inodedb/master/client"
-	"github.com/cubefs/inodedb/master/cluster"
-	"github.com/cubefs/inodedb/master/store"
 	"github.com/cubefs/inodedb/proto"
 )
-
-type space struct {
-	id             uint64
-	inoLimit       uint64
-	currentShardID uint32
-	threshold      float64
-	used           uint64
-
-	info      *spaceInfo
-	shards    *concurrentShards
-	cluster   cluster.Cluster
-	routerMgr Router
-
-	store *store.Store
-
-	serverClient client.Client
-
-	state SpaceState
-
-	lock sync.RWMutex
-}
 
 type SpaceConfig struct {
 	ID          uint64
@@ -46,43 +19,80 @@ type SpaceConfig struct {
 }
 
 func NewSpace(ctx context.Context, cfg *SpaceConfig) (*space, error) {
-	s := &space{
-		id: cfg.ID,
-		info: &spaceInfo{
-			Sid:         cfg.ID,
-			Name:        cfg.Name,
-			FixedFields: cfg.Meta,
-			Type:        cfg.SpaceType,
-		},
-		shards: newConcurrentShards(cfg.SliceMapNum),
-	}
-	return s, nil
-}
-
-func (s *space) AddShard(ctx context.Context) error {
-	id := s.generateShardID()
-	// todo 1. raft
-
-	err := s.addShard(ctx, id)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (s *space) GetMeta(ctx context.Context) (*proto.SpaceMeta, error) {
 	return nil, nil
 }
 
-func (s *space) Load(ctx context.Context) error {
-	return nil
+type space struct {
+	id              uint64
+	info            *spaceInfo
+	shards          *concurrentShards
+	expandingShards []*shard
+
+	lock sync.RWMutex
 }
 
-func (s *space) Report(ctx context.Context, reports []*ShardReport) error {
+func (s *space) GetInfo() *spaceInfo {
+	s.lock.RLock()
+	s.lock.RUnlock()
+
+	return &(*s.info)
 }
 
-func (s *space) generateShardID() uint32 {
-	return atomic.AddUint32(&s.currentShardID, 1)
+func (s *space) GetShard(shardId uint32) *shard {
+	return s.shards.Get(shardId)
+}
+
+func (s *space) PutShard(shard *shard) {
+	s.shards.Put(shard)
+}
+
+func (s *space) GetAllShards() []*shard {
+	return s.shards.List()
+}
+
+func (s *space) GetExpandingShards() []*shard {
+	return s.expandingShards
+}
+
+func (s *space) IsNormal() bool {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
+	return s.info.Status == SpaceStatusNormal
+}
+
+func (s *space) IsInit(withLock bool) bool {
+	if withLock {
+		s.lock.RLock()
+		defer s.lock.RUnlock()
+	}
+
+	return s.info.Status == SpaceStatusInit
+}
+
+func (s *space) IsUpdateRoute(withLock bool) bool {
+	if withLock {
+		s.lock.RLock()
+		defer s.lock.RUnlock()
+	}
+
+	return s.info.Status == SpaceStatusUpdateRoute
+}
+
+func (s *space) IsExpandUpdateNone(withLock bool) bool {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
+	return s.info.ExpandStatus == SpaceExpandStatusNone
+}
+
+func (s *space) IsExpandUpdateRoute(withLock bool) bool {
+	if withLock {
+		s.lock.RLock()
+		defer s.lock.RUnlock()
+	}
+
+	return s.info.ExpandStatus == SpaceExpandStatusUpdateRoute
 }
 
 // concurrentShards is an effective data struct (concurrent map implements)
@@ -120,11 +130,6 @@ func (s *concurrentShards) Put(v *shard) {
 	idx := id % s.num
 	s.locks[idx].Lock()
 	defer s.locks[idx].Unlock()
-	_, ok := s.m[idx][id]
-	// shard already exist
-	if ok {
-		return
-	}
 	atomic.AddUint32(&s.total, 1)
 	s.m[idx][id] = v
 }
