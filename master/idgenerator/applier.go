@@ -12,17 +12,14 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package IDGenter
+package idgenerator
 
 import (
 	"context"
-	"encoding/json"
 
-	"github.com/cubefs/inodedb/common/raft"
-
-	"github.com/cubefs/cubefs/blobstore/clustermgr/base"
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
+	"github.com/cubefs/inodedb/common/raft"
 )
 
 const (
@@ -33,7 +30,7 @@ const (
 	module = "idGenerator"
 )
 
-func (s *IDGenerator) LoadData(ctx context.Context) error {
+func (s *idGenerator) LoadData(ctx context.Context) error {
 	span := trace.SpanFromContextSafe(ctx)
 	scopeItems, err := s.storage.Load(ctx)
 	if err != nil {
@@ -44,35 +41,25 @@ func (s *IDGenerator) LoadData(ctx context.Context) error {
 	return nil
 }
 
-func (s *IDGenerator) GetModuleName() string {
+func (s *idGenerator) GetModuleName() string {
 	return module
 }
 
-func (s *IDGenerator) Apply(ctx context.Context, ops []raft.Op, datas [][]byte, contexts []base.ProposeContext) error {
-	span := trace.SpanFromContextSafe(ctx)
-	for i := range ops {
-		_, taskCtx := trace.StartSpanFromContextWithTraceID(ctx, "", contexts[i].ReqID)
-		switch ops[i] {
-		case RaftOpAlloc:
-			args := &allocArgs{}
-			err := json.Unmarshal(datas[i], args)
-			if err != nil {
-				span.Errorf("json unmarshal failed, err: %v, operation type: %d, data: %v", err, ops[i], datas[i])
-				return errors.Info(err, "json unmarshal failed").Detail(err)
-			}
-			err = s.applyCommit(taskCtx, args)
-			if err != nil {
-				return errors.Info(err, "apply commit failed, args: ", args).Detail(err)
-			}
+func (s *idGenerator) Apply(ctx context.Context, op raft.Op, data []byte) error {
+	switch op {
+	case RaftOpAlloc:
+		err := s.applyCommit(ctx, data)
+		if err != nil {
+			return errors.Info(err, "apply commit failed").Detail(err)
 		}
 	}
 
 	return nil
 }
 
-func (s *IDGenerator) Flush(ctx context.Context) error {
+func (s *idGenerator) Flush(ctx context.Context) error {
 	return nil
 }
 
-func (s *IDGenerator) NotifyLeaderChange(ctx context.Context, leader uint64, host string) {
+func (s *idGenerator) NotifyLeaderChange(ctx context.Context, leader uint64, host string) {
 }

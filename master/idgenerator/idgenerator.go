@@ -12,18 +12,18 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package IDGenter
+package idgenerator
 
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"sync"
 
 	"github.com/cubefs/cubefs/blobstore/common/kvstore"
 	"github.com/cubefs/cubefs/blobstore/common/trace"
+	"github.com/cubefs/cubefs/blobstore/util/errors"
 	"github.com/cubefs/inodedb/common/raft"
-	"github.com/cubefs/inodedb/shardserver/store"
+	"github.com/cubefs/inodedb/master/store"
 )
 
 var (
@@ -32,7 +32,13 @@ var (
 	ErrInvalidCount = errors.New("request count is invalid")
 )
 
-type IDGenerator struct {
+// TODO: rename IDGenerator into IdGenerator
+
+type IDGenerator interface {
+	Alloc(ctx context.Context, name string, count int) (base, new uint64, err error)
+}
+
+type idGenerator struct {
 	scopeItems map[string]uint64
 	raftGroup  raft.Group
 
@@ -40,22 +46,22 @@ type IDGenerator struct {
 	lock    sync.RWMutex
 }
 
-func NewIDGenerator(store *store.Store) (*IDGenerator, error) {
+func NewIDGenerator(store *store.Store) (IDGenerator, error) {
 	_, ctx := trace.StartSpanFromContext(context.Background(), "NewIDGenerator")
 
 	storage := &storage{kvStore: store.KVStore()}
-	s := &IDGenerator{storage: storage}
+	s := &idGenerator{storage: storage}
 	if err := s.LoadData(ctx); err != nil {
 		return nil, err
 	}
 	return s, nil
 }
 
-func (s *IDGenerator) SetRaftGroup(raftGroup raft.Group) {
+func (s *idGenerator) SetRaftGroup(raftGroup raft.Group) {
 	s.raftGroup = raftGroup
 }
 
-func (s *IDGenerator) Alloc(ctx context.Context, name string, count int) (base, new uint64, err error) {
+func (s *idGenerator) Alloc(ctx context.Context, name string, count int) (base, new uint64, err error) {
 	if count <= 0 {
 		return 0, 0, ErrInvalidCount
 	}
@@ -76,24 +82,31 @@ func (s *IDGenerator) Alloc(ctx context.Context, name string, count int) (base, 
 		return
 	}
 
-	_, err = s.raftGroup.Propose(ctx, &raft.ProposeRequest{
+	if _, err = s.raftGroup.Propose(ctx, &raft.ProposeRequest{
 		Module:     module,
 		Op:         RaftOpAlloc,
 		Data:       data,
 		WithResult: false,
-	})
-	if err != nil {
+	}); err != nil {
 		return
 	}
 
 	// TODO: remove this function call after invoke raft
-	s.applyCommit(ctx, args)
+	if err = s.applyCommit(ctx, data); err != nil {
+		return
+	}
 
 	base = new - uint64(count) + 1
 	return
 }
 
-func (s *IDGenerator) applyCommit(ctx context.Context, args *allocArgs) error {
+func (s *idGenerator) applyCommit(ctx context.Context, data []byte) error {
+	args := &allocArgs{}
+	err := json.Unmarshal(data, args)
+	if err != nil {
+		return errors.Info(err, "json unmarshal failed")
+	}
+
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
