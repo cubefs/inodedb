@@ -31,6 +31,7 @@ service InodeDBRouter {
 
 service InodeDBShardServer {
 	rpc AddShard (AddShardRequest) returns (AddShardResponse) {}
+	rpc UpdateShard (UpdateShardRequest) returns (UpdateShardResponse) {}
 	rpc GetShard (GetShardRequest) returns (GetShardResponse) {}
 	rpc ShardInsertItem (InsertItemRequest) returns (InsertItemResponse) {}
 	rpc ShardUpdateItem (UpdateItemRequest) returns (UpdateItemResponse) {}
@@ -95,6 +96,7 @@ message ReportRequest {
 }
 
 message ReportResponse {
+	repeated ShardTask tasks = 1;
 }
 
 message GetNodeRequest {
@@ -126,15 +128,24 @@ message GetSpaceResponse {
 }
 
 message AddShardRequest {
-	optional uint64 sid  = 2 [json_name="space_id"];
+	uint64 sid  = 2 [json_name="space_id"];
 	string space_name = 3 [json_name="space_name"];
 	uint32 shard_id = 4 [json_name="shard_id"];
 	uint64 route_version = 1 [json_name="route_version"];
 	uint64 ino_limit = 5 [json_name="ino_limit"];
-	map<uint32, string> replicates = 6 [json_name="replicates"];
+	repeated uint32 replicates = 6 [json_name="replicates"];
 }
 
 message AddShardResponse {
+}
+
+message UpdateShardRequest {
+	uint64 sid  = 2 [json_name="space_id"];
+	uint32 shard_id = 4 [json_name="shard_id"];
+	uint64 route_version = 1 [json_name="route_version"];
+}
+
+message UpdateShardResponse {
 }
 
 message GetShardRequest {

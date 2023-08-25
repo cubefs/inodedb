@@ -50,6 +50,10 @@ enum CatalogChangeType {
 	AddShard = 2;
 }
 
+enum ShardTaskType {
+	ClearShard = 0;
+}
+
 message Node {
 	uint32 id = 1;
 	string addr = 2;
@@ -57,8 +61,9 @@ message Node {
 	uint32 http_port = 4;
 	uint32 raft_port = 5;
 	string az = 6;
-	repeated NodeRole roles = 7;
-	NodeState state = 8;
+	string rack = 7;
+	repeated NodeRole roles = 8;
+	NodeState state = 9;
 }
 
 message SpaceMeta {
@@ -140,4 +145,11 @@ message CatalogChangeShardAdd {
 	uint32 shard_id = 2;
 	uint64 ino_limit = 3;
 	map<uint32, string> replicates = 4;
+}
+
+message ShardTask {
+	ShardTaskType type = 1;
+	uint64 sid = 2;
+	uint32 shard_id = 3;
+	google.protobuf.Any reserved = 4;
 }
