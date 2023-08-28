@@ -112,6 +112,6 @@ func (c *cluster) handleHeartbeat(ctx context.Context, data []byte) error {
 	}
 
 	n := value.(*node)
-	n.handleHeartbeat(ctx, args.ShardCount)
+	n.HandleHeartbeat(ctx, args.ShardCount)
 	return nil
 }

@@ -10,7 +10,7 @@ import (
 
 const (
 	clusterCF       = "cluster"
-	IDGeneratorName = "NODE"
+	idGeneratorName = "node"
 )
 
 type NodeInfo struct {
@@ -20,6 +20,7 @@ type NodeInfo struct {
 	HttpPort    uint32           `json:"http_port"`
 	ReplicaPort uint32           `json:"replica_port"`
 	Az          string           `json:"az"`
+	Rack        string           `json:"rack"`
 	Roles       []proto.NodeRole `json:"role"`
 	State       proto.NodeState  `json:"state"`
 }
@@ -36,6 +37,7 @@ func (s *NodeInfo) ToProtoNode() *proto.Node {
 		Az:       s.Az,
 		Roles:    roles,
 		State:    s.State,
+		Rack:     s.Rack,
 	}
 }
 
@@ -49,6 +51,7 @@ func (s *NodeInfo) ToDBNode(node *proto.Node) {
 	s.HttpPort = node.HttpPort
 	s.Az = node.Az
 	s.Roles = roles
+	s.Rack = node.Rack
 	s.State = node.State
 }
 
@@ -61,6 +64,7 @@ func (s *NodeInfo) Clone() *NodeInfo {
 	info.HttpPort = s.HttpPort
 	info.Az = s.Az
 	info.State = s.State
+	info.Rack = s.Rack
 
 	roles := make([]proto.NodeRole, len(s.Roles))
 	copy(roles, s.Roles)
@@ -77,20 +81,11 @@ func (s *NodeInfo) Unmarshal(data []byte) error {
 	return json.Unmarshal(data, s)
 }
 
-type ShardAddArgs struct {
-	NodeId       uint32            `json:"node_id"`
-	Sid          *uint64           `json:"sid"`
-	SpaceName    string            `json:"space_name"`
-	ShardId      uint32            `json:"shard_id"`
-	InoLimit     uint64            `json:"ino_limit"`
-	Replicates   map[uint32]string `json:"replicates"`
-	RouteVersion uint64            `json:"route_version"`
-}
-
 type AllocArgs struct {
-	Count int            `json:"count"`
-	Az    string         `json:"az"`
-	Role  proto.NodeRole `json:"role"`
+	Count    int            `json:"count"`
+	Az       string         `json:"az"`
+	Role     proto.NodeRole `json:"role"`
+	RackWare bool           `json:"rack_ware"`
 }
 
 type HeartbeatArgs struct {

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"C"
 	"context"
 
 	"github.com/cubefs/inodedb/common/kvstore"

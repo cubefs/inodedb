@@ -19,7 +19,7 @@ import (
 type Cluster interface {
 	GetNode(ctx context.Context, nodeId uint32) (*proto.Node, error)
 	Alloc(ctx context.Context, args *AllocArgs) ([]*NodeInfo, error)
-	GetClient(ctx context.Context, nodeId uint32) (client.Client, error)
+	GetClient(ctx context.Context, nodeId uint32) (client.MasterClient, error)
 	Register(ctx context.Context, args *proto.Node) error
 	Unregister(ctx context.Context, nodeID uint32) error
 	ListNodeInfo(ctx context.Context, role proto.NodeRole) ([]*proto.Node, error)
@@ -29,14 +29,14 @@ type Cluster interface {
 }
 
 type cluster struct {
-	clusterID uint32
+	clusterId uint32
 
-	allocator sync.Map
-	allNodes  sync.Map
-	allHosts  sync.Map
+	allocators sync.Map
+	allNodes   sync.Map
+	allHosts   sync.Map
 
 	cfg         *Config
-	client      client.ClientMgr
+	client      client.Client
 	raftGroup   raft.Group
 	store       *storage
 	idGenerator idGenerator.IDGenerator
@@ -57,31 +57,30 @@ type Config struct {
 	HeartbeatTimeoutS int   `json:"heartbeat_timeout_s"`
 	RefreshIntervalS  int   `json:"refresh_interval_s"`
 
-	client.Config
+	ShardServerConfig client.Config `json:"shard_server_config"`
+
+	Store *store.Store `json:"-"`
 }
 
 func NewCluster(ctx context.Context, cfg *Config) Cluster {
 	span := trace.SpanFromContext(ctx)
-	db, err := store.NewStore(ctx, &store.DBConfig{Path: cfg.DBPath})
-	if err != nil {
-		span.Fatalf("new store instance failed: %s", err)
-	}
-	generator, err := idGenerator.NewIDGenerator(db)
+
+	generator, err := idGenerator.NewIDGenerator(cfg.Store)
 	if err != nil {
 		span.Fatalf("new id generator failed: %s", err)
 	}
 
-	sc, err := client.NewClient(ctx, &cfg.Config)
+	sc, err := client.NewClient(ctx, &cfg.ShardServerConfig)
 	if err != nil {
 		span.Fatalf("new shard server client failed: %s", err)
 	}
 
 	c := &cluster{
-		clusterID:   cfg.ClusterID,
+		clusterId:   cfg.ClusterID,
 		cfg:         cfg,
 		idGenerator: generator,
 		client:      sc,
-		store:       &storage{kvStore: db.KVStore()},
+		store:       &storage{kvStore: cfg.Store.KVStore()},
 		closeChan:   make(chan struct{}),
 		azs:         make(map[string]struct{}),
 	}
@@ -109,7 +108,7 @@ func (c *cluster) GetNode(ctx context.Context, nodeId uint32) (*proto.Node, erro
 	return info, nil
 }
 
-func (c *cluster) GetClient(ctx context.Context, nodeId uint32) (client.Client, error) {
+func (c *cluster) GetClient(ctx context.Context, nodeId uint32) (client.MasterClient, error) {
 	_, ok := c.allNodes.Load(nodeId)
 	if !ok {
 		return nil, errors.ErrNotFound
@@ -130,11 +129,11 @@ func (c *cluster) Alloc(ctx context.Context, args *AllocArgs) ([]*NodeInfo, erro
 		return nil, errors.ErrInvalidNodeRole
 	}
 
-	value, ok := c.allocator.Load(args.Role)
+	value, ok := c.allocators.Load(args.Role)
 	if !ok {
 		return nil, errors.ErrNodeRoleNotExist
 	}
-	mgr := value.(AllocMgr)
+	mgr := value.(Allocator)
 	alloc, err := mgr.Alloc(ctx, args)
 	if err != nil {
 		span.Warnf("alloc failed, err: %s", err)
@@ -155,11 +154,11 @@ func (c *cluster) Register(ctx context.Context, args *proto.Node) error {
 		}
 	}
 	if _, loaded := c.allHosts.LoadOrStore(args.Addr, nil); loaded {
-		span.Errorf("the node[%s] already exist in cluster, please check raft consistent", args.Addr)
+		span.Errorf("the node[%s] already exist in cluster", args.Addr)
 		return errors.ErrNodeAlreadyExist
 	}
 
-	base, _, err := c.idGenerator.Alloc(ctx, IDGeneratorName, 1)
+	base, _, err := c.idGenerator.Alloc(ctx, idGeneratorName, 1)
 	if err != nil {
 		span.Errorf("get node[%s] id failed, err: %s", args.Addr, err)
 		return err
@@ -217,7 +216,7 @@ func (c *cluster) ListNodeInfo(ctx context.Context, role proto.NodeRole) ([]*pro
 	var res []*proto.Node
 	c.allNodes.Range(func(key, value interface{}) bool {
 		n := value.(*node)
-		if role == -1 || n.contains(ctx, role) {
+		if role == -1 || n.Contains(ctx, role) {
 			n.lock.RLock()
 			info := n.info.ToProtoNode()
 			n.lock.RUnlock()
@@ -281,28 +280,25 @@ func (c *cluster) refresh(ctx context.Context) {
 		return true
 	})
 
-	mgrs := make(map[proto.NodeRole]AllocMgr, len(c.nodeRoles))
+	mgrs := make(map[proto.NodeRole]Allocator, len(c.nodeRoles))
 	for role := range c.nodeRoles {
-		mgrs[role] = NewAllocMgr(ctx)
+		mgrs[role] = NewAllocator(ctx)
 	}
 
 	for _, n := range allNodes {
-		if !n.isAvailable() {
+		if !n.IsAvailable() {
 			continue
 		}
-		n.lock.RLock()
-		az := n.info.Az
-		roles := make([]proto.NodeRole, len(n.info.Roles))
-		copy(roles, n.info.Roles)
-		n.lock.RUnlock()
 
-		for _, role := range roles {
-			mgrs[role].Put(ctx, az, n)
+		info := n.GetInfo()
+
+		for _, role := range info.Roles {
+			mgrs[role].Put(ctx, n)
 		}
 	}
 
 	for role, mgr := range mgrs {
-		c.allocator.Store(role, mgr)
+		c.allocators.Store(role, mgr)
 	}
 }
 

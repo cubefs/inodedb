@@ -10,44 +10,155 @@ import (
 	"github.com/cubefs/inodedb/errors"
 )
 
-type AllocMgr interface {
-	Put(ctx context.Context, az string, n *node)
+type Allocator interface {
+	Put(ctx context.Context, n *node)
 	Alloc(ctx context.Context, args *AllocArgs) ([]*NodeInfo, error)
 }
 
-type allocMgr struct {
-	allocator map[string]*nodeSet
+type allocator struct {
+	allocator map[string]*azStorage
 }
 
-func NewAllocMgr(ctx context.Context) AllocMgr {
-	return &allocMgr{}
+func NewAllocator(ctx context.Context) Allocator {
+	return &allocator{}
 }
 
-func (a *allocMgr) Put(ctx context.Context, az string, n *node) {
+func (a *allocator) Put(ctx context.Context, n *node) {
+	az := n.GetInfo().Az
 	if _, hit := a.allocator[az]; !hit {
-		a.allocator[az] = &nodeSet{}
+		a.allocator[az] = &azStorage{
+			allNodes:    &nodeSet{},
+			rackStorage: make(map[string]*nodeSet),
+		}
 	}
 	a.allocator[az].put(n)
 }
 
-func (a *allocMgr) Alloc(ctx context.Context, args *AllocArgs) ([]*NodeInfo, error) {
+func (a *allocator) Alloc(ctx context.Context, args *AllocArgs) ([]*NodeInfo, error) {
 	span := trace.SpanFromContextSafe(ctx)
-	allocNodes := make([]*NodeInfo, 0, args.Count)
 
-	set := a.allocator[args.Az]
-
-	allocated := set.alloc(args.Count)
-	for _, newNode := range allocated {
-		newNode.lock.RLock()
-		info := newNode.info.Clone()
-		newNode.lock.RUnlock()
-		allocNodes = append(allocNodes, info)
+	if args.RackWare {
+		return a.allocFromRack(ctx, args)
 	}
+
+	allocNodes := make([]*NodeInfo, 0, args.Count)
+	stg := a.allocator[args.Az]
+	selected := make(map[uint32]bool)
+
+	allocated := stg.allNodes.alloc(args.Count, selected)
+	for _, newNode := range allocated {
+		allocNodes = append(allocNodes, newNode.GetInfo())
+	}
+
 	if len(allocNodes) < args.Count {
-		span.Warnf("alloc nodes failed from az[%s], err: %s", args.Az, errors.ErrNoAvailableNode)
+		span.Warnf("alloc nodes failed from az[%s], need: %d, get: %d", args.Az, args.Count, len(allocNodes))
 		return allocNodes, errors.ErrNoAvailableNode
 	}
 	return allocNodes, nil
+}
+
+func (a *allocator) allocFromRack(ctx context.Context, args *AllocArgs) ([]*NodeInfo, error) {
+	span := trace.SpanFromContextSafe(ctx)
+
+	allocNodes := make([]*NodeInfo, 0, args.Count)
+	selectedNodes := make(map[uint32]bool, args.Count)
+	failedRack := make(map[string]bool)
+	as := a.allocator[args.Az]
+	totalWeight := int32(0)
+
+	type weightedStorage struct {
+		weight  int32
+		rack    string
+		storage *nodeSet
+	}
+	rackStorages := make([]*weightedStorage, 0, len(as.rackStorage))
+	for rack, stg := range as.rackStorage {
+		ws := &weightedStorage{
+			rack:    rack,
+			weight:  as.getFactor(stg),
+			storage: stg,
+		}
+		rackStorages = append(rackStorages, ws)
+		totalWeight += ws.weight
+	}
+	rand.Shuffle(len(rackStorages), func(i, j int) {
+		rackStorages[i], rackStorages[j] = rackStorages[j], rackStorages[i]
+	})
+
+	chosenIdx := 0
+	_totalWeight := totalWeight
+	rackNum := len(rackStorages)
+
+RETRY:
+	randNum := int32(0)
+	if _totalWeight > 0 {
+		randNum = rand.Int31n(_totalWeight)
+	}
+	for i := chosenIdx; i < rackNum; i++ {
+		if randNum <= rackStorages[i].weight {
+			if failedRack[rackStorages[i].rack] {
+				continue
+			}
+			set := rackStorages[i].storage
+			res := set.alloc(1, selectedNodes)
+			if len(res) > 0 {
+				newNode := res[0]
+				allocNodes = append(allocNodes, newNode.GetInfo())
+				selectedNodes[newNode.nodeId] = true
+				_totalWeight -= rackStorages[i].weight
+				rackStorages[i].weight -= 1
+				set.updateTotalShardCount(1)
+				rackStorages[chosenIdx], rackStorages[i] = rackStorages[i], rackStorages[chosenIdx]
+				chosenIdx++
+				goto RETRY
+			}
+			// if alloc failed, need not retry this rack
+			failedRack[rackStorages[i].rack] = true
+			span.Warnf("alloc nodes failed from rack[%s], err: %s", rackStorages[i].rack, errors.ErrNoAvailableNode)
+			continue
+		}
+		randNum -= rackStorages[i].weight
+	}
+
+	if len(allocNodes) < args.Count && len(failedRack) < rackNum {
+		span.Info("can't find enough rack, try duplicated rack")
+		chosenIdx = 0
+		_totalWeight = totalWeight - int32(len(allocNodes))
+		goto RETRY
+	}
+
+	as.allNodes.updateTotalShardCount(int32(len(allocNodes)))
+	if len(allocNodes) < args.Count {
+		return allocNodes, errors.ErrNoAvailableNode
+	}
+
+	return allocNodes, nil
+}
+
+type azStorage struct {
+	rackStorage map[string]*nodeSet
+
+	allNodes *nodeSet
+}
+
+func (a *azStorage) put(n *node) {
+
+	a.allNodes.put(n)
+
+	n.lock.RLock()
+	rack := n.info.Rack
+	n.lock.RUnlock()
+	if _, ok := a.rackStorage[rack]; !ok {
+		a.rackStorage[rack] = &nodeSet{}
+	}
+	a.rackStorage[rack].put(n)
+}
+
+func (a *azStorage) getFactor(set *nodeSet) int32 {
+	total := a.allNodes.getShardCount()
+	rackShardCount := set.getShardCount()
+
+	return total - rackShardCount
 }
 
 type nodeSet struct {
@@ -62,7 +173,7 @@ type weightedNode struct {
 	n      *node
 }
 
-func (s *nodeSet) alloc(count int) []*node {
+func (s *nodeSet) alloc(count int, excludes map[uint32]bool) []*node {
 	if count >= len(s.nodes) {
 		return s.nodes
 	}
@@ -72,7 +183,7 @@ func (s *nodeSet) alloc(count int) []*node {
 	res := make([]*node, 0, count)
 
 	for _, n := range s.nodes {
-		if !n.isAvailable() {
+		if !n.IsAvailable() || excludes[n.nodeId] {
 			continue
 		}
 		l := &weightedNode{
@@ -97,7 +208,7 @@ RETRY:
 	for need > 0 {
 		randNum := int32(0)
 		if _totalWeight > 0 {
-			randNum = rand.Int31n(totalWeight)
+			randNum = rand.Int31n(_totalWeight)
 		}
 		for i := chosenIdx; i < total; i++ {
 			if _, ok := selected[nodes[i].nodeId]; ok {
@@ -123,22 +234,26 @@ RETRY:
 		}
 	}
 	for _, newNode := range res {
-		newNode.updateShardCount(1)
+		newNode.UpdateShardCount(1)
 	}
-	s.updateTotalShardCount(int32(len(res)))
 	return res
 }
 
 func (s *nodeSet) put(n *node) {
 	s.nodes = append(s.nodes, n)
+	s.updateTotalShardCount(n.GetShardCount())
 }
 
 func (s *nodeSet) updateTotalShardCount(delta int32) {
 	atomic.AddInt32(&s.shardCount, delta)
 }
 
+func (s *nodeSet) getShardCount() int32 {
+	return atomic.LoadInt32(&s.shardCount)
+}
+
 func (s *nodeSet) getFactor(n *node) int32 {
-	shardCount := atomic.LoadInt32(&n.shardCount)
+	shardCount := n.GetShardCount()
 	total := atomic.LoadInt32(&s.shardCount)
 
 	return total - shardCount
