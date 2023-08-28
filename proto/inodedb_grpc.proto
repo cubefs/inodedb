@@ -43,29 +43,6 @@ service InodeDBShardServer {
 	rpc ShardSearch (SearchRequest) returns (SearchResponse) {}
 }
 
-/*service InodeDB {
-	rpc Cluster (ClusterRequest) returns (ClusterResponse) {}
-	rpc Heartbeat (HeartbeatRequest) returns (HeartbeatResponse) {}
-	rpc Report (ReportRequest) returns (ReportResponse) {}
-	rpc GetNode (GetNodeRequest) returns (GetNodeResponse) {}
-	rpc CreateSpace (CreateSpaceRequest) returns (CreateSpaceResponse) {}
-	rpc DeleteSpace (DeleteSpaceRequest) returns (DeleteSpaceResponse) {}
-	rpc GetSpace (GetSpaceRequest) returns (GetSpaceResponse) {}
-	rpc GetCatalogChanges(GetCatalogChangesRequest) returns (GetCatalogChangesResponse) {}
-
-	rpc AddShard (AddShardRequest) returns (AddShardResponse) {}
-	rpc GetShard (GetShardRequest) returns (GetShardResponse) {}
-
-	rpc InsertItem (InsertItemRequest) returns (InsertItemResponse) {}
-	rpc UpdateItem (UpdateItemRequest) returns (UpdateItemResponse) {}
-	rpc DeleteItem (DeleteItemRequest) returns (DeleteItemResponse) {}
-	rpc GetItem (GetItemRequest) returns (GetItemResponse) {}
-	rpc Link (LinkRequest) returns (LinkResponse) {}
-	rpc Unlink (UnlinkRequest) returns (UnlinkResponse) {}
-	rpc List (ListRequest) returns (ListResponse) {}
-	rpc Search (SearchRequest) returns (SearchResponse) {}
-}*/
-
 message ClusterRequest {
 	ClusterOperation operation = 1;
 	Node node_info = 2;
@@ -128,10 +105,10 @@ message GetSpaceResponse {
 }
 
 message AddShardRequest {
-	uint64 sid  = 2 [json_name="space_id"];
-	string space_name = 3 [json_name="space_name"];
-	uint32 shard_id = 4 [json_name="shard_id"];
-	uint64 route_version = 1 [json_name="route_version"];
+	uint64 sid  = 1 [json_name="space_id"];
+	string space_name = 2 [json_name="space_name"];
+	uint32 shard_id = 3 [json_name="shard_id"];
+	uint64 epoch = 4 [json_name="epoch"];
 	uint64 ino_limit = 5 [json_name="ino_limit"];
 	repeated uint32 replicates = 6 [json_name="replicates"];
 }
@@ -140,9 +117,9 @@ message AddShardResponse {
 }
 
 message UpdateShardRequest {
-	uint64 sid  = 2 [json_name="space_id"];
-	uint32 shard_id = 4 [json_name="shard_id"];
-	uint64 route_version = 1 [json_name="route_version"];
+	uint64 sid  = 1 [json_name="space_id"];
+	uint32 shard_id = 2 [json_name="shard_id"];
+	uint64 epoch = 3 [json_name="epoch"];
 }
 
 message UpdateShardResponse {

@@ -39,7 +39,7 @@ type cluster struct {
 	client      client.ClientMgr
 	raftGroup   raft.Group
 	store       *storage
-	idGenerator *idGenerator.IDGenerator
+	idGenerator idGenerator.IDGenerator
 
 	nodeRoles map[proto.NodeRole]struct{} // use to manage alloc different node role
 	azs       map[string]struct{}

@@ -4,11 +4,10 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/cubefs/inodedb/proto"
-
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
 	"github.com/cubefs/inodedb/common/raft"
+	"github.com/cubefs/inodedb/proto"
 )
 
 const (
@@ -22,6 +21,7 @@ const (
 	RaftOpShardReport
 	RaftOpExpandSpaceCreateShards
 	RaftOpExpandSpaceUpdateRoute
+	RaftOpDeleteSpace
 )
 
 func (c *catalog) Apply(ctx context.Context, op raft.Op, data []byte) error {
@@ -76,6 +76,37 @@ func (c *catalog) applyCreateSpace(ctx context.Context, data []byte) error {
 	return nil
 }
 
+func (c *catalog) applyDeleteSpace(ctx context.Context, data []byte) error {
+	span := trace.SpanFromContext(ctx)
+
+	args := &deleteSpaceArgs{}
+	if err := json.Unmarshal(data, args); err != nil {
+		return errors.Info(err, "json unmarshal data failed")
+	}
+
+	spaceLock := c.spaces.GetLock(args.Sid)
+	spaceLock.Lock()
+	defer spaceLock.Unlock()
+
+	if c.spaces.GetNoLock(args.Sid) != nil {
+		span.Warnf("space[%s] already delete", args.Sid)
+		return nil
+	}
+
+	routeItem := &routeItemInfo{
+		RouteVersion: c.routeMgr.GenRouteVersion(ctx, 1),
+		Type:         proto.CatalogChangeType_DeleteSpace,
+		ItemDetail:   &routeItemSpaceDelete{Sid: args.Sid},
+	}
+	if err := c.storage.DeleteSpace(ctx, args.Sid, routeItem); err != nil {
+		return err
+	}
+
+	c.spaces.Delete(args.Sid)
+	c.routeMgr.InsertRouteItems(ctx, []*routeItemInfo{routeItem})
+	return nil
+}
+
 func (c *catalog) applyInitSpaceShards(ctx context.Context, data []byte) error {
 	span := trace.SpanFromContext(ctx)
 
@@ -96,7 +127,7 @@ func (c *catalog) applyInitSpaceShards(ctx context.Context, data []byte) error {
 
 	info := space.info
 	info.Status = SpaceStatusUpdateRoute
-	if err := c.storage.UpsertSpaceShards(ctx, info, args.ShardInfos); err != nil {
+	if err := c.storage.UpsertSpaceShardsAndRouteItems(ctx, info, args.ShardInfos, nil); err != nil {
 		info.Status = SpaceStatusInit
 		return err
 	}
@@ -130,11 +161,16 @@ func (c *catalog) applyUpdateSpaceRoute(ctx context.Context, data []byte) error 
 
 	info := space.info
 	info.Status = SpaceStatusNormal
-	info.RouteVersion = args.SpaceRouteVersion
-
-	if err := c.storage.UpsertSpaceShards(ctx, info, args.ShardInfos); err != nil {
+	info.Epoch = args.SpaceEpoch
+	routeItems := []*routeItemInfo{{
+		RouteVersion: c.routeMgr.GenRouteVersion(ctx, 1),
+		Type:         proto.CatalogChangeType_AddSpace,
+		ItemDetail:   &routeItemSpaceAdd{Sid: args.Sid},
+	}}
+	routeItems = append(routeItems, c.genShardRouteItems(ctx, args.Sid, args.ShardInfos)...)
+	if err := c.storage.UpsertSpaceShardsAndRouteItems(ctx, info, args.ShardInfos, routeItems); err != nil {
 		info.Status = SpaceStatusInit
-		info.RouteVersion = 0
+		info.Epoch = 0
 		return err
 	}
 
@@ -144,6 +180,7 @@ func (c *catalog) applyUpdateSpaceRoute(ctx context.Context, data []byte) error 
 			info: args.ShardInfos[i],
 		})
 	}
+	c.routeMgr.InsertRouteItems(ctx, routeItems)
 
 	return nil
 }
@@ -166,7 +203,7 @@ func (c *catalog) applyShardReport(ctx context.Context, data []byte) (ret *shard
 
 		shard.lock.Lock()
 		info := shard.info
-		if reportInfo.Shard.RouteVersion < info.RouteVersion && isReplicateMember(reportInfo.Shard.Id, info.Replicates) {
+		if reportInfo.Shard.Epoch < info.Epoch && isReplicateMember(reportInfo.Shard.Id, info.Replicates) {
 			ret.tasks = append(ret.tasks, &proto.ShardTask{
 				Type:    proto.ShardTaskType_ClearShard,
 				Sid:     reportInfo.Sid,
@@ -181,6 +218,8 @@ func (c *catalog) applyShardReport(ctx context.Context, data []byte) (ret *shard
 		if float64(reportInfo.Shard.InoUsed)/float64(reportInfo.Shard.InoLimit) <= defaultInoUsedThreshold {
 			ret.maybeExpandingSpaces = append(ret.maybeExpandingSpaces, space)
 		}
+
+		// TODO: shard report info may need to be saved after raft flush or something
 	}
 
 	return
@@ -206,7 +245,7 @@ func (c *catalog) applyExpandSpaceShards(ctx context.Context, data []byte) error
 
 	info := space.info
 	info.ExpandStatus = SpaceExpandStatusUpdateRoute
-	if err := c.storage.UpsertSpaceShards(ctx, info, args.ShardInfos); err != nil {
+	if err := c.storage.UpsertSpaceShardsAndRouteItems(ctx, info, args.ShardInfos, nil); err != nil {
 		info.ExpandStatus = SpaceExpandStatusNone
 		return err
 	}
@@ -241,7 +280,8 @@ func (c *catalog) applyExpandSpaceUpdateRoute(ctx context.Context, data []byte) 
 
 	info := space.info
 	info.ExpandStatus = SpaceExpandStatusNone
-	if err := c.storage.UpsertSpaceShards(ctx, info, args.ShardInfos); err != nil {
+	routeItems := c.genShardRouteItems(ctx, args.Sid, args.ShardInfos)
+	if err := c.storage.UpsertSpaceShardsAndRouteItems(ctx, info, args.ShardInfos, routeItems); err != nil {
 		info.ExpandStatus = SpaceExpandStatusUpdateRoute
 		return err
 	}
@@ -253,8 +293,28 @@ func (c *catalog) applyExpandSpaceUpdateRoute(ctx context.Context, data []byte) 
 		})
 	}
 	space.expandingShards = nil
+	c.routeMgr.InsertRouteItems(ctx, routeItems)
 
 	return nil
+}
+
+func (c *catalog) genShardRouteItems(ctx context.Context, sid uint64, shardInfos []*shardInfo) []*routeItemInfo {
+	routeItems := make([]*routeItemInfo, len(shardInfos))
+	newRouteVersion := c.routeMgr.GenRouteVersion(ctx, uint64(len(shardInfos)))
+	baseRouteVersion := newRouteVersion - uint64(len(shardInfos)) + 1
+
+	for i := range shardInfos {
+		routeItems[i] = &routeItemInfo{
+			RouteVersion: baseRouteVersion + uint64(i),
+			Type:         proto.CatalogChangeType_AddShard,
+			ItemDetail: &routeItemShardAdd{
+				Sid:     sid,
+				ShardId: shardInfos[i].ShardId,
+			},
+		}
+	}
+
+	return routeItems
 }
 
 func isReplicateMember(target uint32, replicates []uint32) bool {

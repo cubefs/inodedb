@@ -75,8 +75,8 @@ message SpaceMeta {
 }
 
 message Shard {
-	uint64 route_version = 1;
 	uint32 id = 2;
+	uint64 epoch = 1;
 	uint64 ino_limit = 3;
 	uint64 ino_used = 4;
 	uint32 leader_id = 5;
@@ -137,14 +137,14 @@ message CatalogChangeSpaceAdd {
 
 message CatalogChangeSpaceDelete {
 	uint64 sid = 1;
-	optional string name = 2;
 }
 
 message CatalogChangeShardAdd {
-	string space_name = 1;
+	uint64 sid = 1;
 	uint32 shard_id = 2;
-	uint64 ino_limit = 3;
-	map<uint32, string> replicates = 4;
+	uint64 epoch = 3;
+	uint64 ino_limit = 4;
+	repeated uint32 replicates = 5;
 }
 
 message ShardTask {

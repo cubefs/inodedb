@@ -1,11 +1,10 @@
 package catalog
 
 import (
-	"encoding/binary"
 	"encoding/json"
+	"errors"
 
 	"github.com/cubefs/inodedb/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 )
 
 const (
@@ -28,45 +27,45 @@ const (
 
 type SpaceStatus uint8
 
-type ChangeItem struct {
+type routeItemInfo struct {
 	RouteVersion uint64                  `json:"route_version"`
 	Type         proto.CatalogChangeType `json:"type"`
-	Item         *anypb.Any              `json:"item"`
+	ItemDetail   interface{}             `json:"item"`
 }
 
-func (c *ChangeItem) Key() []byte {
-	key := make([]byte, 8)
-	binary.BigEndian.PutUint64(key[4:], c.RouteVersion)
-	return key
+func (r *routeItemInfo) Marshal() ([]byte, error) {
+	return json.Marshal(r)
 }
 
-func (c *ChangeItem) Value() (value []byte, err error) {
-	return json.Marshal(c)
+func (r *routeItemInfo) Unmarshal(data []byte) error {
+	if err := json.Unmarshal(data, r); err != nil {
+		return err
+	}
+	switch r.Type {
+	case proto.CatalogChangeType_AddSpace:
+		r.ItemDetail = &routeItemSpaceAdd{}
+		return json.Unmarshal(data, r)
+	case proto.CatalogChangeType_DeleteSpace:
+		r.ItemDetail = &routeItemSpaceDelete{}
+		return json.Unmarshal(data, r)
+	case proto.CatalogChangeType_AddShard:
+		r.ItemDetail = &routeItemShardAdd{}
+		return json.Unmarshal(data, r)
+	}
+	return errors.New("unsupported route item type")
 }
 
-type ChangeShardAdd struct {
-	SpaceName    string                  `json:"space_name"`
-	ShardId      uint32                  `json:"shard_id"`
-	InoLimit     uint64                  `json:"ino_limit"`
-	Replicates   []uint32                `json:"replicates"`
-	RouteVersion uint64                  `json:"route_version"`
-	Type         proto.CatalogChangeType `json:"type"`
+type routeItemShardAdd struct {
+	Sid     uint64 `json:"sid"`
+	ShardId uint32 `json:"shard_id"`
 }
 
-type ChangeSpaceDelete struct {
-	Sid          uint64                  `json:"sid"`
-	Name         string                  `json:"name"`
-	RouteVersion uint64                  `json:"route_version"`
-	Type         proto.CatalogChangeType `json:"type"`
+type routeItemSpaceDelete struct {
+	Sid uint64 `json:"sid"`
 }
 
-type ChangeSpaceAdd struct {
-	Sid          uint64                  `json:"sid"`
-	Name         string                  `json:"name"`
-	Type         proto.SpaceType         `json:"type"`
-	FixedFields  []*FieldMeta            `json:"fixed_fields"`
-	RouteVersion uint64                  `json:"route_version"`
-	ChangeType   proto.CatalogChangeType `json:"change_type"`
+type routeItemSpaceAdd struct {
+	Sid uint64 `json:"sid"`
 }
 
 type FieldMeta struct {
@@ -81,7 +80,7 @@ type spaceInfo struct {
 	Type            proto.SpaceType `json:"type"`
 	Status          SpaceStatus     `json:"status"`
 	ExpandStatus    uint8           `json:"expand_status"`
-	RouteVersion    uint64          `json:"route_version"`
+	Epoch           uint64          `json:"epoch"`
 	DesiredShardNum uint32          `json:"desired_shard_num"`
 	CurrentShardId  uint32          `json:"current_shard_id"`
 	FixedFields     []FieldMeta     `json:"fixed_fields"`
@@ -96,12 +95,12 @@ func (s *spaceInfo) Unmarshal(data []byte) error {
 }
 
 type shardInfo struct {
-	RouteVersion uint64   `json:"route_version"`
-	ShardId      uint32   `json:"shard_id"`
-	InoLimit     uint64   `json:"ino_limit"`
-	InoUsed      uint64   `json:"ino_used"`
-	Leader       uint32   `json:"leader"`
-	Replicates   []uint32 `json:"replicates"`
+	ShardId    uint32   `json:"shard_id"`
+	Epoch      uint64   `json:"epoch"`
+	InoLimit   uint64   `json:"ino_limit"`
+	InoUsed    uint64   `json:"ino_used"`
+	Leader     uint32   `json:"leader"`
+	Replicates []uint32 `json:"replicates"`
 }
 
 func (s *shardInfo) Marshal() ([]byte, error) {

@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+
 	"google.golang.org/grpc"
 
 	sc "github.com/cubefs/inodedb/client"
@@ -12,6 +13,7 @@ type Client interface {
 	AddShard(ctx context.Context, in *proto.AddShardRequest, opts ...grpc.CallOption) (*proto.AddShardResponse, error)
 	ShardList(ctx context.Context, in *proto.ListRequest, opts ...grpc.CallOption) (*proto.ListResponse, error)
 	GetShard(ctx context.Context, in *proto.GetShardRequest, opts ...grpc.CallOption) (*proto.GetShardResponse, error)
+	UpdateShard(ctx context.Context, in *proto.UpdateShardRequest, opts ...grpc.CallOption) (*proto.UpdateShardResponse, error)
 }
 
 type clientMgr struct {

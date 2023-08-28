@@ -18,6 +18,7 @@ import (
 const (
 	spaceIdName       = "space"
 	shardIdNamePrefix = "%d-shard"
+	epochIdName       = "epoch"
 )
 
 const (
@@ -34,6 +35,7 @@ const (
 type Catalog interface {
 	CreateSpace(ctx context.Context, SpaceName string, SpaceType proto.SpaceType, DesiredShards uint32, FixedFields []*proto.FieldMeta) error
 	DeleteSpace(ctx context.Context, sid uint64) error
+	DeleteSpaceByName(ctx context.Context, name string) error
 	GetSpace(ctx context.Context, sid uint64) (*proto.SpaceMeta, error)
 	GetSpaceByName(ctx context.Context, name string) (*proto.SpaceMeta, error)
 	Report(ctx context.Context, nodeId uint32, infos []*proto.ShardReport) ([]*proto.ShardTask, error)
@@ -71,7 +73,10 @@ type (
 	}
 	updateSpaceRouteArgs struct {
 		createSpaceShardsArgs
-		SpaceRouteVersion uint64
+		SpaceEpoch uint64
+	}
+	deleteSpaceArgs struct {
+		Sid uint64
 	}
 	shardReportsArgs struct {
 		nodeId uint32
@@ -160,7 +165,30 @@ func (c *catalog) CreateSpace(
 }
 
 func (c *catalog) DeleteSpace(ctx context.Context, sid uint64) error {
-	return nil
+	space := c.spaces.Get(sid)
+	if space == nil {
+		return apierrors.ErrSpaceNotExist
+	}
+
+	data, err := json.Marshal(&deleteSpaceArgs{Sid: sid})
+	if err != nil {
+		return errors.Info(err, "marshal delete space argument failed")
+	}
+	if _, err = c.raftGroup.Propose(ctx, &raft.ProposeRequest{
+		Module: module,
+		Op:     RaftOpDeleteSpace,
+		Data:   data,
+	}); err != nil {
+		return err
+	}
+
+	// TODO: remove this function call after invoke raft
+	return c.applyDeleteSpace(ctx, data)
+}
+
+func (c *catalog) DeleteSpaceByName(ctx context.Context, name string) error {
+	space := c.spaces.GetByName(name)
+	return c.DeleteSpace(ctx, space.id)
 }
 
 func (c *catalog) GetSpace(ctx context.Context, sid uint64) (*proto.SpaceMeta, error) {
@@ -182,11 +210,11 @@ func (c *catalog) GetSpace(ctx context.Context, sid uint64) (*proto.SpaceMeta, e
 	for i := range shards {
 		shardInfo := shards[i].GetInfo()
 		shard := &proto.Shard{
-			RouteVersion: shardInfo.RouteVersion,
-			Id:           shardInfo.ShardId,
-			InoLimit:     shardInfo.InoLimit,
-			InoUsed:      shardInfo.InoUsed,
-			LeaderId:     shardInfo.Leader,
+			Id:       shardInfo.ShardId,
+			Epoch:    shardInfo.Epoch,
+			InoLimit: shardInfo.InoLimit,
+			InoUsed:  shardInfo.InoUsed,
+			LeaderId: shardInfo.Leader,
 		}
 		for _, nodeId := range shardInfo.Replicates {
 			node, err := c.cluster.GetNode(ctx, nodeId)
@@ -249,8 +277,56 @@ func (c *catalog) Report(ctx context.Context, nodeId uint32, infos []*proto.Shar
 	return ret.tasks, nil
 }
 
-func (c *catalog) GetCatalogChanges(ctx context.Context, routerVersion uint64, nodeId uint32) ([]*proto.CatalogChangeItem, error) {
-	return nil, nil
+func (c *catalog) GetCatalogChanges(ctx context.Context, routerVersion uint64, nodeId uint32) (ret []*proto.CatalogChangeItem, err error) {
+	items := c.routeMgr.GetRouteItems(ctx, routerVersion)
+	if items == nil {
+		// TODO: get all catalog
+		return nil, nil
+	}
+
+	ret = make([]*proto.CatalogChangeItem, len(items))
+	for i := range items {
+		ret[i] = &proto.CatalogChangeItem{
+			RouteVersion: items[i].RouteVersion,
+			Type:         items[i].Type,
+		}
+
+		switch items[i].Type {
+		case proto.CatalogChangeType_AddSpace:
+			itemDetail := items[i].ItemDetail.(*routeItemSpaceAdd)
+			space := c.spaces.Get(itemDetail.Sid)
+			spaceInfo := space.GetInfo()
+			err = ret[i].Item.MarshalFrom(&proto.CatalogChangeSpaceAdd{
+				Sid:         itemDetail.Sid,
+				Name:        spaceInfo.Name,
+				Type:        spaceInfo.Type,
+				FixedFields: internalFieldMetasToProtoFieldMetas(spaceInfo.FixedFields),
+			})
+		case proto.CatalogChangeType_DeleteSpace:
+			itemDetail := items[i].ItemDetail.(*routeItemSpaceDelete)
+			err = ret[i].Item.MarshalFrom(&proto.CatalogChangeSpaceDelete{
+				Sid: itemDetail.Sid,
+			})
+		case proto.CatalogChangeType_AddShard:
+			itemDetail := items[i].ItemDetail.(*routeItemShardAdd)
+			space := c.spaces.Get(itemDetail.Sid)
+			shard := space.GetShard(itemDetail.ShardId)
+			shardInfo := shard.GetInfo()
+			err = ret[i].Item.MarshalFrom(&proto.CatalogChangeShardAdd{
+				Sid:        itemDetail.Sid,
+				ShardId:    itemDetail.ShardId,
+				Epoch:      shardInfo.Epoch,
+				InoLimit:   shardInfo.InoLimit,
+				Replicates: shardInfo.Replicates,
+			})
+		}
+
+		if err != nil {
+			return
+		}
+	}
+
+	return
 }
 
 func (c *catalog) Close() {
@@ -267,7 +343,7 @@ func (c *catalog) createSpaceTask(ctx context.Context, sid uint64, _ []byte) err
 	}
 
 	if space.IsInit(true) {
-		if err := c.createSpaceShards(ctx, space, space.info.DesiredShardNum, RaftOpInitSpaceShards); err != nil {
+		if err := c.createSpaceShards(ctx, space, 1, space.info.DesiredShardNum, RaftOpInitSpaceShards); err != nil {
 			span.Warnf("initial space's shards failed: %s", errors.Detail(err))
 			return err
 		}
@@ -289,13 +365,13 @@ func (c *catalog) expandSpaceTask(ctx context.Context, sid uint64, _ []byte) err
 	if space.IsExpandUpdateRoute(true) {
 		return c.expandSpaceUpdateRoute(ctx, space)
 	}
-	return c.createSpaceShards(ctx, space, c.cfg.ExpandShardsNumPerSpace, RaftOpExpandSpaceCreateShards)
+	return c.createSpaceShards(ctx, space, space.GetCurrentShardId(), c.cfg.ExpandShardsNumPerSpace, RaftOpExpandSpaceCreateShards)
 }
 
-func (c *catalog) createSpaceShards(ctx context.Context, space *space, desiredShardsNum uint32, op raft.Op) error {
+func (c *catalog) createSpaceShards(ctx context.Context, space *space, startShardId uint32, desiredShardsNum uint32, op raft.Op) error {
 	shardInfos := make([]*shardInfo, 0, desiredShardsNum)
 
-	for shardId := uint32(1); shardId <= desiredShardsNum; shardId++ {
+	for shardId := startShardId; shardId <= desiredShardsNum; shardId++ {
 		// alloc nodes
 		nodeInfos, err := c.cluster.Alloc(ctx, &cluster.AllocArgs{
 			Count: c.cfg.ShardReplicateNum,
@@ -370,14 +446,9 @@ func (c *catalog) createSpaceShards(ctx context.Context, space *space, desiredSh
 }
 
 func (c *catalog) updateSpaceRoute(ctx context.Context, space *space) error {
-	var shards []*shard
-	if space.IsUpdateRoute(true) {
-		shards = space.GetAllShards()
-	} else if space.IsExpandUpdateRoute(true) {
-		shards = space.GetExpandingShards()
-	}
+	shards := space.GetAllShards()
 
-	baseVer, _, err := c.routeMgr.GenRouteVersion(ctx, len(shards)+1)
+	baseEpoch, _, err := c.genNewEpoch(ctx, len(shards)+1)
 	if err != nil {
 		return errors.Info(err, "generate new route version")
 	}
@@ -385,13 +456,30 @@ func (c *catalog) updateSpaceRoute(ctx context.Context, space *space) error {
 	shardInfos := make([]*shardInfo, 0, len(shards))
 	for i, shard := range shards {
 		shardInfo := shard.GetInfo()
-		shardInfo.RouteVersion = baseVer + 1 + uint64(i)
+		shardInfo.Epoch = baseEpoch + 1 + uint64(i)
+
+		// update shard's epoch
+		for _, nodeId := range shardInfo.Replicates {
+			client, err := c.cluster.GetClient(ctx, nodeId)
+			if err != nil {
+				return errors.Info(err, "get client failed")
+			}
+
+			if _, err := client.UpdateShard(ctx, &proto.UpdateShardRequest{
+				Sid:     space.id,
+				ShardId: shardInfo.ShardId,
+				Epoch:   shardInfo.Epoch,
+			}); err != nil {
+				return errors.Info(err, fmt.Sprintf("update shard to node[%d] failed", nodeId))
+			}
+		}
+
 		shardInfos = append(shardInfos, shardInfo)
 	}
 
 	// save shard and modify space's status
 	args := &updateSpaceRouteArgs{
-		SpaceRouteVersion: baseVer,
+		SpaceEpoch: baseEpoch,
 		createSpaceShardsArgs: createSpaceShardsArgs{
 			Sid:        space.id,
 			ShardInfos: shardInfos,
@@ -421,7 +509,7 @@ func (c *catalog) updateSpaceRoute(ctx context.Context, space *space) error {
 func (c *catalog) expandSpaceUpdateRoute(ctx context.Context, space *space) error {
 	shards := space.GetExpandingShards()
 
-	baseVer, _, err := c.routeMgr.GenRouteVersion(ctx, len(shards))
+	baseEpoch, _, err := c.genNewEpoch(ctx, len(shards))
 	if err != nil {
 		return errors.Info(err, "generate new route version")
 	}
@@ -429,7 +517,24 @@ func (c *catalog) expandSpaceUpdateRoute(ctx context.Context, space *space) erro
 	shardInfos := make([]*shardInfo, 0, len(shards))
 	for i, shard := range shards {
 		shardInfo := shard.GetInfo()
-		shardInfo.RouteVersion = baseVer + uint64(i)
+		shardInfo.Epoch = baseEpoch + uint64(i)
+
+		// update shard's epoch
+		for _, nodeId := range shardInfo.Replicates {
+			client, err := c.cluster.GetClient(ctx, nodeId)
+			if err != nil {
+				return errors.Info(err, "get client failed")
+			}
+
+			if _, err := client.UpdateShard(ctx, &proto.UpdateShardRequest{
+				Sid:     space.id,
+				ShardId: shardInfo.ShardId,
+				Epoch:   shardInfo.Epoch,
+			}); err != nil {
+				return errors.Info(err, fmt.Sprintf("update shard to node[%d] failed", nodeId))
+			}
+		}
+
 		shardInfos = append(shardInfos, shardInfo)
 	}
 
@@ -457,6 +562,11 @@ func (c *catalog) expandSpaceUpdateRoute(ctx context.Context, space *space) erro
 	}
 
 	return nil
+}
+
+func (c *catalog) genNewEpoch(ctx context.Context, step int) (base, new uint64, err error) {
+	base, new, err = c.idGenerator.Alloc(ctx, epochIdName, step)
+	return
 }
 
 // concurrentSpaces is an effective data struct (concurrent map implements)
