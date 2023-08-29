@@ -90,6 +90,8 @@ type (
 )
 
 func NewCatalog(ctx context.Context, cfg *Config) Catalog {
+	span := trace.SpanFromContext(ctx)
+
 	c := &catalog{
 		spaces:      newConcurrentSpaces(defaultSplitMapNum),
 		idGenerator: cfg.IdGenerator,
@@ -100,6 +102,10 @@ func NewCatalog(ctx context.Context, cfg *Config) Catalog {
 
 	c.taskMgr.Register(taskTypeCreateSpace, c.createSpaceTask)
 	c.taskMgr.Register(taskTypeExpandSpace, c.maybeExpandSpaceTask)
+	if err := c.Load(ctx); err != nil {
+		span.Fatalf("load catalog data failed: %s", err)
+	}
+
 	return c
 }
 
@@ -363,6 +369,7 @@ func (c *catalog) GetCatalogChanges(ctx context.Context, routerVersion uint64, n
 				ShardId:    itemDetail.ShardId,
 				Epoch:      shardInfo.Epoch,
 				InoLimit:   shardInfo.InoLimit,
+				Leader:     shardInfo.Leader,
 				Replicates: shardInfo.Replicates,
 			})
 		}
