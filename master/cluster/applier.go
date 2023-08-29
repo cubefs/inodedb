@@ -29,11 +29,11 @@ func (c *cluster) Apply(ctx context.Context, ops []raft.Op, datas [][]byte, cont
 		_, newCtx := trace.StartSpanFromContextWithTraceID(ctx, "", contexts[i].ReqID)
 		switch op {
 		case RaftOpRegisterNode:
-			return c.handleRegister(newCtx, datas[i])
+			return c.applyRegister(newCtx, datas[i])
 		case RaftOpUnregisterNode:
-			return c.handleUnregister(newCtx, datas[i])
+			return c.applyUnregister(newCtx, datas[i])
 		case RaftOpHeartbeat:
-			return c.handleHeartbeat(newCtx, datas[i])
+			return c.applyHeartbeat(newCtx, datas[i])
 		default:
 			span.Panicf("unsupported operation type: %d", op)
 		}
@@ -52,66 +52,67 @@ func (c *cluster) GetModuleName() string {
 	return module
 }
 
-func (c *cluster) handleRegister(ctx context.Context, data []byte) error {
+func (c *cluster) applyRegister(ctx context.Context, data []byte) error {
+	span := trace.SpanFromContextSafe(ctx)
+
 	info := &nodeInfo{}
 	err := info.Unmarshal(data)
 	if err != nil {
 		return err
 	}
 
-	nodeId := info.Id
-	newNode := &node{
-		nodeId:           nodeId,
-		info:             info,
-		heartbeatTimeout: c.cfg.HeartbeatTimeoutS,
-		expires:          time.Now().Add(time.Duration(c.cfg.HeartbeatTimeoutS) * time.Second),
+	c.allNodes.Lock()
+	defer c.allNodes.Unlock()
+
+	if n := c.allNodes.GetByNameNoLock(info.Addr); n != nil {
+		span.Warnf("node[%s] has been exist", info.Addr)
+		return nil
 	}
 
+	nodeId := info.Id
+	newNode := &node{
+		nodeId:  nodeId,
+		info:    info,
+		expires: time.Now().Add(time.Duration(c.cfg.HeartbeatTimeoutS) * time.Second),
+	}
 	if err = c.storage.Put(ctx, info); err != nil {
 		return err
 	}
-
-	c.allNodes.Store(nodeId, newNode)
-	c.allHosts.Store(info.Addr, nil)
+	c.allNodes.PutNoLock(newNode)
 
 	return nil
 }
 
-func (c *cluster) handleUnregister(ctx context.Context, data []byte) error {
+func (c *cluster) applyUnregister(ctx context.Context, data []byte) error {
 	nodeId := c.decodeNodeId(data)
 
-	value, hit := c.allNodes.Load(nodeId)
-	if !hit {
+	c.allNodes.Lock()
+	defer c.allNodes.Unlock()
+
+	get := c.allNodes.GetNoLock(nodeId)
+	if get == nil {
 		return nil
 	}
-
-	newNode := value.(*node)
-	newNode.lock.RLock()
-	addr := newNode.info.Addr
-	newNode.lock.RUnlock()
-
 	err := c.storage.Delete(ctx, nodeId)
 	if err != nil {
 		return err
 	}
-	c.allNodes.Delete(nodeId)
-	c.allHosts.Delete(addr)
+	c.allNodes.DeleteNoLock(nodeId)
 	return nil
 }
 
-func (c *cluster) handleHeartbeat(ctx context.Context, data []byte) error {
+func (c *cluster) applyHeartbeat(ctx context.Context, data []byte) error {
 	args := &HeartbeatArgs{}
 	err := json.Unmarshal(data, args)
 	if err != nil {
 		return err
 	}
 
-	value, hit := c.allNodes.Load(args.NodeID)
-	if !hit {
+	n := c.allNodes.Get(args.NodeID)
+	if n == nil {
 		return errors.ErrNodeNotExist
 	}
-
-	n := value.(*node)
-	n.HandleHeartbeat(ctx, args.ShardCount)
+	expires := time.Now().Add(time.Duration(c.cfg.HeartbeatTimeoutS) * time.Second)
+	n.HandleHeartbeat(ctx, args.ShardCount, expires)
 	return nil
 }

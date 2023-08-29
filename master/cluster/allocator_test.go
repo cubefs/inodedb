@@ -8,7 +8,6 @@ import (
 )
 
 func TestAllocMgr_Alloc(t *testing.T) {
-
 	ctx := context.Background()
 	mgr := NewShardServerAllocator(ctx)
 	az := "test_az"
@@ -23,12 +22,12 @@ func TestAllocMgr_Alloc(t *testing.T) {
 				Rack: rack,
 			},
 		}
-		mgr.Put(ctx, az, rack, n)
+		mgr.Put(ctx, n)
 	}
 
 	alloc, err := mgr.Alloc(ctx, &AllocArgs{
 		Count:    1,
-		Az:       az,
+		AZ:       az,
 		RackWare: false,
 	})
 	require.NoError(t, err)
@@ -36,10 +35,9 @@ func TestAllocMgr_Alloc(t *testing.T) {
 
 	alloc, err = mgr.Alloc(ctx, &AllocArgs{
 		Count:    2,
-		Az:       az,
+		AZ:       az,
 		RackWare: true,
 	})
 	require.NoError(t, err)
 	require.Equal(t, 2, len(alloc))
-
 }

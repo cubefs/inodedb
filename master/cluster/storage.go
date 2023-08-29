@@ -7,6 +7,11 @@ import (
 	"github.com/cubefs/inodedb/common/kvstore"
 )
 
+var (
+	nodeKeyPrefix = []byte("n")
+	keyInfix      = []byte("/")
+)
+
 type storage struct {
 	kvStore kvstore.Store
 }
@@ -27,6 +32,8 @@ func (s *storage) Load(ctx context.Context) ([]*nodeInfo, error) {
 		newNode := &nodeInfo{}
 		err = newNode.Unmarshal(vg.Value())
 		if err != nil {
+			kg.Close()
+			vg.Close()
 			return nil, err
 		}
 		res = append(res, newNode)
@@ -38,20 +45,16 @@ func (s *storage) Load(ctx context.Context) ([]*nodeInfo, error) {
 }
 
 func (s *storage) Put(ctx context.Context, info *nodeInfo) error {
-	key := encodeKey(info.Id)
+	key := encodeNodeKey(info.Id)
 	marshal, err := info.Marshal()
 	if err != nil {
 		return err
 	}
-	err = s.kvStore.SetRaw(ctx, clusterCF, key, marshal, nil)
-	if err != nil {
-		return err
-	}
-	return nil
+	return s.kvStore.SetRaw(ctx, clusterCF, key, marshal, nil)
 }
 
 func (s *storage) Get(ctx context.Context, nodeId uint32) (*nodeInfo, error) {
-	key := encodeKey(nodeId)
+	key := encodeNodeKey(nodeId)
 	v, err := s.kvStore.Get(ctx, clusterCF, key, nil)
 	if err != nil {
 		return nil, err
@@ -67,16 +70,14 @@ func (s *storage) Get(ctx context.Context, nodeId uint32) (*nodeInfo, error) {
 }
 
 func (s *storage) Delete(ctx context.Context, nodeId uint32) error {
-	key := encodeKey(nodeId)
-	err := s.kvStore.Delete(ctx, clusterCF, key, nil)
-	if err != nil {
-		return err
-	}
-	return nil
+	key := encodeNodeKey(nodeId)
+	return s.kvStore.Delete(ctx, clusterCF, key, nil)
 }
 
-func encodeKey(nodeId uint32) []byte {
-	v := make([]byte, 4)
-	binary.BigEndian.PutUint32(v, nodeId)
-	return v
+func encodeNodeKey(nodeId uint32) []byte {
+	ret := make([]byte, 0, len(nodeKeyPrefix)+len(keyInfix)+4)
+	ret = append(ret, nodeKeyPrefix...)
+	ret = append(ret, keyInfix...)
+	binary.BigEndian.PutUint32(ret[cap(ret)-4:], nodeId)
+	return ret
 }

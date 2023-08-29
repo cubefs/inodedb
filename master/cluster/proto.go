@@ -9,8 +9,8 @@ import (
 // proto for set encoding/decoding and function return value
 
 const (
-	clusterCF       = "cluster"
-	idGeneratorName = "node"
+	clusterCF  = "cluster"
+	nodeIdName = "node"
 )
 
 type nodeInfo struct {
@@ -83,7 +83,7 @@ func (s *nodeInfo) Unmarshal(data []byte) error {
 
 type AllocArgs struct {
 	Count          int            `json:"count"`
-	Az             string         `json:"az"`
+	AZ             string         `json:"az"`
 	Role           proto.NodeRole `json:"role"`
 	RackWare       bool           `json:"rack_ware"`
 	ExcludeNodeIds []uint32       `json:"exclude_node_ids"`

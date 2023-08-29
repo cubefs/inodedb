@@ -16,34 +16,48 @@ import (
 	"github.com/cubefs/inodedb/proto"
 )
 
-type allocatorFunc func(ctx context.Context) Allocator
+const defaultSplitMapNum = 16
 
 type Cluster interface {
 	GetNode(ctx context.Context, nodeId uint32) (*proto.Node, error)
 	Alloc(ctx context.Context, args *AllocArgs) ([]*nodeInfo, error)
-	GetClient(ctx context.Context, nodeId uint32) (client.MasterClient, error)
+	GetClient(ctx context.Context, nodeId uint32) (client.ShardServerClient, error)
 	Register(ctx context.Context, args *proto.Node) error
 	Unregister(ctx context.Context, nodeID uint32) error
-	ListNodeInfo(ctx context.Context, role proto.NodeRole) ([]*proto.Node, error)
+	ListNodeInfo(ctx context.Context, roles []proto.NodeRole) ([]*proto.Node, error)
 	HandleHeartbeat(ctx context.Context, args *HeartbeatArgs) error
-	Load(ctx context.Context) error
+	Load(ctx context.Context)
 	Close()
 }
+
+type Config struct {
+	ClusterId         uint32         `json:"cluster_id"`
+	Azs               []string       `json:"azs"`
+	GrpcPort          uint32         `json:"grpc_port"`
+	HttpPort          uint32         `json:"http_port"`
+	HeartbeatTimeoutS int            `json:"heartbeat_timeout_s"`
+	RefreshIntervalS  int            `json:"refresh_interval_s"`
+	ShardServerConfig *client.Config `json:"shard_server_config"`
+
+	Store       *store.Store            `json:"-"`
+	IdGenerator idGenerator.IDGenerator `json:"-"`
+}
+
+type allocatorFunc func(ctx context.Context) Allocator
 
 type cluster struct {
 	clusterId uint32
 
 	allocators sync.Map
-	allNodes   sync.Map
-	allHosts   sync.Map
+	allNodes   *concurrentNodes
 
 	cfg         *Config
-	client      client.Client
+	client      client.Transporter
 	raftGroup   raft.Group
 	storage     *storage
 	idGenerator idGenerator.IDGenerator
 
-	//read only
+	// read only
 	azs              map[string]struct{}
 	allocatorFuncMap map[proto.NodeRole]allocatorFunc
 
@@ -51,27 +65,10 @@ type cluster struct {
 	lock sync.RWMutex
 }
 
-type Config struct {
-	ClusterId uint32   `json:"cluster_id"`
-	Azs       []string `json:"azs"`
-
-	HeartbeatTimeoutS int `json:"heartbeat_timeout_s"`
-	RefreshIntervalS  int `json:"refresh_interval_s"`
-
-	ShardServerConfig client.Config `json:"shard_server_config"`
-
-	Store *store.Store `json:"-"`
-}
-
 func NewCluster(ctx context.Context, cfg *Config) Cluster {
 	span := trace.SpanFromContext(ctx)
 
-	generator, err := idGenerator.NewIDGenerator(cfg.Store)
-	if err != nil {
-		span.Fatalf("new id generator failed: %s", err)
-	}
-
-	sc, err := client.NewClient(ctx, &cfg.ShardServerConfig)
+	sc, err := client.NewClient(ctx, cfg.ShardServerConfig)
 	if err != nil {
 		span.Fatalf("new shard server client failed: %s", err)
 	}
@@ -79,8 +76,9 @@ func NewCluster(ctx context.Context, cfg *Config) Cluster {
 	c := &cluster{
 		clusterId:        cfg.ClusterId,
 		cfg:              cfg,
-		idGenerator:      generator,
+		idGenerator:      cfg.IdGenerator,
 		client:           sc,
+		allNodes:         newConcurrentNodes(defaultSplitMapNum),
 		storage:          &storage{kvStore: cfg.Store.KVStore()},
 		done:             make(chan struct{}),
 		azs:              make(map[string]struct{}),
@@ -90,6 +88,7 @@ func NewCluster(ctx context.Context, cfg *Config) Cluster {
 		c.azs[az] = struct{}{}
 	}
 	c.allocatorFuncMap[proto.NodeRole_ShardServer] = NewShardServerAllocator
+	c.Load(ctx)
 
 	return c
 }
@@ -99,11 +98,10 @@ func (c *cluster) SetRaftGroup(raftGroup raft.Group) {
 }
 
 func (c *cluster) GetNode(ctx context.Context, nodeId uint32) (*proto.Node, error) {
-	value, ok := c.allNodes.Load(nodeId)
-	if !ok {
+	n := c.allNodes.Get(nodeId)
+	if n == nil {
 		return nil, errors.ErrNotFound
 	}
-	n := value.(*node)
 	n.lock.RLock()
 	info := n.info.ToProtoNode()
 	n.lock.RUnlock()
@@ -111,19 +109,19 @@ func (c *cluster) GetNode(ctx context.Context, nodeId uint32) (*proto.Node, erro
 	return info, nil
 }
 
-func (c *cluster) GetClient(ctx context.Context, nodeId uint32) (client.MasterClient, error) {
-	_, ok := c.allNodes.Load(nodeId)
-	if !ok {
+func (c *cluster) GetClient(ctx context.Context, nodeId uint32) (client.ShardServerClient, error) {
+	n := c.allNodes.Get(nodeId)
+	if n == nil {
 		return nil, errors.ErrNotFound
 	}
-	return c.client.GetClient(ctx, nodeId)
+	return c.client.GetShardServerClient(ctx, nodeId)
 }
 
 func (c *cluster) Alloc(ctx context.Context, args *AllocArgs) ([]*nodeInfo, error) {
 	span := trace.SpanFromContextSafe(ctx)
 
-	if !c.isValidAz(args.Az) {
-		span.Warnf("alloc args az[%s] invalid", args.Az)
+	if !c.isValidAz(args.AZ) {
+		span.Warnf("alloc args az[%s] invalid", args.AZ)
 		return nil, errors.ErrInvalidAz
 	}
 
@@ -156,17 +154,17 @@ func (c *cluster) Register(ctx context.Context, args *proto.Node) error {
 			return errors.ErrInvalidNodeRole
 		}
 	}
-	if _, loaded := c.allHosts.LoadOrStore(args.Addr, nil); loaded {
+	if get := c.allNodes.GetByName(args.Addr); get != nil {
 		span.Errorf("the node[%s] already exist in cluster", args.Addr)
 		return errors.ErrNodeAlreadyExist
 	}
 
-	base, _, err := c.idGenerator.Alloc(ctx, idGeneratorName, 1)
+	_, id, err := c.idGenerator.Alloc(ctx, nodeIdName, 1)
 	if err != nil {
 		span.Errorf("get node[%s] id failed, err: %s", args.Addr, err)
 		return err
 	}
-	nodeID := base
+	nodeID := id
 	newInfo := &nodeInfo{}
 	newInfo.ToDBNode(args)
 	newInfo.Id = uint32(nodeID)
@@ -185,13 +183,14 @@ func (c *cluster) Register(ctx context.Context, args *proto.Node) error {
 	if err != nil {
 		return err
 	}
-	return c.handleRegister(ctx, data)
+	return c.applyRegister(ctx, data)
 }
 
 func (c *cluster) Unregister(ctx context.Context, nodeId uint32) error {
 	span := trace.SpanFromContextSafe(ctx)
 
-	if _, hit := c.allNodes.Load(nodeId); !hit {
+	n := c.allNodes.Get(nodeId)
+	if n == nil {
 		span.Errorf("node[%d] not found", nodeId)
 		return errors.ErrNodeDoesNotFound
 	}
@@ -207,35 +206,38 @@ func (c *cluster) Unregister(ctx context.Context, nodeId uint32) error {
 	if err != nil {
 		return err
 	}
-	return c.handleUnregister(ctx, data)
+	return c.applyUnregister(ctx, data)
 }
 
-func (c *cluster) ListNodeInfo(ctx context.Context, role proto.NodeRole) ([]*proto.Node, error) {
+func (c *cluster) ListNodeInfo(ctx context.Context, roles []proto.NodeRole) ([]*proto.Node, error) {
 	span := trace.SpanFromContextSafe(ctx)
-	if !c.isValidRole(role) {
-		span.Warnf("list node role[%d] invalid", role)
-		return nil, errors.ErrInvalidNodeRole
-	}
+
 	var res []*proto.Node
-	c.allNodes.Range(func(key, value interface{}) bool {
-		n := value.(*node)
-		if role == -1 || n.Contains(ctx, role) {
-			n.lock.RLock()
-			info := n.info.ToProtoNode()
-			n.lock.RUnlock()
-			res = append(res, info)
+	for _, role := range roles {
+		if !c.isValidRole(role) {
+			span.Warnf("list node role[%d] invalid", role)
+			return nil, errors.ErrInvalidNodeRole
 		}
-		return true
-	})
+		c.allNodes.Range(func(n *node) error {
+			if n.Contains(ctx, role) {
+				n.lock.RLock()
+				info := n.info.ToProtoNode()
+				n.lock.RUnlock()
+				res = append(res, info)
+			}
+			return nil
+		})
+	}
 	return res, nil
 }
 
 func (c *cluster) HandleHeartbeat(ctx context.Context, args *HeartbeatArgs) error {
 	span := trace.SpanFromContextSafe(ctx)
 
-	if _, hit := c.allNodes.Load(args.NodeID); !hit {
+	n := c.allNodes.Get(args.NodeID)
+	if n == nil {
 		span.Errorf("node[%d] not found", args.NodeID)
-		return errors.ErrNotFound
+		return errors.ErrNodeDoesNotFound
 	}
 	data, err := json.Marshal(args)
 	if err != nil {
@@ -251,10 +253,10 @@ func (c *cluster) HandleHeartbeat(ctx context.Context, args *HeartbeatArgs) erro
 		return err
 	}
 	// todo raft propose
-	return c.handleHeartbeat(ctx, data)
+	return c.applyHeartbeat(ctx, data)
 }
 
-func (c *cluster) Load(ctx context.Context) error {
+func (c *cluster) Load(ctx context.Context) {
 	span := trace.SpanFromContextSafe(ctx)
 	infos, err := c.storage.Load(ctx)
 	if err != nil {
@@ -263,24 +265,24 @@ func (c *cluster) Load(ctx context.Context) error {
 
 	for _, info := range infos {
 		newNode := &node{
-			info:             info,
-			nodeId:           info.Id,
-			heartbeatTimeout: c.cfg.HeartbeatTimeoutS,
+			info:   info,
+			nodeId: info.Id,
 		}
-		c.allNodes.Store(info.Id, newNode)
-		c.allHosts.Store(info.Addr, nil)
+		c.allNodes.PutNoLock(newNode)
 	}
 
 	c.refresh(ctx)
-	return nil
+}
+
+func (c *cluster) Close() {
+	close(c.done)
 }
 
 func (c *cluster) refresh(ctx context.Context) {
 	var allNodes []*node
-	c.allNodes.Range(func(key, value interface{}) bool {
-		n := value.(*node)
+	c.allNodes.Range(func(n *node) error {
 		allNodes = append(allNodes, n)
-		return true
+		return nil
 	})
 
 	mgrs := make(map[proto.NodeRole]Allocator, len(c.allocatorFuncMap))
@@ -302,10 +304,6 @@ func (c *cluster) refresh(ctx context.Context) {
 	for role, mgr := range mgrs {
 		c.allocators.Store(role, mgr)
 	}
-}
-
-func (c *cluster) Close() {
-	close(c.done)
 }
 
 func (c *cluster) loop() {

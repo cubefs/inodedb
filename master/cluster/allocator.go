@@ -42,7 +42,7 @@ func (a *allocator) Alloc(ctx context.Context, args *AllocArgs) ([]*nodeInfo, er
 	}
 
 	allocNodes := make([]*nodeInfo, 0, args.Count)
-	azAllocator := a.azAllocators[args.Az]
+	azAllocator := a.azAllocators[args.AZ]
 	excludes := make(map[uint32]bool)
 	for _, id := range args.ExcludeNodeIds {
 		excludes[id] = true
@@ -54,7 +54,7 @@ func (a *allocator) Alloc(ctx context.Context, args *AllocArgs) ([]*nodeInfo, er
 	}
 
 	if len(allocNodes) < args.Count {
-		span.Warnf("alloc nodes failed from az[%s], need: %d, get: %d", args.Az, args.Count, len(allocNodes))
+		span.Warnf("alloc nodes failed from az[%s], need: %d, get: %d", args.AZ, args.Count, len(allocNodes))
 		return allocNodes, errors.ErrNoAvailableNode
 	}
 	return allocNodes, nil
@@ -70,8 +70,14 @@ type weightedNodeSet struct {
 func (a *allocator) allocFromRack(ctx context.Context, args *AllocArgs) ([]*nodeInfo, error) {
 	span := trace.SpanFromContextSafe(ctx)
 
+	if len(a.azAllocators[args.AZ].allNodes.nodes) < args.Count {
+		span.Errorf("can't find enough nodes, need: %d, get: %d",
+			args.Count, len(a.azAllocators[args.AZ].allNodes.nodes))
+		return nil, errors.ErrNoAvailableNode
+	}
+
 	allocNodes := make([]*nodeInfo, 0, args.Count)
-	azAllocator := a.azAllocators[args.Az]
+	azAllocator := a.azAllocators[args.AZ]
 	rackMap := make(map[string]int, len(a.azAllocators))
 	totalWeight := int32(0)
 
@@ -149,7 +155,6 @@ type azAllocator struct {
 }
 
 func (a *azAllocator) put(n *node) {
-
 	a.allNodes.put(n)
 
 	n.lock.RLock()
