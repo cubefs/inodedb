@@ -13,6 +13,14 @@ type shard struct {
 	lock   sync.RWMutex
 }
 
+func newShard(shardInfo *shardInfo) *shard {
+	return &shard{
+		id:     shardInfo.ShardId,
+		leader: shardInfo.Leader,
+		info:   shardInfo,
+	}
+}
+
 func (s *shard) GetInfo() *shardInfo {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
@@ -22,4 +30,5 @@ func (s *shard) GetInfo() *shardInfo {
 
 func (s *shard) UpdateReportInfoNoLock(info *proto.Shard) {
 	s.info.InoUsed = info.InoUsed
+	s.info.Leader = info.LeaderId
 }

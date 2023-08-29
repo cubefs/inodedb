@@ -1,7 +1,6 @@
 package catalog
 
 import (
-	"context"
 	"sync"
 	"sync/atomic"
 
@@ -18,10 +17,6 @@ type SpaceConfig struct {
 	Meta        []*FieldMeta
 }
 
-func NewSpace(ctx context.Context, cfg *SpaceConfig) (*space, error) {
-	return nil, nil
-}
-
 type space struct {
 	id              uint64
 	info            *spaceInfo
@@ -30,6 +25,15 @@ type space struct {
 	currentShardId  uint32
 
 	lock sync.RWMutex
+}
+
+func newSpace(spaceInfo *spaceInfo) *space {
+	space := &space{
+		id:     spaceInfo.Sid,
+		info:   spaceInfo,
+		shards: newConcurrentShards(defaultSplitMapNum),
+	}
+	return space
 }
 
 func (s *space) GetInfo() *spaceInfo {

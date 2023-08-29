@@ -17,8 +17,11 @@ var (
 	keyInfix         = []byte("/")
 )
 
-func newStorage() *storage {
-	return &storage{}
+func newStorage(kvStore kvstore.Store) *storage {
+	return &storage{
+		kvStore:       kvStore,
+		keysGenerator: &keysGenerator{},
+	}
 }
 
 type storage struct {
@@ -33,6 +36,32 @@ func (s *storage) CreateSpace(ctx context.Context, info *spaceInfo) error {
 	}
 
 	return s.kvStore.SetRaw(ctx, cf, s.keysGenerator.encodeSpaceKey(info.Sid), data, nil)
+}
+
+func (s *storage) ListSpaces(ctx context.Context) (ret []*spaceInfo, err error) {
+	lr := s.kvStore.List(ctx, cf, s.keysGenerator.encodeSpaceKeyPrefix(), nil, nil)
+	defer lr.Close()
+
+	for {
+		kg, vg, err := lr.ReadNext()
+		if err != nil {
+			return nil, err
+		}
+		if kg == nil || vg == nil {
+			return
+		}
+
+		spaceInfo := &spaceInfo{}
+		if err = spaceInfo.Unmarshal(vg.Value()); err != nil {
+			kg.Close()
+			vg.Close()
+			return nil, err
+		}
+
+		ret = append(ret, spaceInfo)
+		kg.Close()
+		vg.Close()
+	}
 }
 
 func (s *storage) DeleteSpace(ctx context.Context, sid uint64, info *routeItemInfo) error {
@@ -80,6 +109,32 @@ func (s *storage) UpsertSpaceShardsAndRouteItems(ctx context.Context, info *spac
 	return s.kvStore.Write(ctx, batch, nil)
 }
 
+func (s *storage) ListShards(ctx context.Context, sid uint64) (ret []*shardInfo, err error) {
+	lr := s.kvStore.List(ctx, cf, s.keysGenerator.encodeShardKeyPrefix(sid), nil, nil)
+	defer lr.Close()
+
+	for {
+		kg, vg, err := lr.ReadNext()
+		if err != nil {
+			return nil, err
+		}
+		if kg == nil || vg == nil {
+			return
+		}
+
+		shardInfo := &shardInfo{}
+		if err = shardInfo.Unmarshal(vg.Value()); err != nil {
+			kg.Close()
+			vg.Close()
+			return nil, err
+		}
+
+		ret = append(ret, shardInfo)
+		kg.Close()
+		vg.Close()
+	}
+}
+
 func (s *storage) GetFirstRouteItem(ctx context.Context) (*routeItemInfo, error) {
 	lr := s.kvStore.List(ctx, cf, s.keysGenerator.encodeRouteKeyPrefix(), nil, nil)
 	defer lr.Close()
@@ -88,14 +143,39 @@ func (s *storage) GetFirstRouteItem(ctx context.Context) (*routeItemInfo, error)
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		kg.Close()
-		vg.Close()
-	}()
+	if kg == nil || vg == nil {
+		return nil, nil
+	}
 
 	ret := &routeItemInfo{}
 	err = ret.Unmarshal(vg.Value())
+	kg.Close()
+	vg.Close()
 	return ret, err
+}
+
+func (s *storage) ListRouteItems(ctx context.Context) (ret []*routeItemInfo, err error) {
+	lr := s.kvStore.List(ctx, cf, s.keysGenerator.encodeRouteKeyPrefix(), nil, nil)
+	defer lr.Close()
+
+	for {
+		kg, vg, err := lr.ReadNext()
+		if err != nil {
+			return nil, err
+		}
+		if kg == nil || vg == nil {
+			return
+		}
+
+		item := &routeItemInfo{}
+		if err = item.Unmarshal(vg.Value()); err != nil {
+			return nil, err
+		}
+
+		ret = append(ret, item)
+		kg.Close()
+		vg.Close()
+	}
 }
 
 func (s *storage) DeleteOldestRouteItems(ctx context.Context, before uint64) error {
@@ -132,6 +212,23 @@ func (k *keysGenerator) encodeRouteKey(ver uint64) []byte {
 	ret = append(ret, catalogKeyPrefix...)
 	ret = append(ret, keyInfix...)
 	binary.BigEndian.PutUint64(ret[cap(ret)-8:], ver)
+	return ret
+}
+
+func (k *keysGenerator) encodeSpaceKeyPrefix() []byte {
+	ret := make([]byte, 0, len(catalogKeyPrefix)+len(keyInfix))
+	ret = append(ret, catalogKeyPrefix...)
+	ret = append(ret, keyInfix...)
+	return ret
+}
+
+func (k *keysGenerator) encodeShardKeyPrefix(sid uint64) []byte {
+	ret := make([]byte, 0, len(catalogKeyPrefix)+len(keyInfix)+8+len(shardKeyPrefix)+len(keyInfix))
+	ret = append(ret, catalogKeyPrefix...)
+	ret = append(ret, keyInfix...)
+	binary.BigEndian.PutUint64(ret[len(catalogKeyPrefix)+len(keyInfix):], sid)
+	ret = append(ret, shardKeyPrefix...)
+	ret = append(ret, keyInfix...)
 	return ret
 }
 

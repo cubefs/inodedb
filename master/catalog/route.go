@@ -10,15 +10,54 @@ import (
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 )
 
+const (
+	defaultRouteItemTruncateIntervalNum = 1 << 14
+)
+
 type routeMgr struct {
+	truncateIntervalNum  uint32
 	unstableRouteVersion uint64
 	stableRouteVersion   uint64
-	truncateIntervalNum  uint64
 	increments           *routeItemRing
 	done                 chan struct{}
 	lock                 sync.RWMutex
 
 	storage *storage
+}
+
+func newRouteMgr(ctx context.Context, truncateIntervalNum uint32, storage *storage) (*routeMgr, error) {
+	routeMgr := &routeMgr{
+		truncateIntervalNum: truncateIntervalNum,
+		increments:          newRouteItemRing(truncateIntervalNum),
+		done:                make(chan struct{}),
+		storage:             storage,
+	}
+
+	// load route items into memory
+	items, err := storage.ListRouteItems(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(items) > int(truncateIntervalNum) {
+		items = items[:truncateIntervalNum]
+	}
+	maxRouteVersion := uint64(0)
+	for _, item := range items {
+		routeMgr.increments.put(item)
+		if item.RouteVersion > maxRouteVersion {
+			maxRouteVersion = item.RouteVersion
+		}
+	}
+
+	routeMgr.stableRouteVersion = maxRouteVersion
+	routeMgr.unstableRouteVersion = maxRouteVersion
+
+	return routeMgr, nil
+}
+
+func (r *routeMgr) GetRouteVersion() uint64 {
+	return atomic.LoadUint64(&r.stableRouteVersion)
 }
 
 func (r *routeMgr) GenRouteVersion(ctx context.Context, step uint64) uint64 {
@@ -64,8 +103,8 @@ func (r *routeMgr) loop() {
 				continue
 			}
 
-			if item.RouteVersion < atomic.LoadUint64(&r.stableRouteVersion)-r.truncateIntervalNum {
-				if err := r.storage.DeleteSpace(ctx, item.RouteVersion); err != nil {
+			if item.RouteVersion < atomic.LoadUint64(&r.stableRouteVersion)-uint64(r.truncateIntervalNum) {
+				if err := r.storage.DeleteOldestRouteItems(ctx, item.RouteVersion); err != nil {
 					span.Errorf("delete oldest route items failed: %s", err)
 					continue
 				}

@@ -67,12 +67,9 @@ func (c *catalog) applyCreateSpace(ctx context.Context, data []byte) error {
 		return err
 	}
 
-	space := &space{
-		id:     spaceInfo.Sid,
-		info:   spaceInfo,
-		shards: newConcurrentShards(defaultSplitMapNum),
-	}
+	space := newSpace(spaceInfo)
 	c.spaces.Put(space)
+	c.creatingSpaces.Store(spaceInfo.Name, nil)
 	return nil
 }
 
@@ -132,10 +129,7 @@ func (c *catalog) applyInitSpaceShards(ctx context.Context, data []byte) error {
 		return err
 	}
 	for i := range args.ShardInfos {
-		space.PutShard(&shard{
-			id:   args.ShardInfos[i].ShardId,
-			info: args.ShardInfos[i],
-		})
+		space.PutShard(newShard(args.ShardInfos[i]))
 	}
 
 	return nil
@@ -175,12 +169,10 @@ func (c *catalog) applyUpdateSpaceRoute(ctx context.Context, data []byte) error 
 	}
 
 	for i := range args.ShardInfos {
-		space.PutShard(&shard{
-			id:   args.ShardInfos[i].ShardId,
-			info: args.ShardInfos[i],
-		})
+		space.PutShard(newShard(args.ShardInfos[i]))
 	}
 	c.routeMgr.InsertRouteItems(ctx, routeItems)
+	c.creatingSpaces.Delete(info.Name)
 
 	return nil
 }
@@ -215,7 +207,9 @@ func (c *catalog) applyShardReport(ctx context.Context, data []byte) (ret *shard
 		shard.UpdateReportInfoNoLock(reportInfo.Shard)
 		shard.lock.Unlock()
 
-		if float64(reportInfo.Shard.InoUsed)/float64(reportInfo.Shard.InoLimit) <= defaultInoUsedThreshold {
+		spaceCurrentShardId := space.GetCurrentShardId()
+		if (shard.id >= spaceCurrentShardId-c.cfg.ExpandShardsNumPerSpace && shard.id <= spaceCurrentShardId) &&
+			float64(reportInfo.Shard.InoUsed)/float64(reportInfo.Shard.InoLimit) >= defaultInoUsedThreshold {
 			ret.maybeExpandingSpaces = append(ret.maybeExpandingSpaces, space)
 		}
 
@@ -251,10 +245,7 @@ func (c *catalog) applyExpandSpaceShards(ctx context.Context, data []byte) error
 	}
 	space.expandingShards = make([]*shard, len(args.ShardInfos))
 	for i := range args.ShardInfos {
-		space.expandingShards[i] = &shard{
-			id:   args.ShardInfos[i].ShardId,
-			info: args.ShardInfos[i],
-		}
+		space.expandingShards[i] = newShard(args.ShardInfos[i])
 	}
 
 	return nil
@@ -287,10 +278,7 @@ func (c *catalog) applyExpandSpaceUpdateRoute(ctx context.Context, data []byte) 
 	}
 
 	for i := range args.ShardInfos {
-		space.PutShard(&shard{
-			id:   args.ShardInfos[i].ShardId,
-			info: args.ShardInfos[i],
-		})
+		space.PutShard(newShard(args.ShardInfos[i]))
 	}
 	space.expandingShards = nil
 	c.routeMgr.InsertRouteItems(ctx, routeItems)
