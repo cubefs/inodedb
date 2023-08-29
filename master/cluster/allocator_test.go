@@ -10,13 +10,13 @@ import (
 func TestAllocMgr_Alloc(t *testing.T) {
 
 	ctx := context.Background()
-	mgr := NewAllocator(ctx)
+	mgr := NewShardServerAllocator(ctx)
 	az := "test_az"
 	rack := "test_rack"
 	for i := 0; i < 5; i++ {
 		n := &node{
 			nodeId: uint32(i),
-			info: &NodeInfo{
+			info: &nodeInfo{
 				Id:   uint32(i),
 				Addr: "test_addr" + string(rune(i)),
 				Az:   az,

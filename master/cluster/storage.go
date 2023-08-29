@@ -11,11 +11,11 @@ type storage struct {
 	kvStore kvstore.Store
 }
 
-func (s *storage) Load(ctx context.Context) ([]*NodeInfo, error) {
+func (s *storage) Load(ctx context.Context) ([]*nodeInfo, error) {
 	lr := s.kvStore.List(ctx, clusterCF, nil, nil, nil)
 	defer lr.Close()
 
-	var res []*NodeInfo
+	var res []*nodeInfo
 	for {
 		kg, vg, err := lr.ReadNext()
 		if err != nil {
@@ -24,7 +24,7 @@ func (s *storage) Load(ctx context.Context) ([]*NodeInfo, error) {
 		if kg == nil || vg == nil {
 			break
 		}
-		newNode := &NodeInfo{}
+		newNode := &nodeInfo{}
 		err = newNode.Unmarshal(vg.Value())
 		if err != nil {
 			return nil, err
@@ -37,7 +37,7 @@ func (s *storage) Load(ctx context.Context) ([]*NodeInfo, error) {
 	return res, nil
 }
 
-func (s *storage) Put(ctx context.Context, info *NodeInfo) error {
+func (s *storage) Put(ctx context.Context, info *nodeInfo) error {
 	key := encodeKey(info.Id)
 	marshal, err := info.Marshal()
 	if err != nil {
@@ -50,14 +50,14 @@ func (s *storage) Put(ctx context.Context, info *NodeInfo) error {
 	return nil
 }
 
-func (s *storage) Get(ctx context.Context, nodeId uint32) (*NodeInfo, error) {
+func (s *storage) Get(ctx context.Context, nodeId uint32) (*nodeInfo, error) {
 	key := encodeKey(nodeId)
 	v, err := s.kvStore.Get(ctx, clusterCF, key, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	res := &NodeInfo{}
+	res := &nodeInfo{}
 	err = res.Unmarshal(v.Value())
 	v.Close()
 	if err != nil {

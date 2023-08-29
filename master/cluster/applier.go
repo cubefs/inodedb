@@ -53,7 +53,7 @@ func (c *cluster) GetModuleName() string {
 }
 
 func (c *cluster) handleRegister(ctx context.Context, data []byte) error {
-	info := &NodeInfo{}
+	info := &nodeInfo{}
 	err := info.Unmarshal(data)
 	if err != nil {
 		return err
@@ -67,7 +67,7 @@ func (c *cluster) handleRegister(ctx context.Context, data []byte) error {
 		expires:          time.Now().Add(time.Duration(c.cfg.HeartbeatTimeoutS) * time.Second),
 	}
 
-	if err = c.store.Put(ctx, info); err != nil {
+	if err = c.storage.Put(ctx, info); err != nil {
 		return err
 	}
 
@@ -90,7 +90,7 @@ func (c *cluster) handleUnregister(ctx context.Context, data []byte) error {
 	addr := newNode.info.Addr
 	newNode.lock.RUnlock()
 
-	err := c.store.Delete(ctx, nodeId)
+	err := c.storage.Delete(ctx, nodeId)
 	if err != nil {
 		return err
 	}

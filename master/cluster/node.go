@@ -10,7 +10,7 @@ import (
 )
 
 type node struct {
-	info   *NodeInfo
+	info   *nodeInfo
 	nodeId uint32
 
 	shardCount       int32
@@ -56,7 +56,7 @@ func (n *node) UpdateShardCount(delta int32) {
 	atomic.AddInt32(&n.shardCount, delta)
 }
 
-func (n *node) GetInfo() *NodeInfo {
+func (n *node) GetInfo() *nodeInfo {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
 	return n.info.Clone()

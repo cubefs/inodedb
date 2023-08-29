@@ -6,14 +6,14 @@ import (
 	"github.com/cubefs/inodedb/proto"
 )
 
-// proto for storage encoding/decoding and function return value
+// proto for set encoding/decoding and function return value
 
 const (
 	clusterCF       = "cluster"
 	idGeneratorName = "node"
 )
 
-type NodeInfo struct {
+type nodeInfo struct {
 	Id          uint32           `json:"id"`
 	Addr        string           `json:"addr"`
 	GrpcPort    uint32           `json:"grpc_port"`
@@ -25,7 +25,7 @@ type NodeInfo struct {
 	State       proto.NodeState  `json:"state"`
 }
 
-func (s *NodeInfo) ToProtoNode() *proto.Node {
+func (s *nodeInfo) ToProtoNode() *proto.Node {
 	roles := make([]proto.NodeRole, len(s.Roles))
 	copy(roles, s.Roles)
 
@@ -41,7 +41,7 @@ func (s *NodeInfo) ToProtoNode() *proto.Node {
 	}
 }
 
-func (s *NodeInfo) ToDBNode(node *proto.Node) {
+func (s *nodeInfo) ToDBNode(node *proto.Node) {
 	roles := make([]proto.NodeRole, len(s.Roles))
 	copy(roles, node.Roles)
 
@@ -55,8 +55,8 @@ func (s *NodeInfo) ToDBNode(node *proto.Node) {
 	s.State = node.State
 }
 
-func (s *NodeInfo) Clone() *NodeInfo {
-	info := &NodeInfo{}
+func (s *nodeInfo) Clone() *nodeInfo {
+	info := &nodeInfo{}
 
 	info.Id = s.Id
 	info.Addr = s.Addr
@@ -73,19 +73,20 @@ func (s *NodeInfo) Clone() *NodeInfo {
 	return info
 }
 
-func (s *NodeInfo) Marshal() ([]byte, error) {
+func (s *nodeInfo) Marshal() ([]byte, error) {
 	return json.Marshal(s)
 }
 
-func (s *NodeInfo) Unmarshal(data []byte) error {
+func (s *nodeInfo) Unmarshal(data []byte) error {
 	return json.Unmarshal(data, s)
 }
 
 type AllocArgs struct {
-	Count    int            `json:"count"`
-	Az       string         `json:"az"`
-	Role     proto.NodeRole `json:"role"`
-	RackWare bool           `json:"rack_ware"`
+	Count          int            `json:"count"`
+	Az             string         `json:"az"`
+	Role           proto.NodeRole `json:"role"`
+	RackWare       bool           `json:"rack_ware"`
+	ExcludeNodeIds []uint32       `json:"exclude_node_ids"`
 }
 
 type HeartbeatArgs struct {

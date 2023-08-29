@@ -16,9 +16,11 @@ import (
 	"github.com/cubefs/inodedb/proto"
 )
 
+type allocatorFunc func(ctx context.Context) Allocator
+
 type Cluster interface {
 	GetNode(ctx context.Context, nodeId uint32) (*proto.Node, error)
-	Alloc(ctx context.Context, args *AllocArgs) ([]*NodeInfo, error)
+	Alloc(ctx context.Context, args *AllocArgs) ([]*nodeInfo, error)
 	GetClient(ctx context.Context, nodeId uint32) (client.MasterClient, error)
 	Register(ctx context.Context, args *proto.Node) error
 	Unregister(ctx context.Context, nodeID uint32) error
@@ -38,24 +40,23 @@ type cluster struct {
 	cfg         *Config
 	client      client.Client
 	raftGroup   raft.Group
-	store       *storage
+	storage     *storage
 	idGenerator idGenerator.IDGenerator
 
-	nodeRoles map[proto.NodeRole]struct{} // use to manage alloc different node role
-	azs       map[string]struct{}
+	//read only
+	azs              map[string]struct{}
+	allocatorFuncMap map[proto.NodeRole]allocatorFunc
 
-	closeChan chan struct{}
-	lock      sync.RWMutex
+	done chan struct{}
+	lock sync.RWMutex
 }
 
 type Config struct {
-	ClusterID uint32   `json:"cluster_id"`
+	ClusterId uint32   `json:"cluster_id"`
 	Azs       []string `json:"azs"`
-	DBPath    string   `json:"db_path"`
 
-	NodeMaxLoad       int32 `json:"node_max_load"`
-	HeartbeatTimeoutS int   `json:"heartbeat_timeout_s"`
-	RefreshIntervalS  int   `json:"refresh_interval_s"`
+	HeartbeatTimeoutS int `json:"heartbeat_timeout_s"`
+	RefreshIntervalS  int `json:"refresh_interval_s"`
 
 	ShardServerConfig client.Config `json:"shard_server_config"`
 
@@ -76,18 +77,20 @@ func NewCluster(ctx context.Context, cfg *Config) Cluster {
 	}
 
 	c := &cluster{
-		clusterId:   cfg.ClusterID,
-		cfg:         cfg,
-		idGenerator: generator,
-		client:      sc,
-		store:       &storage{kvStore: cfg.Store.KVStore()},
-		closeChan:   make(chan struct{}),
-		azs:         make(map[string]struct{}),
+		clusterId:        cfg.ClusterId,
+		cfg:              cfg,
+		idGenerator:      generator,
+		client:           sc,
+		storage:          &storage{kvStore: cfg.Store.KVStore()},
+		done:             make(chan struct{}),
+		azs:              make(map[string]struct{}),
+		allocatorFuncMap: make(map[proto.NodeRole]allocatorFunc),
 	}
 	for _, az := range cfg.Azs {
 		c.azs[az] = struct{}{}
 	}
-	c.nodeRoles[proto.NodeRole_ShardServer] = struct{}{}
+	c.allocatorFuncMap[proto.NodeRole_ShardServer] = NewShardServerAllocator
+
 	return c
 }
 
@@ -116,7 +119,7 @@ func (c *cluster) GetClient(ctx context.Context, nodeId uint32) (client.MasterCl
 	return c.client.GetClient(ctx, nodeId)
 }
 
-func (c *cluster) Alloc(ctx context.Context, args *AllocArgs) ([]*NodeInfo, error) {
+func (c *cluster) Alloc(ctx context.Context, args *AllocArgs) ([]*nodeInfo, error) {
 	span := trace.SpanFromContextSafe(ctx)
 
 	if !c.isValidAz(args.Az) {
@@ -164,7 +167,7 @@ func (c *cluster) Register(ctx context.Context, args *proto.Node) error {
 		return err
 	}
 	nodeID := base
-	newInfo := &NodeInfo{}
+	newInfo := &nodeInfo{}
 	newInfo.ToDBNode(args)
 	newInfo.Id = uint32(nodeID)
 
@@ -253,7 +256,7 @@ func (c *cluster) HandleHeartbeat(ctx context.Context, args *HeartbeatArgs) erro
 
 func (c *cluster) Load(ctx context.Context) error {
 	span := trace.SpanFromContextSafe(ctx)
-	infos, err := c.store.Load(ctx)
+	infos, err := c.storage.Load(ctx)
 	if err != nil {
 		span.Fatalf("read node data from rocksdb failed, err: %s", err)
 	}
@@ -280,9 +283,9 @@ func (c *cluster) refresh(ctx context.Context) {
 		return true
 	})
 
-	mgrs := make(map[proto.NodeRole]Allocator, len(c.nodeRoles))
-	for role := range c.nodeRoles {
-		mgrs[role] = NewAllocator(ctx)
+	mgrs := make(map[proto.NodeRole]Allocator, len(c.allocatorFuncMap))
+	for role, f := range c.allocatorFuncMap {
+		mgrs[role] = f(ctx)
 	}
 
 	for _, n := range allNodes {
@@ -291,7 +294,6 @@ func (c *cluster) refresh(ctx context.Context) {
 		}
 
 		info := n.GetInfo()
-
 		for _, role := range info.Roles {
 			mgrs[role].Put(ctx, n)
 		}
@@ -303,7 +305,7 @@ func (c *cluster) refresh(ctx context.Context) {
 }
 
 func (c *cluster) Close() {
-	close(c.closeChan)
+	close(c.done)
 }
 
 func (c *cluster) loop() {
@@ -315,7 +317,7 @@ func (c *cluster) loop() {
 			select {
 			case <-ticker.C:
 				c.refresh(ctxNew)
-			case <-c.closeChan:
+			case <-c.done:
 				return
 			}
 		}
