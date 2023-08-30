@@ -22,8 +22,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cubefs/inodedb/master/cluster"
+
 	"github.com/cubefs/cubefs/blobstore/common/trace"
-	"github.com/cubefs/inodedb/errors"
+	"github.com/cubefs/cubefs/blobstore/util/errors"
+	apierrors "github.com/cubefs/inodedb/errors"
 	"github.com/cubefs/inodedb/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -59,40 +62,101 @@ func NewRPCServer(server *Server) *RPCServer {
 
 // Master API
 
-func (r *RPCServer) Cluster(context.Context, *proto.ClusterRequest) (*proto.ClusterResponse, error) {
-	return nil, nil
+func (r *RPCServer) Cluster(ctx context.Context, req *proto.ClusterRequest) (*proto.ClusterResponse, error) {
+	err := r.master.Register(ctx, req.NodeInfo)
+	return nil, err
 }
 
-func (r *RPCServer) CreateSpace(context.Context, *proto.CreateSpaceRequest) (*proto.CreateSpaceResponse, error) {
-	return nil, nil
+func (r *RPCServer) CreateSpace(ctx context.Context, req *proto.CreateSpaceRequest) (*proto.CreateSpaceResponse, error) {
+	span := trace.SpanFromContext(ctx)
+	err := r.master.CreateSpace(ctx, req.Name, req.Type, req.DesiredShards, req.FixedFields)
+	if err != nil {
+		span.Errorf("create space failed: %s", errors.Detail(err))
+		return nil, err
+	}
+
+	spaceMeta, err := r.master.GetSpaceByName(ctx, req.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	ret := &proto.CreateSpaceResponse{Info: spaceMeta}
+	return ret, nil
 }
 
-func (r *RPCServer) DeleteSpace(context.Context, *proto.DeleteSpaceRequest) (*proto.DeleteSpaceResponse, error) {
-	return nil, nil
+func (r *RPCServer) DeleteSpace(ctx context.Context, req *proto.DeleteSpaceRequest) (*proto.DeleteSpaceResponse, error) {
+	span := trace.SpanFromContext(ctx)
+	err := r.master.DeleteSpaceByName(ctx, req.Name)
+	if err != nil {
+		span.Errorf("delete space[%s] failed: %s", req.Name, errors.Detail(err))
+	}
+	return nil, err
 }
 
-func (r *RPCServer) GetSpace(context.Context, *proto.GetSpaceRequest) (*proto.GetSpaceResponse, error) {
-	return nil, nil
+func (r *RPCServer) GetSpace(ctx context.Context, req *proto.GetSpaceRequest) (*proto.GetSpaceResponse, error) {
+	spaceMeta, err := r.master.GetSpaceByName(ctx, req.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	ret := &proto.GetSpaceResponse{Info: spaceMeta}
+	return ret, nil
 }
 
-func (r *RPCServer) Heartbeat(context.Context, *proto.HeartbeatRequest) (*proto.HeartbeatResponse, error) {
-	return nil, nil
+func (r *RPCServer) Heartbeat(ctx context.Context, req *proto.HeartbeatRequest) (*proto.HeartbeatResponse, error) {
+	span := trace.SpanFromContext(ctx)
+	err := r.master.HandleHeartbeat(ctx, &cluster.HeartbeatArgs{
+		NodeID:     req.Id,
+		ShardCount: int32(req.ShardCount),
+	})
+	if err != nil {
+		span.Errorf("handle heartbeat failed: %s", err)
+	}
+
+	return nil, err
 }
 
-func (r *RPCServer) Report(context.Context, *proto.ReportRequest) (*proto.ReportResponse, error) {
-	return nil, nil
+func (r *RPCServer) Report(ctx context.Context, req *proto.ReportRequest) (*proto.ReportResponse, error) {
+	span := trace.SpanFromContext(ctx)
+	tasks, err := r.master.Report(ctx, req.Id, req.Infos)
+	if err != nil {
+		span.Errorf("report failed: %s", errors.Detail(err))
+		return nil, err
+	}
+
+	return &proto.ReportResponse{Tasks: tasks}, nil
 }
 
-func (r *RPCServer) GetNode(context.Context, *proto.GetNodeRequest) (*proto.GetNodeResponse, error) {
-	return nil, nil
+func (r *RPCServer) GetNode(ctx context.Context, req *proto.GetNodeRequest) (*proto.GetNodeResponse, error) {
+	node, err := r.master.GetNode(ctx, req.Id)
+	if err != nil {
+		return nil, err
+	}
+
+	return &proto.GetNodeResponse{NodeInfo: node}, nil
 }
 
-func (r *RPCServer) GetCatalogChanges(context.Context, *proto.GetCatalogChangesRequest) (*proto.GetCatalogChangesResponse, error) {
-	return nil, nil
+func (r *RPCServer) GetCatalogChanges(ctx context.Context, req *proto.GetCatalogChangesRequest) (*proto.GetCatalogChangesResponse, error) {
+	span := trace.SpanFromContext(ctx)
+	routeVersion, items, err := r.master.GetCatalogChanges(ctx, req.RouteVersion, req.NodeId)
+	if err != nil {
+		span.Errorf("get catalog changes failed: %s", err)
+		return nil, err
+	}
+
+	return &proto.GetCatalogChangesResponse{
+		RouteVersion: routeVersion,
+		Items:        items,
+	}, nil
 }
 
-func (r *RPCServer) GetRoleNodes(context.Context, *proto.GetRoleNodesRequest) (*proto.GetRoleNodesResponse, error) {
-	return nil, nil
+func (r *RPCServer) GetRoleNodes(ctx context.Context, req *proto.GetRoleNodesRequest) (*proto.GetRoleNodesResponse, error) {
+	nodes, err := r.master.ListNodeInfo(ctx, []proto.NodeRole{req.Role})
+	if err != nil {
+		return nil, err
+	}
+
+	return &proto.GetRoleNodesResponse{Nodes: nodes}, nil
 }
 
 // Shard Server API
@@ -115,7 +179,7 @@ func (r *RPCServer) GetShard(ctx context.Context, req *proto.GetShardRequest) (*
 
 func (r *RPCServer) ShardInsertItem(ctx context.Context, req *proto.InsertItemRequest) (*proto.InsertItemResponse, error) {
 	if req.PreferredShard == 0 {
-		return nil, errors.ErrInvalidShardID
+		return nil, apierrors.ErrInvalidShardID
 	}
 	shardServer := r.shardServer
 	space, err := shardServer.Catalog.GetSpace(ctx, req.SpaceName)
@@ -203,7 +267,7 @@ func (r *RPCServer) ShardUnlink(ctx context.Context, req *proto.UnlinkRequest) (
 
 func (r *RPCServer) ShardList(ctx context.Context, req *proto.ListRequest) (*proto.ListResponse, error) {
 	if req.Num > maxListNum {
-		return nil, errors.ErrListNumExceed
+		return nil, apierrors.ErrListNumExceed
 	}
 	shardServer := r.shardServer
 	space, err := shardServer.Catalog.GetSpace(ctx, req.SpaceName)
