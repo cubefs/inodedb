@@ -31,9 +31,10 @@ const (
 type Config struct {
 	Role []proto.NodeRole
 
-	MasterConfig client.MasterConfig `json:"master_config"`
-	NodeConfig   proto.Node          `json:"node_config"`
-	StoreConfig  store.Config        `json:"store_config"`
+	MasterConfig client.MasterConfig     `json:"master_config"`
+	NodeConfig   proto.Node              `json:"node_config"`
+	StoreConfig  store.Config            `json:"store_config"`
+	ServerConfig *client.TransportConfig `json:"server_config"`
 }
 
 type Server struct {
@@ -44,10 +45,28 @@ type Server struct {
 }
 
 func NewServer(cfg *Config) *Server {
-	shardServer := shardserver.NewShardServer(&shardserver.Config{
-		StoreConfig:  cfg.StoreConfig,
-		MasterConfig: cfg.MasterConfig,
-		NodeConfig:   cfg.NodeConfig,
-	})
-	return &Server{shardServer: shardServer}
+	s := &Server{}
+	for _, role := range cfg.Role {
+		switch role {
+		case proto.NodeRole_ShardServer:
+			shardServer := shardserver.NewShardServer(&shardserver.Config{
+				StoreConfig:  cfg.StoreConfig,
+				MasterConfig: cfg.MasterConfig,
+				NodeConfig:   cfg.NodeConfig,
+			})
+			s.shardServer = shardServer
+		case proto.NodeRole_Router:
+			newRouter := router.NewRouter(&router.Config{
+				ServerConfig: cfg.ServerConfig,
+				MasterConfig: &cfg.MasterConfig,
+				NodeConfig:   &cfg.NodeConfig,
+			})
+			s.router = newRouter
+		case proto.NodeRole_Master:
+		case proto.NodeRole_Single:
+		default:
+			continue
+		}
+	}
+	return s
 }

@@ -288,36 +288,88 @@ func (r *RPCServer) ShardSearch(context.Context, *proto.SearchRequest) (*proto.S
 
 // Router API
 
-func (r *RPCServer) InsertItem(context.Context, *proto.InsertItemRequest) (*proto.InsertItemResponse, error) {
-	return nil, nil
+func (r *RPCServer) InsertItem(ctx context.Context, req *proto.InsertItemRequest) (*proto.InsertItemResponse, error) {
+	spaceName := req.SpaceName
+	space, err := r.router.Catalog.GetSpace(ctx, spaceName)
+	if err != nil {
+		return nil, err
+	}
+	ino, err := space.InsertItem(ctx, req.Item)
+	if err != nil {
+		return nil, err
+	}
+	return &proto.InsertItemResponse{Ino: ino}, nil
 }
 
-func (r *RPCServer) UpdateItem(context.Context, *proto.UpdateItemRequest) (*proto.UpdateItemResponse, error) {
-	return nil, nil
+func (r *RPCServer) UpdateItem(ctx context.Context, req *proto.UpdateItemRequest) (*proto.UpdateItemResponse, error) {
+	spaceName := req.SpaceName
+	space, err := r.router.Catalog.GetSpace(ctx, spaceName)
+	if err != nil {
+		return nil, err
+	}
+	return nil, space.UpdateItem(ctx, req.Item)
 }
 
-func (r *RPCServer) DeleteItem(context.Context, *proto.DeleteItemRequest) (*proto.DeleteItemResponse, error) {
-	return nil, nil
+func (r *RPCServer) DeleteItem(ctx context.Context, req *proto.DeleteItemRequest) (*proto.DeleteItemResponse, error) {
+	spaceName := req.SpaceName
+	space, err := r.router.Catalog.GetSpace(ctx, spaceName)
+	if err != nil {
+		return nil, err
+	}
+	return nil, space.DeleteItem(ctx, req.Ino)
 }
 
-func (r *RPCServer) GetItem(context.Context, *proto.GetItemRequest) (*proto.GetItemResponse, error) {
-	return nil, nil
+func (r *RPCServer) GetItem(ctx context.Context, req *proto.GetItemRequest) (*proto.GetItemResponse, error) {
+	spaceName := req.SpaceName
+	space, err := r.router.Catalog.GetSpace(ctx, spaceName)
+	if err != nil {
+		return nil, err
+	}
+	item, err := space.GetItem(ctx, req.Ino)
+	if err != nil {
+		return nil, err
+	}
+	return &proto.GetItemResponse{Item: item}, nil
 }
 
-func (r *RPCServer) Link(context.Context, *proto.LinkRequest) (*proto.LinkResponse, error) {
-	return nil, nil
+func (r *RPCServer) Link(ctx context.Context, req *proto.LinkRequest) (*proto.LinkResponse, error) {
+	spaceName := req.SpaceName
+	space, err := r.router.Catalog.GetSpace(ctx, spaceName)
+	if err != nil {
+		return nil, err
+	}
+	return nil, space.Link(ctx, req.Link)
 }
 
-func (r *RPCServer) Unlink(context.Context, *proto.UnlinkRequest) (*proto.UnlinkResponse, error) {
-	return nil, nil
+func (r *RPCServer) Unlink(ctx context.Context, req *proto.UnlinkRequest) (*proto.UnlinkResponse, error) {
+	spaceName := req.SpaceName
+	space, err := r.router.Catalog.GetSpace(ctx, spaceName)
+	if err != nil {
+		return nil, err
+	}
+	return nil, space.Unlink(ctx, req.Unlink)
 }
 
-func (r *RPCServer) List(context.Context, *proto.ListRequest) (*proto.ListResponse, error) {
-	return nil, nil
+func (r *RPCServer) List(ctx context.Context, req *proto.ListRequest) (*proto.ListResponse, error) {
+	spaceName := req.SpaceName
+	space, err := r.router.Catalog.GetSpace(ctx, spaceName)
+	if err != nil {
+		return nil, err
+	}
+	links, err := space.List(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return &proto.ListResponse{Links: links}, nil
 }
 
-func (r *RPCServer) Search(context.Context, *proto.SearchRequest) (*proto.SearchResponse, error) {
-	return nil, nil
+func (r *RPCServer) Search(ctx context.Context, req *proto.SearchRequest) (*proto.SearchResponse, error) {
+	spaceName := req.SpaceName
+	space, err := r.router.Catalog.GetSpace(ctx, spaceName)
+	if err != nil {
+		return nil, err
+	}
+	return space.Search(ctx, req)
 }
 
 // util function
