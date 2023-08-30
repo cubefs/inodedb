@@ -6,6 +6,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/cubefs/inodedb/common/raft"
+
 	"github.com/cubefs/inodedb/shardserver/catalog/persistent"
 
 	"github.com/cubefs/cubefs/blobstore/util/errors"
@@ -78,7 +80,7 @@ type shard struct {
 	vectorIndex *vector.Index
 	scalarIndex *scalar.Index
 	store       *store.Store
-	raftGroup   *RaftGroup
+	raftGroup   raft.Group
 
 	keyLocks [keyLocksNum]sync.Mutex
 	lock     sync.RWMutex
@@ -97,7 +99,7 @@ func (s *shard) InsertItem(ctx context.Context, i *proto.Item) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	if _, err := s.raftGroup.Propose(ctx, &RaftProposeRequest{
+	if _, err := s.raftGroup.Propose(ctx, &raft.ProposeRequest{
 		Op:   RaftOpInsertItem,
 		Data: data,
 	}); err != nil {
@@ -119,7 +121,7 @@ func (s *shard) UpdateItem(ctx context.Context, updateItem *proto.Item) error {
 		return err
 	}
 
-	if _, err := s.raftGroup.Propose(ctx, &RaftProposeRequest{
+	if _, err := s.raftGroup.Propose(ctx, &raft.ProposeRequest{
 		Op:   RaftOpUpdateItem,
 		Data: data,
 	}); err != nil {
@@ -138,7 +140,7 @@ func (s *shard) DeleteItem(ctx context.Context, ino uint64) error {
 
 	data := make([]byte, 8)
 	encodeIno(ino, data)
-	if _, err := s.raftGroup.Propose(ctx, &RaftProposeRequest{
+	if _, err := s.raftGroup.Propose(ctx, &raft.ProposeRequest{
 		Op:   RaftOpDeleteItem,
 		Data: data,
 	}); err != nil {
@@ -180,7 +182,7 @@ func (s *shard) Link(ctx context.Context, l *proto.Link) error {
 		return err
 	}
 
-	if _, err := s.raftGroup.Propose(ctx, &RaftProposeRequest{
+	if _, err := s.raftGroup.Propose(ctx, &raft.ProposeRequest{
 		Op:   RaftOpLinkItem,
 		Data: data,
 	}); err != nil {
@@ -202,7 +204,7 @@ func (s *shard) Unlink(ctx context.Context, unlink *proto.Unlink) error {
 		return err
 	}
 
-	if _, err := s.raftGroup.Propose(ctx, &RaftProposeRequest{
+	if _, err := s.raftGroup.Propose(ctx, &raft.ProposeRequest{
 		Op:   RaftOpUnlinkItem,
 		Data: data,
 	}); err != nil {
@@ -256,6 +258,19 @@ func (s *shard) List(ctx context.Context, ino uint64, start string, num uint32) 
 	return
 }
 
+func (s *shard) UpdateEpoch(epoch uint64) {
+	s.lock.Lock()
+	s.epoch = epoch
+	s.lock.Unlock()
+}
+
+func (s *shard) GetEpoch() uint64 {
+	s.lock.RLock()
+	epoch := s.epoch
+	s.lock.RUnlock()
+	return epoch
+}
+
 func (s *shard) Stats() *shardStats {
 	s.lock.RLock()
 	replicates := make([]uint32, len(s.nodes))
@@ -275,6 +290,16 @@ func (s *shard) Stats() *shardStats {
 
 func (s *shard) Start() {
 	s.raftGroup.Start()
+}
+
+func (s *shard) Stop() {
+	// TODO: stop and operation on this shard
+}
+
+func (s *shard) Close() {
+	// TODO: wait all operation done on this shard and then close shard, ensure memory safe
+
+	s.raftGroup.Close()
 }
 
 func (s *shard) nextIno() (uint64, error) {

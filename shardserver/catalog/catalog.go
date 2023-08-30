@@ -137,19 +137,26 @@ func (c *Catalog) GetShard(ctx context.Context, spaceName string, shardID uint32
 }
 
 func (c *Catalog) loop(ctx context.Context) {
-	span := trace.SpanFromContext(ctx)
 	reportTicker := time.NewTicker(60 * time.Second)
 	routeUpdateTicker := time.NewTicker(5 * time.Second)
 
 	for {
 		select {
 		case <-reportTicker.C:
+			span, ctx := trace.StartSpanFromContext(ctx, "")
 			shardReports := c.getAlteredShards()
-			if err := c.transporter.Report(ctx, shardReports); err != nil {
+			tasks, err := c.transporter.Report(ctx, shardReports)
+			if err != nil {
 				span.Warnf("shard report failed: %s", err)
+				continue
 			}
+			for _, task := range tasks {
+				c.executeShardTask(ctx, task)
+			}
+
 			reportTicker.Reset(time.Duration(60+rand.Intn(10)) * time.Second)
 		case <-routeUpdateTicker.C:
+			span, ctx := trace.StartSpanFromContext(ctx, "")
 			if err := c.updateRoute(ctx); err != nil {
 				span.Warnf("update route failed: %s", err)
 			}
@@ -179,12 +186,15 @@ func (c *Catalog) getAlteredShards() []*proto.ShardReport {
 			shard := value.(*shard)
 			stats := shard.Stats()
 
-			ret = append(ret, &proto.ShardReport{Shard: &proto.Shard{
-				Epoch:    stats.routeVersion,
-				Id:       shard.shardId,
-				InoLimit: stats.inoLimit,
-				InoUsed:  stats.inoUsed,
-			}})
+			ret = append(ret, &proto.ShardReport{
+				Sid: space.sid,
+				Shard: &proto.Shard{
+					Epoch:    stats.routeVersion,
+					Id:       shard.shardId,
+					InoLimit: stats.inoLimit,
+					InoUsed:  stats.inoUsed,
+				},
+			})
 
 			return true
 		})
@@ -231,6 +241,28 @@ func (c *Catalog) updateRoute(ctx context.Context) error {
 			c.spaces.Delete(spaceItem.Name)
 		}
 		c.updateRouteVersion(routeItem.RouteVersion)
+	}
+	return nil
+}
+
+func (c *Catalog) executeShardTask(ctx context.Context, task *proto.ShardTask) error {
+	switch task.Type {
+	case proto.ShardTaskType_ClearShard:
+		space, err := c.GetSpace(ctx, task.SpaceName)
+		if err != nil {
+			return err
+		}
+		shard, err := space.GetShard(ctx, task.ShardId)
+		if err != nil {
+			return err
+		}
+
+		if shard.GetEpoch() == task.Epoch {
+			shard.Stop()
+			shard.Close()
+			return space.DeleteShard(ctx, task.ShardId)
+		}
+	default:
 	}
 	return nil
 }

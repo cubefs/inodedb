@@ -197,9 +197,10 @@ func (c *catalog) applyShardReport(ctx context.Context, data []byte) (ret *shard
 		info := shard.info
 		if reportInfo.Shard.Epoch < info.Epoch && isReplicateMember(reportInfo.Shard.Id, info.Replicates) {
 			ret.tasks = append(ret.tasks, &proto.ShardTask{
-				Type:    proto.ShardTaskType_ClearShard,
-				Sid:     reportInfo.Sid,
-				ShardId: reportInfo.Shard.Id,
+				Type:      proto.ShardTaskType_ClearShard,
+				SpaceName: space.GetInfo().Name,
+				ShardId:   reportInfo.Shard.Id,
+				Epoch:     reportInfo.Shard.Epoch,
 			})
 			shard.lock.Unlock()
 			continue

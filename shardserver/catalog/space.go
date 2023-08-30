@@ -50,9 +50,21 @@ func (s *Space) UpdateShard(ctx context.Context, shardId uint32, epoch uint64) e
 		return err
 	}
 
-	shard.lock.Lock()
-	shard.epoch = epoch
-	shard.lock.Unlock()
+	shard.UpdateEpoch(epoch)
+
+	return nil
+}
+
+func (s *Space) DeleteShard(ctx context.Context, shardId uint32) error {
+	shard, err := s.GetShard(ctx, shardId)
+	if err != nil {
+		return err
+	}
+
+	s.lock.Lock()
+	s.shardsTree.Delete(shard.shardRange)
+	s.lock.Unlock()
+	s.shards.Delete(shardId)
 
 	return nil
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/cubefs/inodedb/common/raft"
+
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
 	"github.com/cubefs/inodedb/common/kvstore"
@@ -12,7 +14,7 @@ import (
 	pb "google.golang.org/protobuf/proto"
 )
 
-func (s *shard) Apply(ctx context.Context, op RaftOp, data []byte, index uint64) (result interface{}, err error) {
+func (s *shard) Apply(ctx context.Context, op raft.Op, data []byte, index uint64) (result interface{}, err error) {
 	switch op {
 	case RaftOpInsertItem:
 		err := s.applyInsertItem(ctx, data)
@@ -35,15 +37,15 @@ func (s *shard) Apply(ctx context.Context, op RaftOp, data []byte, index uint64)
 	return nil, nil
 }
 
-func (s *shard) ApplyMemberChange(cc RaftConfChange, index uint64) error {
+func (s *shard) ApplyMemberChange(cc raft.ConfChange, index uint64) error {
 	return nil
 }
 
-func (s *shard) Snapshot() (RaftSnapshot, error) {
+func (s *shard) Snapshot() (raft.Snapshot, error) {
 	return nil, nil
 }
 
-func (s *shard) ApplySnapshot(st RaftSnapshot) error {
+func (s *shard) ApplySnapshot(st raft.Snapshot) error {
 	return nil
 }
 

@@ -151,7 +151,8 @@ message CatalogChangeShardAdd {
 
 message ShardTask {
 	ShardTaskType type = 1;
-	uint64 sid = 2;
+	string space_name = 2;
 	uint32 shard_id = 3;
-	google.protobuf.Any reserved = 4;
+	uint64 epoch = 4;
+	google.protobuf.Any reserved = 5;
 }

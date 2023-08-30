@@ -68,13 +68,16 @@ func (t *transporter) GetRouteUpdate(ctx context.Context, routeVersion uint64) (
 	return resp.Items, nil
 }
 
-func (t *transporter) Report(ctx context.Context, infos []*proto.ShardReport) error {
-	_, err := t.masterClient.Report(ctx, &proto.ReportRequest{
+func (t *transporter) Report(ctx context.Context, infos []*proto.ShardReport) ([]*proto.ShardTask, error) {
+	resp, err := t.masterClient.Report(ctx, &proto.ReportRequest{
 		Id:    t.myself.Id,
 		Infos: infos,
 	})
+	if err != nil {
+		return nil, err
+	}
 
-	return err
+	return resp.Tasks, err
 }
 
 func (t *transporter) GetNode(ctx context.Context, nodeId uint32) (*proto.Node, error) {
