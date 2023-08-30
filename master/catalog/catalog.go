@@ -51,6 +51,7 @@ type Config struct {
 	IdGenerator             idgenerator.IDGenerator `json:"-"`
 	Store                   *store.Store            `json:"-"`
 	Cluster                 cluster.Cluster         `json:"-"`
+	RaftGroup               raft.Group              `json:"-"`
 }
 
 type (
@@ -99,6 +100,7 @@ func NewCatalog(ctx context.Context, cfg *Config) Catalog {
 		idGenerator: cfg.IdGenerator,
 		storage:     newStorage(cfg.Store),
 		cluster:     cfg.Cluster,
+		raftGroup:   cfg.RaftGroup,
 		taskMgr:     newTaskMgr(defaultTaskPoolNum),
 		done:        make(chan struct{}),
 	}

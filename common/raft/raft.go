@@ -87,6 +87,11 @@ type (
 
 		respKey string
 	}
+
+	Config struct {
+		SM   StateMachine
+		Raft raft
+	}
 )
 
 func (req *ProposeRequest) Marshal() ([]byte, error) {
@@ -107,6 +112,13 @@ type group struct {
 	storage          Storage
 	raft             raft
 	proposeResponses sync.Map
+}
+
+func NewRaftGroup(cfg *Config) Group {
+	return &group{
+		raft: cfg.Raft,
+		sm:   cfg.SM,
+	}
 }
 
 func (r *group) Propose(ctx context.Context, req *ProposeRequest) (*ProposeResponse, error) {
@@ -142,6 +154,10 @@ func (r *group) Propose(ctx context.Context, req *ProposeRequest) (*ProposeRespo
 }
 
 func (r *group) Start() {
+}
+
+func (r *group) Stat() *Stat {
+	return nil
 }
 
 func (r *group) Close() {

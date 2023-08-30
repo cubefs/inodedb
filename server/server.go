@@ -40,9 +40,10 @@ type Config struct {
 	AuditLog auditlog.Config  `json:"auditlog"`
 	Roles    []proto.NodeRole `json:"roles"`
 
-	MasterRpcConfig client.MasterConfig `json:"master_rpc_config"`
-	NodeConfig      proto.Node          `json:"node_config"`
-	StoreConfig     StoreConfig         `json:"store_config"`
+	MasterRpcConfig client.MasterConfig    `json:"master_rpc_config"`
+	NodeConfig      proto.Node             `json:"node_config"`
+	StoreConfig     StoreConfig            `json:"store_config"`
+	ServerConfig    client.TransportConfig `json:"server_config"`
 
 	CatalogConfig catalog.Config `json:"catalog_config"`
 	ClusterConfig cluster.Config `json:"cluster_config"`
@@ -73,6 +74,11 @@ func NewServer(cfg *Config) *Server {
 		log.Fatal("failed to open audit log:", err)
 	}
 
+	server := &Server{
+		auditRecorder: auditRecorder,
+		logHandler:    logHandler,
+	}
+
 	shardServer := shardserver.NewShardServer(&shardserver.Config{
 		StoreConfig: shardServerStore.Config{
 			Path:     cfg.StoreConfig.Path + "/shardserver/",
@@ -91,13 +97,30 @@ func NewServer(cfg *Config) *Server {
 		ClusterConfig: cfg.ClusterConfig,
 	})
 
-	return &Server{
-		shardServer: shardServer,
-		master:      master,
+	newRouter := router.NewRouter(&router.Config{
+		ServerConfig: &cfg.ServerConfig,
+		MasterConfig: &cfg.MasterRpcConfig,
+		NodeConfig:   &cfg.NodeConfig,
+	})
 
-		auditRecorder: auditRecorder,
-		logHandler:    logHandler,
+	for _, role := range cfg.Roles {
+		switch role {
+		case proto.NodeRole_ShardServer:
+			server.shardServer = shardServer
+		case proto.NodeRole_Master:
+			server.master = master
+		case proto.NodeRole_Router:
+			server.router = newRouter
+		case proto.NodeRole_Single:
+			server.shardServer = shardServer
+			server.master = master
+			server.router = newRouter
+		default:
+			continue
+		}
 	}
+
+	return server
 }
 
 func (s *Server) Close() {

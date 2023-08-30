@@ -41,6 +41,7 @@ type Config struct {
 
 	Store       *store.Store            `json:"-"`
 	IdGenerator idGenerator.IDGenerator `json:"-"`
+	RaftGroup   raft.Group              `json:"-"`
 }
 
 type allocatorFunc func(ctx context.Context) Allocator
@@ -77,6 +78,7 @@ func NewCluster(ctx context.Context, cfg *Config) Cluster {
 		clusterId:        cfg.ClusterId,
 		cfg:              cfg,
 		idGenerator:      cfg.IdGenerator,
+		raftGroup:        cfg.RaftGroup,
 		client:           sc,
 		allNodes:         newConcurrentNodes(defaultSplitMapNum),
 		storage:          &storage{kvStore: cfg.Store.KVStore()},

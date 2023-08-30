@@ -437,7 +437,7 @@ func (r *RPCServer) unaryInterceptorWithAuditLog(ctx context.Context, req interf
 		bw.Write(out)
 		bw.Write([]byte("\t"))
 		bw.Write([]byte(strconv.FormatInt(duration, 10)))
-		r.auditLogRecorder.Log(bw.Bytes())
+		r.auditRecorder.Log(bw.Bytes())
 	}
 
 	return
