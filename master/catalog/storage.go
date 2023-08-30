@@ -50,7 +50,7 @@ func (s *storage) ListSpaces(ctx context.Context) (ret []*spaceInfo, err error) 
 			return nil, err
 		}
 		if kg == nil || vg == nil {
-			return
+			return ret, nil
 		}
 
 		spaceInfo := &spaceInfo{}
@@ -121,7 +121,7 @@ func (s *storage) ListShards(ctx context.Context, sid uint64) (ret []*shardInfo,
 			return nil, err
 		}
 		if kg == nil || vg == nil {
-			return
+			return ret, nil
 		}
 
 		shardInfo := &shardInfo{}
@@ -166,7 +166,7 @@ func (s *storage) ListRouteItems(ctx context.Context) (ret []*routeItemInfo, err
 			return nil, err
 		}
 		if kg == nil || vg == nil {
-			return
+			return ret, nil
 		}
 
 		item := &routeItemInfo{}

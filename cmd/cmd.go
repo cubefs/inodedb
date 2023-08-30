@@ -31,19 +31,6 @@ import (
 	"github.com/cubefs/inodedb/server"
 )
 
-const (
-	ConfigKeyRole              = "role"
-	ConfigKeyLogDir            = "logDir"
-	ConfigKeyLogLevel          = "logLevel"
-	ConfigKeyProfPort          = "prof"
-	ConfigKeyWarnLogDir        = "warnLogDir"
-	ConfigKeyBuffersTotalLimit = "buffersTotalLimit"
-)
-
-const (
-	LoggerOutput = "output.log"
-)
-
 var (
 	configFile       = flag.String("c", "", "config file path")
 	configVersion    = flag.Bool("v", false, "show version")
