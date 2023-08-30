@@ -15,7 +15,6 @@
 package main
 
 import (
-	"flag"
 	"net/http"
 	"os"
 	"os/signal"
@@ -29,13 +28,6 @@ import (
 	"github.com/cubefs/cubefs/blobstore/util/log"
 	_ "github.com/cubefs/cubefs/blobstore/util/version"
 	"github.com/cubefs/inodedb/server"
-)
-
-var (
-	configFile       = flag.String("c", "", "config file path")
-	configVersion    = flag.Bool("v", false, "show version")
-	configForeground = flag.Bool("f", false, "run foreground")
-	redirectSTD      = flag.Bool("redirect-std", true, "redirect standard output to file")
 )
 
 // Config service config

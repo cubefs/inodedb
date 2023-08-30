@@ -23,8 +23,8 @@ const (
 )
 
 type Config struct {
-	AuditLog auditlog.Config  `json:"audit_log"`
-	Roles    []proto.NodeRole `json:"roles"`
+	AuditLog auditlog.Config `json:"audit_log"`
+	Roles    []string        `json:"roles"`
 
 	NodeConfig      proto.Node             `json:"node_config"`
 	StoreConfig     StoreConfig            `json:"store_config"`
@@ -97,18 +97,18 @@ func NewServer(cfg *Config) *Server {
 
 	for _, role := range cfg.Roles {
 		switch role {
-		case proto.NodeRole_ShardServer:
+		case proto.NodeRole_ShardServer.String():
 			server.shardServer = newShardServer()
-		case proto.NodeRole_Master:
+		case proto.NodeRole_Master.String():
 			server.master = newMaster()
-		case proto.NodeRole_Router:
+		case proto.NodeRole_Router.String():
 			server.router = newRouter()
-		case proto.NodeRole_Single:
+		case proto.NodeRole_Single.String():
 			server.shardServer = newShardServer()
 			server.master = newMaster()
 			server.router = newRouter()
 		default:
-			continue
+			log.Fatalf("unknown node role")
 		}
 	}
 
