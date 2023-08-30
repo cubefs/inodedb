@@ -1,17 +1,3 @@
-// Copyright 2023 The CubeFS Authors.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-// implied. See the License for the specific language governing
-// permissions and limitations under the License.
-
 package server
 
 import (
@@ -37,13 +23,13 @@ const (
 )
 
 type Config struct {
-	AuditLog auditlog.Config  `json:"auditlog"`
+	AuditLog auditlog.Config  `json:"audit_log"`
 	Roles    []proto.NodeRole `json:"roles"`
 
-	MasterRpcConfig client.MasterConfig    `json:"master_rpc_config"`
 	NodeConfig      proto.Node             `json:"node_config"`
 	StoreConfig     StoreConfig            `json:"store_config"`
-	ServerConfig    client.TransportConfig `json:"server_config"`
+	MasterRpcConfig client.MasterConfig    `json:"master_rpc_config"`
+	ServerRpcConfig client.TransportConfig `json:"server_rpc_config"`
 
 	CatalogConfig catalog.Config `json:"catalog_config"`
 	ClusterConfig cluster.Config `json:"cluster_config"`
@@ -79,42 +65,48 @@ func NewServer(cfg *Config) *Server {
 		logHandler:    logHandler,
 	}
 
-	shardServer := shardserver.NewShardServer(&shardserver.Config{
-		StoreConfig: shardServerStore.Config{
-			Path:     cfg.StoreConfig.Path + "/shardserver/",
-			KVOption: cfg.StoreConfig.KVOption,
-		},
-		MasterConfig: cfg.MasterRpcConfig,
-		NodeConfig:   cfg.NodeConfig,
-	})
+	newShardServer := func() *shardserver.ShardServer {
+		return shardserver.NewShardServer(&shardserver.Config{
+			StoreConfig: shardServerStore.Config{
+				Path:     cfg.StoreConfig.Path + "/shardserver/",
+				KVOption: cfg.StoreConfig.KVOption,
+			},
+			MasterConfig: cfg.MasterRpcConfig,
+			NodeConfig:   cfg.NodeConfig,
+		})
+	}
 
-	master := master.NewMaster(&master.Config{
-		StoreConfig: masterStore.Config{
-			Path:     cfg.StoreConfig.Path + "/master/",
-			KVOption: cfg.StoreConfig.KVOption,
-		},
-		CatalogConfig: cfg.CatalogConfig,
-		ClusterConfig: cfg.ClusterConfig,
-	})
+	newMaster := func() *master.Master {
+		return master.NewMaster(&master.Config{
+			StoreConfig: masterStore.Config{
+				Path:     cfg.StoreConfig.Path + "/master/",
+				KVOption: cfg.StoreConfig.KVOption,
+			},
+			CatalogConfig: cfg.CatalogConfig,
+			ClusterConfig: cfg.ClusterConfig,
+		})
+	}
 
-	newRouter := router.NewRouter(&router.Config{
-		ServerConfig: &cfg.ServerConfig,
-		MasterConfig: &cfg.MasterRpcConfig,
-		NodeConfig:   &cfg.NodeConfig,
-	})
+	newRouter := func() *router.Router {
+		return router.NewRouter(&router.Config{
+			ServerConfig: &cfg.ServerRpcConfig,
+			MasterConfig: &cfg.MasterRpcConfig,
+			NodeConfig:   &cfg.NodeConfig,
+		})
+	}
 
 	for _, role := range cfg.Roles {
 		switch role {
 		case proto.NodeRole_ShardServer:
-			server.shardServer = shardServer
+			server.shardServer = newShardServer()
 		case proto.NodeRole_Master:
-			server.master = master
+			server.master = newMaster()
 		case proto.NodeRole_Router:
-			server.router = newRouter
+			server.router = newRouter()
 		case proto.NodeRole_Single:
-			server.shardServer = shardServer
-			server.master = master
-			server.router = newRouter
+			server.shardServer = newShardServer()
+			server.master = newMaster()
+			server.router = newRouter()
 		default:
 			continue
 		}
