@@ -18,6 +18,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"log"
+	"net"
 	"strconv"
 	"sync"
 	"time"
@@ -41,13 +43,15 @@ var auditLogPool = sync.Pool{
 }
 
 type RPCServer struct {
+	grpcServer *grpc.Server
+
 	*Server
 }
 
 func NewRPCServer(server *Server) *RPCServer {
 	rs := &RPCServer{Server: server}
 
-	s := grpc.NewServer(grpc.ChainUnaryInterceptor(rs.unaryInterceptorWithTracer, rs.unaryInterceptorWithTracer))
+	s := grpc.NewServer(grpc.ChainUnaryInterceptor(rs.unaryInterceptorWithTracer, rs.unaryInterceptorWithAuditLog))
 	if rs.master != nil {
 		proto.RegisterInodeDBMasterServer(s, rs)
 	}
@@ -57,7 +61,22 @@ func NewRPCServer(server *Server) *RPCServer {
 	if rs.shardServer != nil {
 		proto.RegisterInodeDBShardServerServer(s, rs)
 	}
+
+	rs.grpcServer = s
 	return nil
+}
+
+func (r *RPCServer) Serve(addr string) {
+	Listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Fatalf("listen addr[%s] failed: %s", addr, err)
+	}
+
+	go r.grpcServer.Serve(Listener)
+}
+
+func (r *RPCServer) Stop() {
+	r.grpcServer.GracefulStop()
 }
 
 // Master API
@@ -397,8 +416,6 @@ func (r *RPCServer) unaryInterceptorWithTracer(ctx context.Context, req interfac
 }
 
 func (r *RPCServer) unaryInterceptorWithAuditLog(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-	// TODO: decode into node role
-	nodeRole := proto.NodeRole_Router
 	start := time.Now()
 
 	resp, err = handler(ctx, req)
@@ -420,7 +437,7 @@ func (r *RPCServer) unaryInterceptorWithAuditLog(ctx context.Context, req interf
 		bw.Write(out)
 		bw.Write([]byte("\t"))
 		bw.Write([]byte(strconv.FormatInt(duration, 10)))
-		r.auditLogRecorder[nodeRole].Log([]byte("XX"))
+		r.auditLogRecorder.Log(bw.Bytes())
 	}
 
 	return

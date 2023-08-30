@@ -9,7 +9,7 @@ import (
 
 type Config struct {
 	Path     string         `json:"path"`
-	KvOption kvstore.Option `json:"kv_option"`
+	KVOption kvstore.Option `json:"kv_option"`
 }
 
 type Store struct {
@@ -18,7 +18,7 @@ type Store struct {
 
 func NewStore(ctx context.Context, cfg *Config) (*Store, error) {
 	kvStorePath := cfg.Path + "/kv"
-	kvStore, err := kvstore.NewKVStore(ctx, kvStorePath, kvstore.RocksdbLsmKVType, &cfg.KvOption)
+	kvStore, err := kvstore.NewKVStore(ctx, kvStorePath, kvstore.RocksdbLsmKVType, &cfg.KVOption)
 	if err != nil {
 		return nil, err
 	}
