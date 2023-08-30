@@ -22,22 +22,22 @@ import (
 const keyLocksNum = 1024
 
 type shardConfig struct {
-	routeVersion uint64
-	spaceId      uint64
-	shardId      uint32
-	inoLimit     uint64
-	nodes        map[uint32]string
-	store        *store.Store
+	epoch    uint64
+	spaceId  uint64
+	shardId  uint32
+	inoLimit uint64
+	nodes    []uint32
+	store    *store.Store
 }
 
 func newShard(cfg *shardConfig) *shard {
 	shard := &shard{
-		shardId:      cfg.shardId,
-		routeVersion: cfg.routeVersion,
-		inoLimit:     cfg.inoLimit,
-		spaceId:      cfg.spaceId,
-		nodes:        cfg.nodes,
-		store:        cfg.store,
+		shardId:  cfg.shardId,
+		epoch:    cfg.epoch,
+		inoLimit: cfg.inoLimit,
+		spaceId:  cfg.spaceId,
+		nodes:    cfg.nodes,
+		store:    cfg.store,
 		shardRange: &shardRange{
 			startIno: uint64(cfg.shardId-1) * proto.ShardRangeStepSize,
 		},
@@ -67,18 +67,18 @@ type shardStats struct {
 }
 
 type shard struct {
-	shardId      uint32
-	inoCursor    uint64
-	inoLimit     uint64
-	inoUsed      uint64
-	spaceId      uint64
-	routeVersion uint64
-	nodes        map[uint32]string
-	shardKeys    *shardKeysGenerator
-	vectorIndex  *vector.Index
-	scalarIndex  *scalar.Index
-	store        *store.Store
-	raftGroup    *RaftGroup
+	shardId     uint32
+	inoCursor   uint64
+	inoLimit    uint64
+	inoUsed     uint64
+	spaceId     uint64
+	epoch       uint64
+	nodes       []uint32
+	shardKeys   *shardKeysGenerator
+	vectorIndex *vector.Index
+	scalarIndex *scalar.Index
+	store       *store.Store
+	raftGroup   *RaftGroup
 
 	keyLocks [keyLocksNum]sync.Mutex
 	lock     sync.RWMutex
@@ -258,12 +258,10 @@ func (s *shard) List(ctx context.Context, ino uint64, start string, num uint32) 
 
 func (s *shard) Stats() *shardStats {
 	s.lock.RLock()
-	replicates := make([]uint32, 0, len(s.nodes))
-	for i := range s.nodes {
-		replicates = append(replicates, i)
-	}
+	replicates := make([]uint32, len(s.nodes))
+	copy(replicates, s.nodes)
 	inoLimit := s.inoLimit
-	routeVersion := s.routeVersion
+	routeVersion := s.epoch
 	s.lock.RUnlock()
 
 	return &shardStats{

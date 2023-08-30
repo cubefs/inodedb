@@ -163,13 +163,19 @@ func (r *RPCServer) GetRoleNodes(ctx context.Context, req *proto.GetRoleNodesReq
 
 func (r *RPCServer) AddShard(ctx context.Context, req *proto.AddShardRequest) (*proto.AddShardResponse, error) {
 	shardServer := r.shardServer
-	err := shardServer.Catalog.AddShard(ctx, req.SpaceName, req.ShardId, req.RouteVersion, req.InoLimit, req.Replicates)
+	err := shardServer.AddShard(ctx, req.SpaceName, req.ShardId, req.Epoch, req.InoLimit, req.Replicates)
+	return nil, err
+}
+
+func (r *RPCServer) UpdateShard(ctx context.Context, req *proto.UpdateShardRequest) (*proto.UpdateShardResponse, error) {
+	shardServer := r.shardServer
+	err := shardServer.UpdateShard(ctx, req.SpaceName, req.ShardId, req.Epoch)
 	return nil, err
 }
 
 func (r *RPCServer) GetShard(ctx context.Context, req *proto.GetShardRequest) (*proto.GetShardResponse, error) {
 	shardServer := r.shardServer
-	shard, err := shardServer.Catalog.GetShard(ctx, req.SpaceName, req.ShardId)
+	shard, err := shardServer.GetShard(ctx, req.SpaceName, req.ShardId)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +188,7 @@ func (r *RPCServer) ShardInsertItem(ctx context.Context, req *proto.InsertItemRe
 		return nil, apierrors.ErrInvalidShardID
 	}
 	shardServer := r.shardServer
-	space, err := shardServer.Catalog.GetSpace(ctx, req.SpaceName)
+	space, err := shardServer.GetSpace(ctx, req.SpaceName)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +203,7 @@ func (r *RPCServer) ShardInsertItem(ctx context.Context, req *proto.InsertItemRe
 
 func (r *RPCServer) ShardUpdateItem(ctx context.Context, req *proto.UpdateItemRequest) (*proto.UpdateItemResponse, error) {
 	shardServer := r.shardServer
-	space, err := shardServer.Catalog.GetSpace(ctx, req.SpaceName)
+	space, err := shardServer.GetSpace(ctx, req.SpaceName)
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +217,7 @@ func (r *RPCServer) ShardUpdateItem(ctx context.Context, req *proto.UpdateItemRe
 
 func (r *RPCServer) ShardDeleteItem(ctx context.Context, req *proto.DeleteItemRequest) (*proto.DeleteItemResponse, error) {
 	shardServer := r.shardServer
-	space, err := shardServer.Catalog.GetSpace(ctx, req.SpaceName)
+	space, err := shardServer.GetSpace(ctx, req.SpaceName)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +231,7 @@ func (r *RPCServer) ShardDeleteItem(ctx context.Context, req *proto.DeleteItemRe
 
 func (r *RPCServer) ShardGetItem(ctx context.Context, req *proto.GetItemRequest) (*proto.GetItemResponse, error) {
 	shardServer := r.shardServer
-	space, err := shardServer.Catalog.GetSpace(ctx, req.SpaceName)
+	space, err := shardServer.GetSpace(ctx, req.SpaceName)
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +245,7 @@ func (r *RPCServer) ShardGetItem(ctx context.Context, req *proto.GetItemRequest)
 
 func (r *RPCServer) ShardLink(ctx context.Context, req *proto.LinkRequest) (*proto.LinkResponse, error) {
 	shardServer := r.shardServer
-	space, err := shardServer.Catalog.GetSpace(ctx, req.SpaceName)
+	space, err := shardServer.GetSpace(ctx, req.SpaceName)
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +259,7 @@ func (r *RPCServer) ShardLink(ctx context.Context, req *proto.LinkRequest) (*pro
 
 func (r *RPCServer) ShardUnlink(ctx context.Context, req *proto.UnlinkRequest) (*proto.UnlinkResponse, error) {
 	shardServer := r.shardServer
-	space, err := shardServer.Catalog.GetSpace(ctx, req.SpaceName)
+	space, err := shardServer.GetSpace(ctx, req.SpaceName)
 	if err != nil {
 		return nil, err
 	}
@@ -270,7 +276,7 @@ func (r *RPCServer) ShardList(ctx context.Context, req *proto.ListRequest) (*pro
 		return nil, apierrors.ErrListNumExceed
 	}
 	shardServer := r.shardServer
-	space, err := shardServer.Catalog.GetSpace(ctx, req.SpaceName)
+	space, err := shardServer.GetSpace(ctx, req.SpaceName)
 	if err != nil {
 		return nil, err
 	}

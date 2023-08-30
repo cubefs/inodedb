@@ -137,6 +137,7 @@ message CatalogChangeSpaceAdd {
 
 message CatalogChangeSpaceDelete {
 	uint64 sid = 1;
+	string name = 2;
 }
 
 message CatalogChangeShardAdd {

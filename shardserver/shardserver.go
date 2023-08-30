@@ -17,7 +17,7 @@ type Config struct {
 }
 
 type ShardServer struct {
-	Catalog *catalog.Catalog
+	*catalog.Catalog
 }
 
 func NewShardServer(cfg *Config) *ShardServer {

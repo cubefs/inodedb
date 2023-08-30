@@ -357,8 +357,11 @@ func (c *catalog) GetCatalogChanges(ctx context.Context, routerVersion uint64, n
 			})
 		case proto.CatalogChangeType_DeleteSpace:
 			itemDetail := items[i].ItemDetail.(*routeItemSpaceDelete)
+			space := c.spaces.Get(itemDetail.Sid)
+			spaceInfo := space.GetInfo()
 			err = ret[i].Item.MarshalFrom(&proto.CatalogChangeSpaceDelete{
-				Sid: itemDetail.Sid,
+				Sid:  itemDetail.Sid,
+				Name: spaceInfo.Name,
 			})
 		case proto.CatalogChangeType_AddShard:
 			itemDetail := items[i].ItemDetail.(*routeItemShardAdd)
@@ -541,9 +544,9 @@ func (c *catalog) updateSpaceRoute(ctx context.Context, space *space) error {
 			}
 
 			if _, err := client.UpdateShard(ctx, &proto.UpdateShardRequest{
-				Sid:     space.id,
-				ShardId: shardInfo.ShardId,
-				Epoch:   shardInfo.Epoch,
+				SpaceName: space.GetInfo().Name,
+				ShardId:   shardInfo.ShardId,
+				Epoch:     shardInfo.Epoch,
 			}); err != nil {
 				return errors.Info(err, fmt.Sprintf("update shard to node[%d] failed", nodeId))
 			}
@@ -602,9 +605,9 @@ func (c *catalog) expandSpaceUpdateRoute(ctx context.Context, space *space) erro
 			}
 
 			if _, err := client.UpdateShard(ctx, &proto.UpdateShardRequest{
-				Sid:     space.id,
-				ShardId: shardInfo.ShardId,
-				Epoch:   shardInfo.Epoch,
+				SpaceName: space.GetInfo().Name,
+				ShardId:   shardInfo.ShardId,
+				Epoch:     shardInfo.Epoch,
 			}); err != nil {
 				return errors.Info(err, fmt.Sprintf("update shard to node[%d] failed", nodeId))
 			}

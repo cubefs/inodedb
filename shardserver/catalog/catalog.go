@@ -77,13 +77,12 @@ func (c *Catalog) GetSpace(ctx context.Context, spaceName string) (*Space, error
 	return c.getSpace(ctx, spaceName)
 }
 
-func (c *Catalog) AddShard(ctx context.Context, spaceName string, shardId uint32, routeVersion uint64, inoLimit uint64, replicates map[uint32]string) error {
+func (c *Catalog) AddShard(ctx context.Context, spaceName string, shardId uint32, epoch uint64, inoLimit uint64, replicates []uint32) error {
 	span := trace.SpanFromContext(ctx)
 	v, ok := c.spaces.Load(spaceName)
 	if ok {
 		space := v.(*Space)
-		space.AddShard(ctx, shardId, routeVersion, inoLimit, replicates)
-		c.updateRouteVersion(routeVersion)
+		space.AddShard(ctx, shardId, epoch, inoLimit, replicates)
 		return nil
 	}
 
@@ -98,9 +97,18 @@ func (c *Catalog) AddShard(ctx context.Context, spaceName string, shardId uint32
 		return errors.ErrSpaceDoesNotExist
 	}
 	space := v.(*Space)
-	space.AddShard(ctx, shardId, routeVersion, inoLimit, replicates)
-	c.updateRouteVersion(routeVersion)
+	space.AddShard(ctx, shardId, epoch, inoLimit, replicates)
 	return nil
+}
+
+func (c *Catalog) UpdateShard(ctx context.Context, spaceName string, shardId uint32, epoch uint64) error {
+	v, ok := c.spaces.Load(spaceName)
+	if !ok {
+		return errors.ErrSpaceNotExist
+	}
+
+	space := v.(*Space)
+	return space.UpdateShard(ctx, shardId, epoch)
 }
 
 func (c *Catalog) GetShard(ctx context.Context, spaceName string, shardID uint32) (*proto.Shard, error) {
@@ -172,10 +180,10 @@ func (c *Catalog) getAlteredShards() []*proto.ShardReport {
 			stats := shard.Stats()
 
 			ret = append(ret, &proto.ShardReport{Shard: &proto.Shard{
-				RouteVersion: stats.routeVersion,
-				Id:           shard.shardId,
-				InoLimit:     stats.inoLimit,
-				InoUsed:      stats.inoUsed,
+				Epoch:    stats.routeVersion,
+				Id:       shard.shardId,
+				InoLimit: stats.inoLimit,
+				InoUsed:  stats.inoUsed,
 			}})
 
 			return true

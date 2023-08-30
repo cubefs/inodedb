@@ -23,14 +23,14 @@ type Space struct {
 	lock       sync.RWMutex
 }
 
-func (s *Space) AddShard(ctx context.Context, shardId uint32, routeVersion uint64, inoLimit uint64, replicates map[uint32]string) {
+func (s *Space) AddShard(ctx context.Context, shardId uint32, routeVersion uint64, inoLimit uint64, replicates []uint32) {
 	shard := newShard(&shardConfig{
-		routeVersion: routeVersion,
-		spaceId:      s.sid,
-		shardId:      shardId,
-		inoLimit:     inoLimit,
-		nodes:        replicates,
-		store:        s.store,
+		epoch:    routeVersion,
+		spaceId:  s.sid,
+		shardId:  shardId,
+		inoLimit: inoLimit,
+		nodes:    replicates,
+		store:    s.store,
 	})
 
 	_, loaded := s.shards.LoadOrStore(shardId, shard)
@@ -42,6 +42,19 @@ func (s *Space) AddShard(ctx context.Context, shardId uint32, routeVersion uint6
 	s.shardsTree.ReplaceOrInsert(shard.shardRange)
 	s.lock.Unlock()
 	shard.Start()
+}
+
+func (s *Space) UpdateShard(ctx context.Context, shardId uint32, epoch uint64) error {
+	shard, err := s.GetShard(ctx, shardId)
+	if err != nil {
+		return err
+	}
+
+	shard.lock.Lock()
+	shard.epoch = epoch
+	shard.lock.Unlock()
+
+	return nil
 }
 
 func (s *Space) InsertItem(ctx context.Context, shardId uint32, item *proto.Item) (uint64, error) {

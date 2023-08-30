@@ -117,7 +117,7 @@ message AddShardResponse {
 }
 
 message UpdateShardRequest {
-	uint64 sid  = 1 [json_name="space_id"];
+	string space_name = 1 [json_name="space_name"];
 	uint32 shard_id = 2 [json_name="shard_id"];
 	uint64 epoch = 3 [json_name="epoch"];
 }
