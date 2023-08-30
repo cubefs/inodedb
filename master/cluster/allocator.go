@@ -64,7 +64,6 @@ type weightedNodeSet struct {
 	weight int32
 	rack   string
 	num    int
-	set    *nodeSet
 }
 
 func (a *allocator) allocFromRack(ctx context.Context, args *AllocArgs) ([]*nodeInfo, error) {

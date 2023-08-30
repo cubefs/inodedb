@@ -28,15 +28,21 @@ func NewMaster(cfg *Config) *Master {
 	if err != nil {
 		span.Fatalf("new store failed: %s", err)
 	}
+	newCluster := cluster.NewCluster(ctx, &cfg.ClusterConfig)
 
 	idGenerator, err := idgenerator.NewIDGenerator(store)
+	if err != nil {
+		span.Fatalf("new id generator failed: %s", err)
+	}
+
 	cfg.CatalogConfig.IdGenerator = idGenerator
 	cfg.CatalogConfig.Store = store
 	cfg.ClusterConfig.Store = store
 	cfg.ClusterConfig.IdGenerator = idGenerator
+	cfg.CatalogConfig.Cluster = newCluster
 
 	return &Master{
 		Catalog: catalog.NewCatalog(ctx, &cfg.CatalogConfig),
-		Cluster: cluster.NewCluster(ctx, &cfg.ClusterConfig),
+		Cluster: newCluster,
 	}
 }

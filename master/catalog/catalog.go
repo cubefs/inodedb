@@ -50,6 +50,7 @@ type Config struct {
 	ExpandShardsNumPerSpace uint32                  `json:"expand_shards_num_per_space"`
 	IdGenerator             idgenerator.IDGenerator `json:"-"`
 	Store                   *store.Store            `json:"-"`
+	Cluster                 cluster.Cluster         `json:"-"`
 }
 
 type (
@@ -97,6 +98,7 @@ func NewCatalog(ctx context.Context, cfg *Config) Catalog {
 		spaces:      newConcurrentSpaces(defaultSplitMapNum),
 		idGenerator: cfg.IdGenerator,
 		storage:     newStorage(cfg.Store),
+		cluster:     cfg.Cluster,
 		taskMgr:     newTaskMgr(defaultTaskPoolNum),
 		done:        make(chan struct{}),
 	}

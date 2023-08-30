@@ -18,6 +18,7 @@ import (
 	"github.com/cubefs/cubefs/blobstore/common/rpc/auditlog"
 	"github.com/cubefs/inodedb/client"
 	"github.com/cubefs/inodedb/master"
+	ms "github.com/cubefs/inodedb/master/store"
 	"github.com/cubefs/inodedb/proto"
 	"github.com/cubefs/inodedb/router"
 	"github.com/cubefs/inodedb/shardserver"
@@ -63,6 +64,13 @@ func NewServer(cfg *Config) *Server {
 			})
 			s.router = newRouter
 		case proto.NodeRole_Master:
+			master := master.NewMaster(&master.Config{
+				StoreConfig: ms.Config{
+					Path:     cfg.StoreConfig.Path,
+					KvOption: cfg.StoreConfig.KvOption,
+				},
+			})
+			s.master = master
 		case proto.NodeRole_Single:
 		default:
 			continue
