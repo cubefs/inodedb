@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"errors"
 
+	"github.com/cubefs/inodedb/master/store"
+
 	"github.com/cubefs/inodedb/common/kvstore"
 )
 
@@ -17,9 +19,9 @@ var (
 	keyInfix         = []byte("/")
 )
 
-func newStorage(kvStore kvstore.Store) *storage {
+func newStorage(kvStore *store.Store) *storage {
 	return &storage{
-		kvStore:       kvStore,
+		kvStore:       kvStore.KVStore(),
 		keysGenerator: &keysGenerator{},
 	}
 }

@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/cubefs/inodedb/master/store"
+
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
-	"github.com/cubefs/inodedb/common/kvstore"
 	"github.com/cubefs/inodedb/common/raft"
 	apierrors "github.com/cubefs/inodedb/errors"
 	"github.com/cubefs/inodedb/master/cluster"
@@ -48,7 +49,7 @@ type Config struct {
 	InoLimitPerShard        uint64                  `json:"ino_limit_per_shard"`
 	ExpandShardsNumPerSpace uint32                  `json:"expand_shards_num_per_space"`
 	IdGenerator             idgenerator.IDGenerator `json:"-"`
-	Store                   kvstore.Store           `json:"-"`
+	Store                   *store.Store            `json:"-"`
 }
 
 type (
