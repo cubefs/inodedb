@@ -5,7 +5,7 @@
     "addr": "127.0.0.1",
     "http_port": 10000,
     "grpc_port": 12120,
-    "az": "test_az",
+    "az": "z0",
     "rack": "test_rack"
   },
 

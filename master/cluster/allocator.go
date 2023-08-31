@@ -20,7 +20,9 @@ type allocator struct {
 }
 
 func NewShardServerAllocator(ctx context.Context) Allocator {
-	return &allocator{}
+	return &allocator{
+		azAllocators: make(map[string]*azAllocator),
+	}
 }
 
 func (a *allocator) Put(ctx context.Context, n *node) {
@@ -204,6 +206,10 @@ func (s *nodeSet) alloc(count int, excludes map[uint32]bool) []*node {
 		}
 		weightedNodes = append(weightedNodes, wn)
 		totalWeight += wn.weight
+	}
+
+	if len(weightedNodes) == 0 {
+		return res
 	}
 
 	chosenIdx := 0
