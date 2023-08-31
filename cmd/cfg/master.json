@@ -1,14 +1,42 @@
 {
-  "role": "master",
-  "ip": "192.168.31.173",
-  "http": "80",
-  "grpc": "1212",
-  "prof":"10088",
-  "id":"1",
-  "peers": "1:192.168.31.173:80,2:192.168.31.141:80,3:192.168.30.200:80",
-  "retainLogs":"20000",
-  "logDir": "/export/Logs/master",
-  "logLevel":"info",
-  "walDir":"/export/Data/master/raft",
-  "storeDir":"/export/Data/master/rocksdbstore"
+  "roles": ["Master"],
+  "node_config": {
+    "roles": [2],
+    "addr": "127.0.0.1",
+    "http_port": 10000,
+    "grpc_port": 12120,
+    "az": "test_az",
+    "rack": "test_rack"
+  },
+
+  "audit_log": {
+    "logdir": "./run/master/",
+    "chunkbits": 29,
+    "backup": 30,
+    "log_file_suffix":".log"
+  },
+ "store_config": {
+   "path": "./run/db",
+   "kv_option": {
+     "column_family": ["cluster", "id", "catalog"]
+   }
+ },
+  "catalog_config": {
+    "shard_replicate_num": 1,
+    "ino_limit_per_shard": 1600,
+    "expand_shards_num_per_space": 10
+  },
+  "cluster_config": {
+    "cluster_id": 1,
+    "azs": ["z0"],
+    "grpc_port": 12120,
+    "http_port": 80,
+    "heartbeat_timeout_s": 1,
+    "refresh_interval_s": 30,
+    "shard_server_config": {
+      "grpc_port": 12120
+    }
+  },
+  "http_bind_addr": "127.0.0.1:10000",
+  "grpc_bind_addr": "127.0.0.1:12120"
 }

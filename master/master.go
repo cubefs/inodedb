@@ -2,7 +2,6 @@ package master
 
 import (
 	"context"
-
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/inodedb/common/raft"
 	"github.com/cubefs/inodedb/master/catalog"
@@ -29,25 +28,24 @@ func NewMaster(cfg *Config) *Master {
 	if err != nil {
 		span.Fatalf("new store failed: %s", err)
 	}
-	newCluster := cluster.NewCluster(ctx, &cfg.ClusterConfig)
-
-	idGenerator, err := idgenerator.NewIDGenerator(store)
-	if err != nil {
-		span.Fatalf("new id generator failed: %s", err)
-	}
-
 	raftGroup := raft.NewRaftGroup(&raft.Config{
 		Raft: &raft.NoopRaft{},
 	})
+
+	idGenerator, err := idgenerator.NewIDGenerator(store, raftGroup)
+	if err != nil {
+		span.Fatalf("new id generator failed: %s", err)
+	}
 
 	cfg.CatalogConfig.IdGenerator = idGenerator
 	cfg.CatalogConfig.Store = store
 	cfg.ClusterConfig.Store = store
 	cfg.ClusterConfig.IdGenerator = idGenerator
-	cfg.CatalogConfig.Cluster = newCluster
 	cfg.ClusterConfig.RaftGroup = raftGroup
 	cfg.CatalogConfig.RaftGroup = raftGroup
 
+	newCluster := cluster.NewCluster(ctx, &cfg.ClusterConfig)
+	cfg.CatalogConfig.Cluster = newCluster
 	return &Master{
 		Catalog: catalog.NewCatalog(ctx, &cfg.CatalogConfig),
 		Cluster: newCluster,

@@ -153,7 +153,7 @@ type (
 	}
 	Option struct {
 		Sync                             bool
-		ColumnFamily                     []CF
+		ColumnFamily                     []CF `json:"column_family"`
 		CreateIfMissing                  bool
 		Cache                            LruCache
 		BlockSize                        int

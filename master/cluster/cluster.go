@@ -22,7 +22,7 @@ type Cluster interface {
 	GetNode(ctx context.Context, nodeId uint32) (*proto.Node, error)
 	Alloc(ctx context.Context, args *AllocArgs) ([]*nodeInfo, error)
 	GetClient(ctx context.Context, nodeId uint32) (client.ShardServerClient, error)
-	Register(ctx context.Context, args *proto.Node) error
+	Register(ctx context.Context, args *proto.Node) (uint32, error)
 	Unregister(ctx context.Context, nodeID uint32) error
 	ListNodeInfo(ctx context.Context, roles []proto.NodeRole) ([]*proto.Node, error)
 	HandleHeartbeat(ctx context.Context, args *HeartbeatArgs) error
@@ -67,19 +67,11 @@ type cluster struct {
 }
 
 func NewCluster(ctx context.Context, cfg *Config) Cluster {
-	span := trace.SpanFromContext(ctx)
-
-	sc, err := client.NewClient(ctx, cfg.ShardServerConfig)
-	if err != nil {
-		span.Fatalf("new shard server client failed: %s", err)
-	}
-
 	c := &cluster{
 		clusterId:        cfg.ClusterId,
 		cfg:              cfg,
 		idGenerator:      cfg.IdGenerator,
 		raftGroup:        cfg.RaftGroup,
-		client:           sc,
 		allNodes:         newConcurrentNodes(defaultSplitMapNum),
 		storage:          &storage{kvStore: cfg.Store.KVStore()},
 		done:             make(chan struct{}),
@@ -112,6 +104,18 @@ func (c *cluster) GetNode(ctx context.Context, nodeId uint32) (*proto.Node, erro
 }
 
 func (c *cluster) GetClient(ctx context.Context, nodeId uint32) (client.ShardServerClient, error) {
+	span := trace.SpanFromContextSafe(ctx)
+	if c.client == nil {
+		c.lock.Lock()
+		if c.client == nil {
+			sc, err := client.NewClient(ctx, c.cfg.ShardServerConfig)
+			if err != nil {
+				span.Fatalf("new shard server client failed: %s", err)
+			}
+			c.client = sc
+		}
+		c.lock.Unlock()
+	}
 	n := c.allNodes.Get(nodeId)
 	if n == nil {
 		return nil, errors.ErrNotFound
@@ -144,36 +148,42 @@ func (c *cluster) Alloc(ctx context.Context, args *AllocArgs) ([]*nodeInfo, erro
 	return alloc, err
 }
 
-func (c *cluster) Register(ctx context.Context, args *proto.Node) error {
+func (c *cluster) Register(ctx context.Context, args *proto.Node) (uint32, error) {
 	span := trace.SpanFromContextSafe(ctx)
+	span.Debugf("register node, args : %+v", args)
 	if !c.isValidAz(args.Az) {
 		span.Warnf("register node az[%s] not match", args.Az)
-		return errors.ErrInvalidAz
+		return 0, errors.ErrInvalidAz
 	}
+
+	if len(args.Roles) == 0 {
+		return 0, errors.ErrInvalidNodeRole
+	}
+
 	for _, role := range args.Roles {
 		if !c.isValidRole(role) {
 			span.Warnf("register node role[%d] not match", role)
-			return errors.ErrInvalidNodeRole
+			return 0, errors.ErrInvalidNodeRole
 		}
 	}
 	if get := c.allNodes.GetByName(args.Addr); get != nil {
 		span.Errorf("the node[%s] already exist in cluster", args.Addr)
-		return errors.ErrNodeAlreadyExist
+		return 0, errors.ErrNodeAlreadyExist
 	}
 
 	_, id, err := c.idGenerator.Alloc(ctx, nodeIdName, 1)
 	if err != nil {
 		span.Errorf("get node[%s] id failed, err: %s", args.Addr, err)
-		return err
+		return 0, err
 	}
-	nodeID := id
+	nodeID := uint32(id)
 	newInfo := &nodeInfo{}
 	newInfo.ToDBNode(args)
-	newInfo.Id = uint32(nodeID)
+	newInfo.Id = nodeID
 
 	data, err := newInfo.Marshal()
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	_, err = c.raftGroup.Propose(ctx, &raft.ProposeRequest{
@@ -183,9 +193,9 @@ func (c *cluster) Register(ctx context.Context, args *proto.Node) error {
 		WithResult: false,
 	})
 	if err != nil {
-		return err
+		return 0, err
 	}
-	return c.applyRegister(ctx, data)
+	return nodeID, c.applyRegister(ctx, data)
 }
 
 func (c *cluster) Unregister(ctx context.Context, nodeId uint32) error {
@@ -213,7 +223,7 @@ func (c *cluster) Unregister(ctx context.Context, nodeId uint32) error {
 
 func (c *cluster) ListNodeInfo(ctx context.Context, roles []proto.NodeRole) ([]*proto.Node, error) {
 	span := trace.SpanFromContextSafe(ctx)
-
+	span.Debugf("receive ListNodeInfo request, args: %v", roles)
 	var res []*proto.Node
 	for _, role := range roles {
 		if !c.isValidRole(role) {
@@ -235,7 +245,7 @@ func (c *cluster) ListNodeInfo(ctx context.Context, roles []proto.NodeRole) ([]*
 
 func (c *cluster) HandleHeartbeat(ctx context.Context, args *HeartbeatArgs) error {
 	span := trace.SpanFromContextSafe(ctx)
-
+	span.Debugf("receive HeartBeat, args: %v", args)
 	n := c.allNodes.Get(args.NodeID)
 	if n == nil {
 		span.Errorf("node[%d] not found", args.NodeID)

@@ -19,9 +19,9 @@ import (
 	"encoding/json"
 	"sync"
 
-	"github.com/cubefs/cubefs/blobstore/common/kvstore"
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
+	"github.com/cubefs/inodedb/common/kvstore"
 	"github.com/cubefs/inodedb/common/raft"
 	"github.com/cubefs/inodedb/master/store"
 )
@@ -46,11 +46,12 @@ type idGenerator struct {
 	lock    sync.RWMutex
 }
 
-func NewIDGenerator(store *store.Store) (IDGenerator, error) {
+func NewIDGenerator(store *store.Store, raftGroup raft.Group) (IDGenerator, error) {
 	_, ctx := trace.StartSpanFromContext(context.Background(), "NewIDGenerator")
 
 	storage := &storage{kvStore: store.KVStore()}
 	s := &idGenerator{storage: storage}
+	s.raftGroup = raftGroup
 	if err := s.LoadData(ctx); err != nil {
 		return nil, err
 	}

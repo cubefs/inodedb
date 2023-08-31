@@ -713,6 +713,16 @@ func (s *concurrentSpaces) Put(v *space) {
 	s.locks[idx].Unlock()
 }
 
+// Put new space into shardedSpace
+func (s *concurrentSpaces) PutNoLock(v *space) {
+	id := v.id
+	idx := uint32(id) % s.num
+	s.idMap[idx][id] = v
+
+	idx = s.nameCharSum(v.info.Name) % s.num
+	s.nameMap[idx][v.info.Name] = v
+}
+
 // Delete space into shardedSpace
 func (s *concurrentSpaces) Delete(id uint64) {
 	idx := uint32(id) % s.num

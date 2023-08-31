@@ -50,6 +50,7 @@ type Server struct {
 }
 
 func NewServer(cfg *Config) *Server {
+	cfg.StoreConfig.KVOption.CreateIfMissing = true
 	// check log dir exist
 	if _, err := os.Stat(cfg.AuditLog.LogDir); os.IsNotExist(err) {
 		os.Mkdir(cfg.AuditLog.LogDir, 0o777)
@@ -65,45 +66,71 @@ func NewServer(cfg *Config) *Server {
 		logHandler:    logHandler,
 	}
 
-	newShardServer := func() *shardserver.ShardServer {
-		return shardserver.NewShardServer(&shardserver.Config{
-			StoreConfig: shardServerStore.Config{
-				Path:     cfg.StoreConfig.Path + "/shardserver/",
-				KVOption: cfg.StoreConfig.KVOption,
-			},
-			MasterConfig: cfg.MasterRpcConfig,
-			NodeConfig:   cfg.NodeConfig,
-		})
-	}
-
-	newMaster := func() *master.Master {
-		return master.NewMaster(&master.Config{
-			StoreConfig: masterStore.Config{
-				Path:     cfg.StoreConfig.Path + "/master/",
-				KVOption: cfg.StoreConfig.KVOption,
-			},
-			CatalogConfig: cfg.CatalogConfig,
-			ClusterConfig: cfg.ClusterConfig,
-		})
-	}
-
-	newRouter := func() *router.Router {
-		return router.NewRouter(&router.Config{
-			ServerConfig: &cfg.ServerRpcConfig,
-			MasterConfig: &cfg.MasterRpcConfig,
-			NodeConfig:   &cfg.NodeConfig,
-		})
-	}
-
 	for _, role := range cfg.Roles {
 		switch role {
 		case proto.NodeRole_ShardServer.String():
+			newShardServer := func() *shardserver.ShardServer {
+				return shardserver.NewShardServer(&shardserver.Config{
+					StoreConfig: shardServerStore.Config{
+						Path:     cfg.StoreConfig.Path + "/shardserver/",
+						KVOption: cfg.StoreConfig.KVOption,
+					},
+					MasterConfig: cfg.MasterRpcConfig,
+					NodeConfig:   cfg.NodeConfig,
+				})
+			}
 			server.shardServer = newShardServer()
 		case proto.NodeRole_Master.String():
+			newMaster := func() *master.Master {
+				return master.NewMaster(&master.Config{
+					StoreConfig: masterStore.Config{
+						Path:     cfg.StoreConfig.Path + "/master/",
+						KVOption: cfg.StoreConfig.KVOption,
+					},
+					CatalogConfig: cfg.CatalogConfig,
+					ClusterConfig: cfg.ClusterConfig,
+				})
+			}
 			server.master = newMaster()
 		case proto.NodeRole_Router.String():
+			newRouter := func() *router.Router {
+				return router.NewRouter(&router.Config{
+					ServerConfig: &cfg.ServerRpcConfig,
+					MasterConfig: &cfg.MasterRpcConfig,
+					NodeConfig:   &cfg.NodeConfig,
+				})
+			}
 			server.router = newRouter()
 		case proto.NodeRole_Single.String():
+			newShardServer := func() *shardserver.ShardServer {
+				return shardserver.NewShardServer(&shardserver.Config{
+					StoreConfig: shardServerStore.Config{
+						Path:     cfg.StoreConfig.Path + "/shardserver/",
+						KVOption: cfg.StoreConfig.KVOption,
+					},
+					MasterConfig: cfg.MasterRpcConfig,
+					NodeConfig:   cfg.NodeConfig,
+				})
+			}
+
+			newMaster := func() *master.Master {
+				return master.NewMaster(&master.Config{
+					StoreConfig: masterStore.Config{
+						Path:     cfg.StoreConfig.Path + "/master/",
+						KVOption: cfg.StoreConfig.KVOption,
+					},
+					CatalogConfig: cfg.CatalogConfig,
+					ClusterConfig: cfg.ClusterConfig,
+				})
+			}
+
+			newRouter := func() *router.Router {
+				return router.NewRouter(&router.Config{
+					ServerConfig: &cfg.ServerRpcConfig,
+					MasterConfig: &cfg.MasterRpcConfig,
+					NodeConfig:   &cfg.NodeConfig,
+				})
+			}
 			server.shardServer = newShardServer()
 			server.master = newMaster()
 			server.router = newRouter()

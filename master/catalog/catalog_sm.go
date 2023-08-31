@@ -68,7 +68,7 @@ func (c *catalog) applyCreateSpace(ctx context.Context, data []byte) error {
 	}
 
 	space := newSpace(spaceInfo)
-	c.spaces.Put(space)
+	c.spaces.PutNoLock(space)
 	c.creatingSpaces.Store(spaceInfo.Name, nil)
 	return nil
 }

@@ -75,9 +75,9 @@ func (s *storage) Delete(ctx context.Context, nodeId uint32) error {
 }
 
 func encodeNodeKey(nodeId uint32) []byte {
-	ret := make([]byte, 0, len(nodeKeyPrefix)+len(keyInfix)+4)
+	ret := make([]byte, len(nodeKeyPrefix)+len(keyInfix)+4)
 	ret = append(ret, nodeKeyPrefix...)
 	ret = append(ret, keyInfix...)
-	binary.BigEndian.PutUint32(ret[cap(ret)-4:], nodeId)
+	binary.BigEndian.PutUint32(ret[len(ret)-4:], nodeId)
 	return ret
 }

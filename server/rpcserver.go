@@ -49,7 +49,7 @@ func NewRPCServer(server *Server) *RPCServer {
 	}
 
 	rs.grpcServer = s
-	return nil
+	return rs
 }
 
 func (r *RPCServer) Serve(addr string) {
@@ -68,12 +68,12 @@ func (r *RPCServer) Stop() {
 // Master API
 
 func (r *RPCServer) Cluster(ctx context.Context, req *proto.ClusterRequest) (*proto.ClusterResponse, error) {
-	err := r.master.Register(ctx, req.NodeInfo)
-	return nil, err
+	nodeId, err := r.master.Register(ctx, req.NodeInfo)
+	return &proto.ClusterResponse{Id: nodeId}, err
 }
 
 func (r *RPCServer) CreateSpace(ctx context.Context, req *proto.CreateSpaceRequest) (*proto.CreateSpaceResponse, error) {
-	span := trace.SpanFromContext(ctx)
+	span := trace.SpanFromContextSafe(ctx)
 	err := r.master.CreateSpace(ctx, req.Name, req.Type, req.DesiredShards, req.FixedFields)
 	if err != nil {
 		span.Errorf("create space failed: %s", errors.Detail(err))
@@ -117,8 +117,7 @@ func (r *RPCServer) Heartbeat(ctx context.Context, req *proto.HeartbeatRequest) 
 	if err != nil {
 		span.Errorf("handle heartbeat failed: %s", err)
 	}
-
-	return nil, err
+	return &proto.HeartbeatResponse{}, err
 }
 
 func (r *RPCServer) Report(ctx context.Context, req *proto.ReportRequest) (*proto.ReportResponse, error) {
@@ -169,13 +168,13 @@ func (r *RPCServer) GetRoleNodes(ctx context.Context, req *proto.GetRoleNodesReq
 func (r *RPCServer) AddShard(ctx context.Context, req *proto.AddShardRequest) (*proto.AddShardResponse, error) {
 	shardServer := r.shardServer
 	err := shardServer.AddShard(ctx, req.SpaceName, req.ShardId, req.Epoch, req.InoLimit, req.Replicates)
-	return nil, err
+	return &proto.AddShardResponse{}, err
 }
 
 func (r *RPCServer) UpdateShard(ctx context.Context, req *proto.UpdateShardRequest) (*proto.UpdateShardResponse, error) {
 	shardServer := r.shardServer
 	err := shardServer.UpdateShard(ctx, req.SpaceName, req.ShardId, req.Epoch)
-	return nil, err
+	return &proto.UpdateShardResponse{}, err
 }
 
 func (r *RPCServer) GetShard(ctx context.Context, req *proto.GetShardRequest) (*proto.GetShardResponse, error) {
@@ -217,7 +216,7 @@ func (r *RPCServer) ShardUpdateItem(ctx context.Context, req *proto.UpdateItemRe
 	if err != nil {
 		return nil, err
 	}
-	return nil, nil
+	return &proto.UpdateItemResponse{}, nil
 }
 
 func (r *RPCServer) ShardDeleteItem(ctx context.Context, req *proto.DeleteItemRequest) (*proto.DeleteItemResponse, error) {
@@ -231,7 +230,7 @@ func (r *RPCServer) ShardDeleteItem(ctx context.Context, req *proto.DeleteItemRe
 	if err != nil {
 		return nil, err
 	}
-	return nil, nil
+	return &proto.DeleteItemResponse{}, nil
 }
 
 func (r *RPCServer) ShardGetItem(ctx context.Context, req *proto.GetItemRequest) (*proto.GetItemResponse, error) {
@@ -259,7 +258,7 @@ func (r *RPCServer) ShardLink(ctx context.Context, req *proto.LinkRequest) (*pro
 	if err != nil {
 		return nil, err
 	}
-	return nil, nil
+	return &proto.LinkResponse{}, nil
 }
 
 func (r *RPCServer) ShardUnlink(ctx context.Context, req *proto.UnlinkRequest) (*proto.UnlinkResponse, error) {
@@ -273,7 +272,7 @@ func (r *RPCServer) ShardUnlink(ctx context.Context, req *proto.UnlinkRequest) (
 	if err != nil {
 		return nil, err
 	}
-	return nil, nil
+	return &proto.UnlinkResponse{}, nil
 }
 
 func (r *RPCServer) ShardList(ctx context.Context, req *proto.ListRequest) (*proto.ListResponse, error) {
@@ -318,7 +317,7 @@ func (r *RPCServer) UpdateItem(ctx context.Context, req *proto.UpdateItemRequest
 	if err != nil {
 		return nil, err
 	}
-	return nil, space.UpdateItem(ctx, req.Item)
+	return &proto.UpdateItemResponse{}, space.UpdateItem(ctx, req.Item)
 }
 
 func (r *RPCServer) DeleteItem(ctx context.Context, req *proto.DeleteItemRequest) (*proto.DeleteItemResponse, error) {
@@ -327,7 +326,7 @@ func (r *RPCServer) DeleteItem(ctx context.Context, req *proto.DeleteItemRequest
 	if err != nil {
 		return nil, err
 	}
-	return nil, space.DeleteItem(ctx, req.Ino)
+	return &proto.DeleteItemResponse{}, space.DeleteItem(ctx, req.Ino)
 }
 
 func (r *RPCServer) GetItem(ctx context.Context, req *proto.GetItemRequest) (*proto.GetItemResponse, error) {
@@ -349,7 +348,7 @@ func (r *RPCServer) Link(ctx context.Context, req *proto.LinkRequest) (*proto.Li
 	if err != nil {
 		return nil, err
 	}
-	return nil, space.Link(ctx, req.Link)
+	return &proto.LinkResponse{}, space.Link(ctx, req.Link)
 }
 
 func (r *RPCServer) Unlink(ctx context.Context, req *proto.UnlinkRequest) (*proto.UnlinkResponse, error) {
@@ -358,7 +357,7 @@ func (r *RPCServer) Unlink(ctx context.Context, req *proto.UnlinkRequest) (*prot
 	if err != nil {
 		return nil, err
 	}
-	return nil, space.Unlink(ctx, req.Unlink)
+	return &proto.UnlinkResponse{}, space.Unlink(ctx, req.Unlink)
 }
 
 func (r *RPCServer) List(ctx context.Context, req *proto.ListRequest) (*proto.ListResponse, error) {

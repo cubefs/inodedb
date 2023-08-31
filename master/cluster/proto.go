@@ -21,7 +21,7 @@ type nodeInfo struct {
 	ReplicaPort uint32           `json:"replica_port"`
 	Az          string           `json:"az"`
 	Rack        string           `json:"rack"`
-	Roles       []proto.NodeRole `json:"role"`
+	Roles       []proto.NodeRole `json:"roles"`
 	State       proto.NodeState  `json:"state"`
 }
 
@@ -42,7 +42,7 @@ func (s *nodeInfo) ToProtoNode() *proto.Node {
 }
 
 func (s *nodeInfo) ToDBNode(node *proto.Node) {
-	roles := make([]proto.NodeRole, len(s.Roles))
+	roles := make([]proto.NodeRole, len(node.Roles))
 	copy(roles, node.Roles)
 
 	s.Id = node.Id

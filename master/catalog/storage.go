@@ -191,10 +191,10 @@ func (s *storage) DeleteOldestRouteItems(ctx context.Context, before uint64) err
 type keysGenerator struct{}
 
 func (k *keysGenerator) encodeSpaceKey(sid uint64) []byte {
-	ret := make([]byte, 0, len(catalogKeyPrefix)+len(keyInfix)+8)
+	ret := make([]byte, len(catalogKeyPrefix)+len(keyInfix)+8)
 	ret = append(ret, catalogKeyPrefix...)
 	ret = append(ret, keyInfix...)
-	binary.BigEndian.PutUint64(ret[cap(ret)-8:], sid)
+	binary.BigEndian.PutUint64(ret[len(ret)-8:], sid)
 	return ret
 }
 
