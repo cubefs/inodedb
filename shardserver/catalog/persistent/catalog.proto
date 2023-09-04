@@ -4,6 +4,16 @@ package persistent;
 
 option go_package = "github.com/cubefs/inodedb/shard/catalog/persistent";
 
+message ShardInfo {
+  uint32 ShardId = 1;
+  uint64 sid = 2;
+  uint64 ino_cursor = 3;
+  uint64 ino_used = 4;
+  uint64 ino_limit = 5;
+  uint64 epoch = 6;
+  repeated uint32 nodes = 7;
+}
+
 message Item {
   uint64 ino = 1;
   uint64 links = 2;

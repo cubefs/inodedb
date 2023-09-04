@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cubefs/cubefs/blobstore/util/log"
+
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/taskpool"
 )
@@ -34,7 +36,7 @@ func newTaskMgr(taskPoolNum int) *taskMgr {
 		taskElementMap: make(map[uint64]*list.Element),
 		taskPool:       taskpool.New(taskPoolNum, taskPoolNum),
 		taskFuncMap:    make(map[taskType]taskFunc),
-		notifyC:        make(chan struct{}),
+		notifyC:        make(chan struct{}, 1),
 		done:           make(chan struct{}),
 	}
 }
@@ -52,12 +54,15 @@ type taskMgr struct {
 }
 
 func (t *taskMgr) Send(ctx context.Context, task *task) {
+	span := trace.SpanFromContext(ctx)
+
 	t.lock.Lock()
 	defer func() {
 		t.lock.Unlock()
 		t.notify()
 	}()
 
+	span.Info(t.tasks)
 	if t.tasks[task.sid] != nil {
 		return
 	}
@@ -65,6 +70,8 @@ func (t *taskMgr) Send(ctx context.Context, task *task) {
 	t.tasks[task.sid] = task
 	e := t.taskList.PushBack(task)
 	t.taskElementMap[task.sid] = e
+
+	span.Infof("send task[%+v] success", task)
 }
 
 func (t *taskMgr) Register(typ taskType, f taskFunc) {
@@ -72,7 +79,6 @@ func (t *taskMgr) Register(typ taskType, f taskFunc) {
 }
 
 func (t *taskMgr) Start() {
-	t.done = make(chan struct{})
 	go t.run()
 }
 
@@ -84,28 +90,47 @@ func (t *taskMgr) run() {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
+	log.Info("start run task manager")
+
 	for {
 		select {
 		case <-t.notifyC:
 			for {
-				t.lock.Lock()
-				e := t.taskList.Front()
-				task := e.Value.(*task)
-				if time.Since(task.assignedAt) < 0 {
-					t.lock.Unlock()
-					break
-				}
-				t.taskList.Remove(e)
-				delete(t.taskElementMap, task.sid)
-				t.lock.Unlock()
+				ok := func() bool {
+					t.lock.Lock()
+					defer t.lock.Unlock()
 
-				if !t.execute(task) {
+					if t.taskList.Len() == 0 {
+						return false
+					}
+
+					e := t.taskList.Front()
+					task := e.Value.(*task)
+					log.Info(task)
+					if time.Since(task.assignedAt) < 0 {
+						log.Info(task, 1)
+						return false
+					}
+
+					log.Info(task, 2)
+					if !t.execute(task) {
+						return false
+					}
+
+					t.taskList.Remove(e)
+					delete(t.taskElementMap, task.sid)
+
+					return true
+				}()
+
+				if !ok {
 					break
 				}
 			}
 		case <-ticker.C:
 			t.notify()
 		case <-t.done:
+			log.Info("done")
 			return
 		}
 	}
@@ -117,7 +142,11 @@ func (t *taskMgr) execute(task *task) bool {
 		if err := t.taskFuncMap[task.typ](ctx, task.sid, task.args); err != nil {
 			span.Warnf("execute task[%+v] failed: %s", task, err)
 			// resend
-			t.Send(ctx, task)
+			t.lock.Lock()
+			span.Info("get lock")
+			e := t.taskList.PushBack(task)
+			t.taskElementMap[task.sid] = e
+			t.lock.Unlock()
 			return
 		}
 
@@ -125,7 +154,7 @@ func (t *taskMgr) execute(task *task) bool {
 		delete(t.tasks, task.sid)
 		t.lock.Unlock()
 
-		span.Info("execute task[%+v] success")
+		span.Infof("execute task[%+v] success", task)
 	})
 }
 

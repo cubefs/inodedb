@@ -7,29 +7,33 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cubefs/inodedb/util"
-
-	"github.com/cubefs/inodedb/client"
-
 	"github.com/cubefs/cubefs/blobstore/common/trace"
-	"github.com/cubefs/inodedb/errors"
+	"github.com/cubefs/cubefs/blobstore/util/errors"
+	"github.com/cubefs/inodedb/client"
+	apierrors "github.com/cubefs/inodedb/errors"
 	"github.com/cubefs/inodedb/proto"
 	"github.com/cubefs/inodedb/shardserver/store"
+	"github.com/cubefs/inodedb/util"
 )
 
-type Config struct {
-	StoreConfig  store.Config        `json:"store_config"`
-	MasterConfig client.MasterConfig `json:"master_config"`
-	NodeConfig   proto.Node          `json:"node_config"`
-}
+const defaultBTreeDegree = 32
+
+type (
+	Config struct {
+		StoreConfig  store.Config        `json:"store_config"`
+		MasterConfig client.MasterConfig `json:"master_config"`
+		NodeConfig   proto.Node          `json:"node_config"`
+	}
+)
 
 type Catalog struct {
 	routeVersion uint64
 	transporter  *transporter
 	store        *store.Store
 
-	spaces sync.Map
-	done   chan struct{}
+	spaces         sync.Map
+	spaceIdToNames sync.Map
+	done           chan struct{}
 }
 
 func NewCatalog(ctx context.Context, cfg *Config) *Catalog {
@@ -64,8 +68,8 @@ func NewCatalog(ctx context.Context, cfg *Config) *Catalog {
 		store:       store,
 		done:        make(chan struct{}),
 	}
-	if err := catalog.updateRoute(ctx); err != nil {
-		span.Fatalf("update route failed: %s", err)
+	if err := catalog.initRoute(ctx); err != nil {
+		span.Fatalf("update route failed: %s", errors.Detail(err))
 	}
 
 	catalog.transporter.StartHeartbeat(ctx)
@@ -82,29 +86,27 @@ func (c *Catalog) AddShard(ctx context.Context, spaceName string, shardId uint32
 	v, ok := c.spaces.Load(spaceName)
 	if ok {
 		space := v.(*Space)
-		space.AddShard(ctx, shardId, epoch, inoLimit, replicates)
-		return nil
+		return space.AddShard(ctx, shardId, epoch, inoLimit, replicates)
 	}
 
-	if err := c.updateRoute(ctx); err != nil {
+	if err := c.updateSpace(ctx, spaceName); err != nil {
 		span.Warnf("update route failed: %s", err)
-		return errors.ErrSpaceDoesNotExist
+		return apierrors.ErrSpaceDoesNotExist
 	}
 
 	v, ok = c.spaces.Load(spaceName)
 	if !ok {
 		span.Warnf("still can not get route update for space[%s]", spaceName)
-		return errors.ErrSpaceDoesNotExist
+		return apierrors.ErrSpaceDoesNotExist
 	}
 	space := v.(*Space)
-	space.AddShard(ctx, shardId, epoch, inoLimit, replicates)
-	return nil
+	return space.AddShard(ctx, shardId, epoch, inoLimit, replicates)
 }
 
 func (c *Catalog) UpdateShard(ctx context.Context, spaceName string, shardId uint32, epoch uint64) error {
 	v, ok := c.spaces.Load(spaceName)
 	if !ok {
-		return errors.ErrSpaceNotExist
+		return apierrors.ErrSpaceNotExist
 	}
 
 	space := v.(*Space)
@@ -129,7 +131,7 @@ func (c *Catalog) GetShard(ctx context.Context, spaceName string, shardID uint32
 	}
 
 	return &proto.Shard{
-		Id:       shard.shardId,
+		Id:       shard.ShardId,
 		InoLimit: shardStat.inoLimit,
 		InoUsed:  shardStat.inoUsed,
 		Nodes:    nodes,
@@ -157,7 +159,7 @@ func (c *Catalog) loop(ctx context.Context) {
 			reportTicker.Reset(time.Duration(60+rand.Intn(10)) * time.Second)
 		case <-routeUpdateTicker.C:
 			span, ctx := trace.StartSpanFromContext(ctx, "")
-			if err := c.updateRoute(ctx); err != nil {
+			if err := c.initRoute(ctx); err != nil {
 				span.Warnf("update route failed: %s", err)
 			}
 			routeUpdateTicker.Reset(time.Duration(5+rand.Intn(5)) * time.Second)
@@ -170,7 +172,7 @@ func (c *Catalog) loop(ctx context.Context) {
 func (c *Catalog) getSpace(ctx context.Context, spaceName string) (*Space, error) {
 	v, ok := c.spaces.Load(spaceName)
 	if !ok {
-		return nil, errors.ErrSpaceDoesNotExist
+		return nil, apierrors.ErrSpaceDoesNotExist
 	}
 
 	space := v.(*Space)
@@ -190,7 +192,7 @@ func (c *Catalog) getAlteredShards() []*proto.ShardReport {
 				Sid: space.sid,
 				Shard: &proto.Shard{
 					Epoch:    stats.routeVersion,
-					Id:       shard.shardId,
+					Id:       shard.ShardId,
 					InoLimit: stats.inoLimit,
 					InoUsed:  stats.inoUsed,
 				},
@@ -203,21 +205,46 @@ func (c *Catalog) getAlteredShards() []*proto.ShardReport {
 	return ret
 }
 
-func (c *Catalog) updateRoute(ctx context.Context) error {
-	changes, err := c.transporter.GetRouteUpdate(ctx, c.getRouteVersion())
+func (c *Catalog) updateSpace(ctx context.Context, spaceName string) error {
+	spaceMeta, err := c.transporter.GetSpace(ctx, spaceName)
 	if err != nil {
 		return err
 	}
 
+	fixedFields := make(map[string]proto.FieldMeta, len(spaceMeta.FixedFields))
+	for _, field := range spaceMeta.FixedFields {
+		fixedFields[field.Name] = *field
+	}
+
+	space := &Space{
+		store:       c.store,
+		sid:         spaceMeta.Sid,
+		name:        spaceMeta.Name,
+		spaceType:   spaceMeta.Type,
+		fixedFields: fixedFields,
+	}
+	c.spaces.LoadOrStore(spaceMeta.Name, space)
+	c.spaceIdToNames.LoadOrStore(spaceMeta.Sid, spaceMeta.Name)
+	// load space's shards
+	if err := space.Load(ctx); err != nil {
+		return errors.Info(err, "load space failed")
+	}
+
+	return nil
+}
+
+func (c *Catalog) initRoute(ctx context.Context) error {
+	routeVersion, changes, err := c.transporter.GetRouteUpdate(ctx, c.getRouteVersion())
+	if err != nil {
+		return errors.Info(err, "get route update failed")
+	}
+
 	for _, routeItem := range changes {
-		if routeItem.RouteVersion <= c.getRouteVersion() {
-			continue
-		}
 		switch routeItem.Type {
 		case proto.CatalogChangeType_AddSpace:
 			spaceItem := new(proto.CatalogChangeSpaceAdd)
 			if err := routeItem.Item.UnmarshalTo(spaceItem); err != nil {
-				return err
+				return errors.Info(err, "unmarshal add space item failed")
 			}
 
 			fixedFields := make(map[string]proto.FieldMeta, len(spaceItem.FixedFields))
@@ -225,23 +252,34 @@ func (c *Catalog) updateRoute(ctx context.Context) error {
 				fixedFields[field.Name] = *field
 			}
 
-			c.spaces.LoadOrStore(spaceItem.Name, &Space{
+			space := &Space{
 				store:       c.store,
 				sid:         spaceItem.Sid,
 				name:        spaceItem.Name,
 				spaceType:   spaceItem.Type,
 				fixedFields: fixedFields,
-			})
+			}
+			c.spaces.LoadOrStore(spaceItem.Name, space)
+			c.spaceIdToNames.LoadOrStore(spaceItem.Sid, spaceItem.Name)
+			// load space's shards
+			if err := space.Load(ctx); err != nil {
+				return errors.Info(err, "load space failed")
+			}
+
 		case proto.CatalogChangeType_DeleteSpace:
 			spaceItem := new(proto.CatalogChangeSpaceDelete)
 			if err := routeItem.Item.UnmarshalTo(spaceItem); err != nil {
-				return err
+				return errors.Info(err, "unmarshal delete space item failed")
 			}
 
-			c.spaces.Delete(spaceItem.Name)
+			spaceName, _ := c.spaceIdToNames.Load(spaceItem.Sid)
+			c.spaces.Delete(spaceName.(string))
+			c.spaceIdToNames.Delete(spaceItem.Sid)
 		}
 		c.updateRouteVersion(routeItem.RouteVersion)
 	}
+
+	c.updateRouteVersion(routeVersion)
 	return nil
 }
 
@@ -296,4 +334,13 @@ func (c *Catalog) getShard(ctx context.Context, spaceName string, shardId uint32
 	}
 
 	return space.GetShard(ctx, shardId)
+}
+
+func isReplicateMember(target uint32, replicates []uint32) bool {
+	for _, replicate := range replicates {
+		if replicate == target {
+			return true
+		}
+	}
+	return false
 }

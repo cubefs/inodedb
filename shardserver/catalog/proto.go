@@ -16,6 +16,7 @@ const (
 var (
 	infix       = []byte{'/'}
 	inodeSuffix = []byte{'i'}
+	linkSuffix  = []byte{'l'}
 	raftSuffix  = []byte{'r'}
 )
 
@@ -46,15 +47,45 @@ func (l *link) Unmarshal(raw []byte) error {
 	return pb.Unmarshal(raw, (*persistent.Link)(l))
 }
 
-func shardDataPrefixSize(sid uint64, shardId uint32) int {
-	return 8 + len(infix) + 4 + len(inodeSuffix)
+func spacePrefixSize() int {
+	return 8 + len(infix)
+}
+
+func shardPrefixSize() int {
+	return spacePrefixSize() + 4
+}
+
+func shardInodePrefixSize() int {
+	return shardPrefixSize() + len(inodeSuffix)
+}
+
+func shardLinkPrefixSize() int {
+	return shardPrefixSize() + len(linkSuffix)
 }
 
 func shardRaftPrefixSize(sid uint64, shardId uint32) int {
-	return 8 + len(infix) + 4 + len(raftSuffix)
+	return shardPrefixSize() + len(raftSuffix)
 }
 
-func encodeShardDataPrefix(sid uint64, shardId uint32, raw []byte) {
+func encodeSpacePrefix(sid uint64, raw []byte) {
+	if raw == nil || cap(raw) == 0 {
+		panic("invalid raw input")
+	}
+	binary.BigEndian.PutUint64(raw[:8], sid)
+	copy(raw[8:], infix)
+}
+
+func encodeShardPrefix(sid uint64, shardId uint32, raw []byte) {
+	if raw == nil || cap(raw) == 0 {
+		panic("invalid raw input")
+	}
+	infixSize := len(infix)
+	binary.BigEndian.PutUint64(raw[:8], sid)
+	copy(raw[8:], infix)
+	binary.BigEndian.PutUint32(raw[8+infixSize:], shardId)
+}
+
+func encodeShardInodePrefix(sid uint64, shardId uint32, raw []byte) {
 	if raw == nil || cap(raw) == 0 {
 		panic("invalid raw input")
 	}
@@ -63,6 +94,17 @@ func encodeShardDataPrefix(sid uint64, shardId uint32, raw []byte) {
 	copy(raw[8:], infix)
 	binary.BigEndian.PutUint32(raw[8+infixSize:], shardId)
 	copy(raw[8+infixSize+4:], inodeSuffix)
+}
+
+func encodeShardLinkPrefix(sid uint64, shardId uint32, raw []byte) {
+	if raw == nil || cap(raw) == 0 {
+		panic("invalid raw input")
+	}
+	infixSize := len(infix)
+	binary.BigEndian.PutUint64(raw[:8], sid)
+	copy(raw[8:], infix)
+	binary.BigEndian.PutUint32(raw[8+infixSize:], shardId)
+	copy(raw[8+infixSize+4:], linkSuffix)
 }
 
 func encodeShardRaftPrefix(sid uint64, shardId uint32, raw []byte) {

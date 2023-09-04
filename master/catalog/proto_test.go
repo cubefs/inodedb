@@ -1,29 +1,25 @@
 package catalog
 
 import (
-	"encoding/json"
 	"testing"
+
+	"github.com/cubefs/inodedb/proto"
 )
 
 func TestProto(t *testing.T) {
 	detail := &routeItemSpaceAdd{
-		Sid:  1,
-		Name: "space1",
+		Sid: 1,
 	}
 	itemInfo := &routeItemInfo{
-		RouteVersion: 0,
-		Type:         0,
+		RouteVersion: 1,
+		Type:         proto.CatalogChangeType_AddSpace,
 		ItemDetail:   detail,
 	}
 
-	data, _ := json.Marshal(itemInfo)
+	data, _ := itemInfo.Marshal()
 	t.Log(string(data))
 
-	new := &routeItemInfo{ItemDetail: &routeItemSpaceAdd{}}
-	json.Unmarshal(data, new)
+	new := &routeItemInfo{}
+	new.Unmarshal(data)
 	t.Log(new.ItemDetail)
-
-	new1 := &routeItemInfo{}
-	json.Unmarshal(data, new1)
-	t.Log(new1)
 }

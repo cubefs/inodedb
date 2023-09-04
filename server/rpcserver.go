@@ -10,6 +10,13 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
+
+	"github.com/cubefs/inodedb/shardserver"
+	shardServerStore "github.com/cubefs/inodedb/shardserver/store"
+
 	"github.com/cubefs/inodedb/master/cluster"
 
 	"github.com/cubefs/cubefs/blobstore/common/trace"
@@ -17,9 +24,6 @@ import (
 	apierrors "github.com/cubefs/inodedb/errors"
 	"github.com/cubefs/inodedb/proto"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
 )
 
 var auditLogPool = sync.Pool{
@@ -37,7 +41,7 @@ type RPCServer struct {
 func NewRPCServer(server *Server) *RPCServer {
 	rs := &RPCServer{Server: server}
 
-	s := grpc.NewServer(grpc.ChainUnaryInterceptor(rs.unaryInterceptorWithTracer, rs.unaryInterceptorWithAuditLog))
+	s := grpc.NewServer(grpc.ChainUnaryInterceptor( /*rs.unaryInterceptorWithTracer,*/ rs.unaryInterceptorWithAuditLog))
 	if rs.master != nil {
 		proto.RegisterInodeDBMasterServer(s, rs)
 	}
@@ -59,6 +63,23 @@ func (r *RPCServer) Serve(addr string) {
 	}
 
 	go r.grpcServer.Serve(Listener)
+
+	if r.cfg.Roles[0] == proto.NodeRole_Single.String() {
+		time.Sleep(100 * time.Millisecond)
+		r.shardServer = shardserver.NewShardServer(&shardserver.Config{
+			StoreConfig: shardServerStore.Config{
+				Path:     r.cfg.StoreConfig.Path + "/shardserver/",
+				KVOption: r.cfg.StoreConfig.KVOption,
+			},
+			MasterConfig: r.cfg.MasterRpcConfig,
+			NodeConfig:   r.cfg.NodeConfig,
+		})
+		/*r.router = router.NewRouter(&router.Config{
+			ServerConfig: r.cfg.ServerRpcConfig,
+			MasterConfig: r.cfg.MasterRpcConfig,
+			NodeConfig:   r.cfg.NodeConfig,
+		})*/
+	}
 }
 
 func (r *RPCServer) Stop() {
@@ -73,7 +94,8 @@ func (r *RPCServer) Cluster(ctx context.Context, req *proto.ClusterRequest) (*pr
 }
 
 func (r *RPCServer) CreateSpace(ctx context.Context, req *proto.CreateSpaceRequest) (*proto.CreateSpaceResponse, error) {
-	span := trace.SpanFromContextSafe(ctx)
+	span, ctx := trace.StartSpanFromContext(ctx, "")
+	span.Infof("receive CreateSpace request: %+v", req)
 	err := r.master.CreateSpace(ctx, req.Name, req.Type, req.DesiredShards, req.FixedFields)
 	if err != nil {
 		span.Errorf("create space failed: %s", errors.Detail(err))
@@ -121,7 +143,7 @@ func (r *RPCServer) Heartbeat(ctx context.Context, req *proto.HeartbeatRequest) 
 }
 
 func (r *RPCServer) Report(ctx context.Context, req *proto.ReportRequest) (*proto.ReportResponse, error) {
-	span := trace.SpanFromContext(ctx)
+	span := trace.SpanFromContextSafe(ctx)
 	tasks, err := r.master.Report(ctx, req.Id, req.Infos)
 	if err != nil {
 		span.Errorf("report failed: %s", errors.Detail(err))
@@ -141,7 +163,7 @@ func (r *RPCServer) GetNode(ctx context.Context, req *proto.GetNodeRequest) (*pr
 }
 
 func (r *RPCServer) GetCatalogChanges(ctx context.Context, req *proto.GetCatalogChangesRequest) (*proto.GetCatalogChangesResponse, error) {
-	span := trace.SpanFromContext(ctx)
+	span, ctx := trace.StartSpanFromContext(ctx, "")
 	routeVersion, items, err := r.master.GetCatalogChanges(ctx, req.RouteVersion, req.NodeId)
 	if err != nil {
 		span.Errorf("get catalog changes failed: %s", err)
@@ -166,6 +188,7 @@ func (r *RPCServer) GetRoleNodes(ctx context.Context, req *proto.GetRoleNodesReq
 // Shard Server API
 
 func (r *RPCServer) AddShard(ctx context.Context, req *proto.AddShardRequest) (*proto.AddShardResponse, error) {
+	_, ctx = trace.StartSpanFromContext(ctx, "")
 	shardServer := r.shardServer
 	err := shardServer.AddShard(ctx, req.SpaceName, req.ShardId, req.Epoch, req.InoLimit, req.Replicates)
 	return &proto.AddShardResponse{}, err
@@ -206,6 +229,7 @@ func (r *RPCServer) ShardInsertItem(ctx context.Context, req *proto.InsertItemRe
 }
 
 func (r *RPCServer) ShardUpdateItem(ctx context.Context, req *proto.UpdateItemRequest) (*proto.UpdateItemResponse, error) {
+	_, ctx = trace.StartSpanFromContext(ctx, "")
 	shardServer := r.shardServer
 	space, err := shardServer.GetSpace(ctx, req.SpaceName)
 	if err != nil {

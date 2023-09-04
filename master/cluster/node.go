@@ -10,9 +10,10 @@ import (
 )
 
 type node struct {
-	info   *nodeInfo
+	// read only
 	nodeId uint32
 
+	info       *nodeInfo
 	shardCount int32
 	expires    time.Time
 	lock       sync.RWMutex

@@ -1,15 +1,20 @@
 {
-    "role": "shardserver",
-    "grpc": "9021",
-    "http": "8080",
-    "prof": "9092",
-    "logLevel": "info",
-    "dataDir": "/export/Data/shardserver",
-    "logDir": "/export/Logs/shardserver",
-    "raftDir": "/export/Data/shardserver/raft",
-    "raftHeartbeatPort": "9093",
-    "raftReplicaPort": "9094",
-    "masterAddr": [
-        "192.168.32.256:80"
-    ]
+    "roles": ["ShardServer"],
+    "grpc_bind_addr": ":9021",
+    "http_bind_addr": ":8080",
+    "log_level": "info",
+    "audit_log": {
+        "logdir": "./run/auditlog"
+    },
+    "node_config": {
+        "grpc_port": 9021,
+        "http_port": 8080,
+        "raft_port": 10200
+    },
+    "store_config": {
+        "path": "./run/store"
+    },
+    "master_rpc_config": {
+        "master_addresses": "127.0.0.1:1212"
+    }
 }

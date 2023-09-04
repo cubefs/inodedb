@@ -18,6 +18,7 @@ type masterClient interface {
 	Heartbeat(context.Context, *proto.HeartbeatRequest, ...grpc.CallOption) (*proto.HeartbeatResponse, error)
 	Report(context.Context, *proto.ReportRequest, ...grpc.CallOption) (*proto.ReportResponse, error)
 	GetNode(context.Context, *proto.GetNodeRequest, ...grpc.CallOption) (*proto.GetNodeResponse, error)
+	GetSpace(ctx context.Context, in *proto.GetSpaceRequest, opts ...grpc.CallOption) (*proto.GetSpaceResponse, error)
 	GetCatalogChanges(context.Context, *proto.GetCatalogChangesRequest, ...grpc.CallOption) (*proto.GetCatalogChangesResponse, error)
 }
 
@@ -59,13 +60,29 @@ func (t *transporter) Register(ctx context.Context) error {
 	return nil
 }
 
-func (t *transporter) GetRouteUpdate(ctx context.Context, routeVersion uint64) ([]*proto.CatalogChangeItem, error) {
-	resp, err := t.masterClient.GetCatalogChanges(ctx, &proto.GetCatalogChangesRequest{RouteVersion: routeVersion, NodeId: t.myself.Id})
+func (t *transporter) GetMyself() *proto.Node {
+	node := *t.myself
+	return &node
+}
+
+func (t *transporter) GetSpace(ctx context.Context, spaceName string) (*proto.SpaceMeta, error) {
+	resp, err := t.masterClient.GetSpace(ctx, &proto.GetSpaceRequest{
+		Name: spaceName,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	return resp.Items, nil
+	return resp.Info, nil
+}
+
+func (t *transporter) GetRouteUpdate(ctx context.Context, routeVersion uint64) (uint64, []*proto.CatalogChangeItem, error) {
+	resp, err := t.masterClient.GetCatalogChanges(ctx, &proto.GetCatalogChangesRequest{RouteVersion: routeVersion, NodeId: t.myself.Id})
+	if err != nil {
+		return 0, nil, err
+	}
+
+	return resp.RouteVersion, resp.Items, nil
 }
 
 func (t *transporter) Report(ctx context.Context, infos []*proto.ShardReport) ([]*proto.ShardTask, error) {

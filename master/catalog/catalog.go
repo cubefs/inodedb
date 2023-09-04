@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sync"
 
+	"google.golang.org/protobuf/types/known/anypb"
+
 	"github.com/cubefs/inodedb/master/store"
 
 	"github.com/cubefs/cubefs/blobstore/common/trace"
@@ -48,6 +50,7 @@ type Config struct {
 	ShardReplicateNum       int                     `json:"shard_replicate_num"`
 	InoLimitPerShard        uint64                  `json:"ino_limit_per_shard"`
 	ExpandShardsNumPerSpace uint32                  `json:"expand_shards_num_per_space"`
+	AZs                     []string                `json:"azs"`
 	IdGenerator             idgenerator.IDGenerator `json:"-"`
 	Store                   *store.Store            `json:"-"`
 	Cluster                 cluster.Cluster         `json:"-"`
@@ -65,7 +68,7 @@ type (
 		taskMgr     *taskMgr
 		routeMgr    *routeMgr
 		cluster     cluster.Cluster
-		cfg         Config
+		cfg         *Config
 
 		done chan struct{}
 		lock sync.RWMutex
@@ -76,7 +79,8 @@ type (
 		ShardInfos []*shardInfo
 	}
 	updateSpaceRouteArgs struct {
-		createSpaceShardsArgs
+		Sid        uint64
+		ShardInfos []*shardInfo
 		SpaceEpoch uint64
 	}
 	deleteSpaceArgs struct {
@@ -103,6 +107,7 @@ func NewCatalog(ctx context.Context, cfg *Config) Catalog {
 		raftGroup:   cfg.RaftGroup,
 		taskMgr:     newTaskMgr(defaultTaskPoolNum),
 		done:        make(chan struct{}),
+		cfg:         cfg,
 	}
 
 	c.taskMgr.Register(taskTypeCreateSpace, c.createSpaceTask)
@@ -111,26 +116,39 @@ func NewCatalog(ctx context.Context, cfg *Config) Catalog {
 		span.Fatalf("load catalog data failed: %s", err)
 	}
 
+	c.taskMgr.Start()
+
 	return c
 }
 
 func (c *catalog) Load(ctx context.Context) error {
+	span := trace.SpanFromContext(ctx)
 	c.spaces = newConcurrentSpaces(defaultSplitMapNum)
 	spaceInfos, err := c.storage.ListSpaces(ctx)
 	if err != nil {
 		return errors.Info(err, "list spaces failed")
 	}
+
 	for _, spaceInfo := range spaceInfos {
 		space := newSpace(spaceInfo)
 		c.spaces.Put(space)
 
 		shardInfos, err := c.storage.ListShards(ctx, space.id)
+		span.Infof("shards length: %d", len(shardInfos))
 		if err != nil {
 			return errors.Info(err, "list space shards failed")
 		}
 
 		for _, shardInfo := range shardInfos {
 			space.PutShard(newShard(shardInfo))
+		}
+
+		span.Infof("load space: %+v", space.GetInfo())
+		if space.IsInit(true) || space.IsUpdateRoute(true) {
+			c.taskMgr.Send(ctx, &task{
+				sid: space.id,
+				typ: taskTypeCreateSpace,
+			})
 		}
 	}
 
@@ -266,7 +284,7 @@ func (c *catalog) GetSpace(ctx context.Context, sid uint64) (*proto.SpaceMeta, e
 		meta.Shards[i] = shard
 	}
 
-	return nil, nil
+	return meta, nil
 }
 
 func (c *catalog) GetSpaceByName(ctx context.Context, name string) (*proto.SpaceMeta, error) {
@@ -317,18 +335,33 @@ func (c *catalog) Report(ctx context.Context, nodeId uint32, infos []*proto.Shar
 	return ret.tasks, nil
 }
 
-func (c *catalog) GetCatalogChanges(ctx context.Context, routerVersion uint64, nodeId uint32) (routeVersion uint64, ret []*proto.CatalogChangeItem, err error) {
-	items := c.routeMgr.GetRouteItems(ctx, routerVersion)
-	if items == nil {
+func (c *catalog) GetCatalogChanges(ctx context.Context, fromRouterVersion uint64, nodeId uint32) (routeVersion uint64, ret []*proto.CatalogChangeItem, err error) {
+	span := trace.SpanFromContext(ctx)
+	span.Infof("get catalog changes from %d", fromRouterVersion)
+	var (
+		items    []*routeItemInfo
+		isLatest bool
+	)
+	if fromRouterVersion > 0 {
+		items, isLatest = c.routeMgr.GetRouteItems(ctx, fromRouterVersion)
+	}
+
+	if items == nil && !isLatest {
 		// get all catalog
 		routeVersion = c.routeMgr.GetRouteVersion()
 		spaces := c.spaces.List()
 		for _, space := range spaces {
+			if !space.IsNormal() {
+				continue
+			}
+
 			items = append(items, &routeItemInfo{
 				Type:       proto.CatalogChangeType_AddSpace,
 				ItemDetail: &routeItemSpaceAdd{Sid: space.id},
 			})
+			span.Infof("space: %+v", space.GetInfo())
 			shards := space.shards.List()
+			span.Infof("space shards: %d", len(shards))
 			for _, shard := range shards {
 				items = append(items, &routeItemInfo{
 					Type: proto.CatalogChangeType_AddShard,
@@ -346,6 +379,7 @@ func (c *catalog) GetCatalogChanges(ctx context.Context, routerVersion uint64, n
 		ret[i] = &proto.CatalogChangeItem{
 			RouteVersion: items[i].RouteVersion,
 			Type:         items[i].Type,
+			Item:         &anypb.Any{},
 		}
 
 		switch items[i].Type {
@@ -374,6 +408,7 @@ func (c *catalog) GetCatalogChanges(ctx context.Context, routerVersion uint64, n
 			shardInfo := shard.GetInfo()
 			err = ret[i].Item.MarshalFrom(&proto.CatalogChangeShardAdd{
 				Sid:        itemDetail.Sid,
+				Name:       space.GetInfo().Name,
 				ShardId:    itemDetail.ShardId,
 				Epoch:      shardInfo.Epoch,
 				InoLimit:   shardInfo.InoLimit,
@@ -387,8 +422,8 @@ func (c *catalog) GetCatalogChanges(ctx context.Context, routerVersion uint64, n
 		}
 	}
 
-	if routeVersion == 0 {
-		routeVersion = ret[len(ret)].RouteVersion
+	if routeVersion == 0 && len(ret) > 0 {
+		routeVersion = ret[len(ret)-1].RouteVersion
 	}
 
 	return
@@ -400,6 +435,7 @@ func (c *catalog) Close() {
 
 func (c *catalog) createSpaceTask(ctx context.Context, sid uint64, _ []byte) error {
 	span := trace.SpanFromContext(ctx)
+	span.Infof("start create space[%d] task", sid)
 	space := c.spaces.Get(sid)
 
 	if space.IsNormal() {
@@ -408,7 +444,8 @@ func (c *catalog) createSpaceTask(ctx context.Context, sid uint64, _ []byte) err
 	}
 
 	if space.IsInit(true) {
-		if err := c.createSpaceShards(ctx, space, 1, space.info.DesiredShardNum, RaftOpInitSpaceShards); err != nil {
+		span.Infof("start create space shards")
+		if err := c.createSpaceShards(ctx, space, 1, space.GetInfo().DesiredShardNum, RaftOpInitSpaceShards); err != nil {
 			span.Warnf("initial space's shards failed: %s", errors.Detail(err))
 			return err
 		}
@@ -451,14 +488,18 @@ func (c *catalog) maybeExpandSpaceTask(ctx context.Context, sid uint64, _ []byte
 }
 
 func (c *catalog) createSpaceShards(ctx context.Context, space *space, startShardId uint32, desiredShardsNum uint32, op raft.Op) error {
+	span := trace.SpanFromContext(ctx)
 	shardInfos := make([]*shardInfo, 0, desiredShardsNum)
 
 	for shardId := startShardId; shardId <= desiredShardsNum; shardId++ {
+		span.Info("start alloc nodes")
 		// alloc nodes
 		nodeInfos, err := c.cluster.Alloc(ctx, &cluster.AllocArgs{
+			AZ:    c.cfg.AZs[0],
 			Count: c.cfg.ShardReplicateNum,
 			Role:  proto.NodeRole_ShardServer,
 		})
+		span.Infof("alloc result: %+v", nodeInfos)
 		if err != nil {
 			return errors.Info(err, "alloc shard server nodes failed")
 		}
@@ -471,10 +512,12 @@ func (c *catalog) createSpaceShards(ctx context.Context, space *space, startShar
 
 		// create shards
 		for i := range nodes {
+			span.Info("start get client")
 			client, err := c.cluster.GetClient(ctx, nodes[i])
 			if err != nil {
 				return errors.Info(err, "get client failed")
 			}
+			span.Info("get client success")
 
 			if _, err := client.AddShard(ctx, &proto.AddShardRequest{
 				Sid:        space.id,
@@ -485,6 +528,7 @@ func (c *catalog) createSpaceShards(ctx context.Context, space *space, startShar
 			}); err != nil {
 				return errors.Info(err, fmt.Sprintf("add shard to node[%d] failed", nodes[i]))
 			}
+			span.Info("add shard success")
 		}
 
 		shardInfos = append(shardInfos, &shardInfo{
@@ -562,10 +606,8 @@ func (c *catalog) updateSpaceRoute(ctx context.Context, space *space) error {
 	// save shard and modify space's status
 	args := &updateSpaceRouteArgs{
 		SpaceEpoch: baseEpoch,
-		createSpaceShardsArgs: createSpaceShardsArgs{
-			Sid:        space.id,
-			ShardInfos: shardInfos,
-		},
+		Sid:        space.id,
+		ShardInfos: shardInfos,
 	}
 	data, err := json.Marshal(args)
 	if err != nil {
@@ -754,8 +796,19 @@ func (s *concurrentSpaces) Range(f func(v *space) error) {
 	}
 }
 
+func (s *concurrentSpaces) Len() uint64 {
+	ret := uint64(0)
+	for i := uint32(0); i < s.num; i++ {
+		l := s.locks[i]
+		l.RLock()
+		ret += uint64(len(s.idMap[i]))
+		l.RUnlock()
+	}
+	return ret
+}
+
 func (s *concurrentSpaces) List() []*space {
-	ret := make([]*space, 0)
+	ret := make([]*space, 0, s.Len()*2)
 	s.Range(func(v *space) error {
 		ret = append(ret, v)
 		return nil

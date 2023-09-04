@@ -109,7 +109,7 @@ func (s *ShardServerClient) refreshShardServerClients(ctx context.Context) error
 			continue
 		}
 
-		routerAddress := node.Addr + strconv.Itoa(int(node.GrpcPort))
+		routerAddress := node.Addr + ":" + strconv.Itoa(int(node.GrpcPort))
 		conn, err := grpc.Dial(routerAddress, s.dialOpts...)
 		if err != nil {
 			return err

@@ -16,9 +16,9 @@ import (
 )
 
 type Config struct {
-	MasterConfig *sc.MasterConfig   `json:"master_config"`
-	NodeConfig   *proto.Node        `json:"node_config"`
-	ServerConfig *ShardServerConfig `json:"server_config"`
+	MasterConfig sc.MasterConfig   `json:"master_config"`
+	NodeConfig   proto.Node        `json:"node_config"`
+	ServerConfig ShardServerConfig `json:"server_config"`
 }
 
 type Catalog struct {
@@ -33,13 +33,13 @@ type Catalog struct {
 func NewCatalog(ctx context.Context, cfg *Config) *Catalog {
 	span := trace.SpanFromContext(ctx)
 
-	masterClient, err := sc.NewMasterClient(cfg.MasterConfig)
+	masterClient, err := sc.NewMasterClient(&cfg.MasterConfig)
 	if err != nil {
 		span.Fatalf("new master client failed: %s", err)
 	}
 
 	cfg.ServerConfig.MasterClient = masterClient
-	err = NewShardServerClient(ctx, cfg.ServerConfig)
+	err = NewShardServerClient(ctx, &cfg.ServerConfig)
 	if err != nil {
 		span.Fatalf("new shard server client failed: %s", err)
 	}
@@ -54,7 +54,7 @@ func NewCatalog(ctx context.Context, cfg *Config) *Catalog {
 		}
 	}
 
-	service := NewService(masterClient, cfg.NodeConfig)
+	service := NewService(masterClient, &cfg.NodeConfig)
 	if err = service.Register(ctx); err != nil {
 		span.Fatalf("register router to master failed: %s", err)
 	}

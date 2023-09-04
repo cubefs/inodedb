@@ -41,7 +41,7 @@ type Config struct {
 }
 
 func main() {
-	config.Init("f", "", "server.conf")
+	config.Init("f", "", "server.json")
 
 	cfg := &Config{}
 	if err := config.Load(cfg); err != nil {

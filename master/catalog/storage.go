@@ -3,7 +3,6 @@ package catalog
 import (
 	"context"
 	"encoding/binary"
-	"errors"
 
 	"github.com/cubefs/inodedb/master/store"
 
@@ -49,6 +48,7 @@ func (s *storage) ListSpaces(ctx context.Context) (ret []*spaceInfo, err error) 
 		if err != nil {
 			return nil, err
 		}
+
 		if kg == nil || vg == nil {
 			return ret, nil
 		}
@@ -81,10 +81,6 @@ func (s *storage) DeleteSpace(ctx context.Context, sid uint64, info *routeItemIn
 }
 
 func (s *storage) UpsertSpaceShardsAndRouteItems(ctx context.Context, info *spaceInfo, shards []*shardInfo, routeItems []*routeItemInfo) error {
-	if len(routeItems) > 0 && len(shards) != len(routeItems) {
-		return errors.New("route items and shards num mismatch")
-	}
-
 	batch := s.kvStore.NewWriteBatch()
 	defer batch.Close()
 
@@ -99,12 +95,14 @@ func (s *storage) UpsertSpaceShardsAndRouteItems(ctx context.Context, info *spac
 		if err != nil {
 			return err
 		}
+		batch.Put(cf, s.keysGenerator.encodeShardKey(info.Sid, shards[i].ShardId), shardData)
+	}
+
+	for i := range routeItems {
 		routeItemData, err := routeItems[i].Marshal()
 		if err != nil {
 			return err
 		}
-
-		batch.Put(cf, s.keysGenerator.encodeShardKey(info.Sid, shards[i].ShardId), shardData)
 		batch.Put(cf, s.keysGenerator.encodeRouteKey(routeItems[i].RouteVersion), routeItemData)
 	}
 
@@ -192,51 +190,49 @@ type keysGenerator struct{}
 
 func (k *keysGenerator) encodeSpaceKey(sid uint64) []byte {
 	ret := make([]byte, len(catalogKeyPrefix)+len(keyInfix)+8)
-	ret = append(ret, catalogKeyPrefix...)
-	ret = append(ret, keyInfix...)
+	copy(ret, catalogKeyPrefix)
+	copy(ret[len(catalogKeyPrefix):], keyInfix)
 	binary.BigEndian.PutUint64(ret[len(ret)-8:], sid)
 	return ret
 }
 
 func (k *keysGenerator) encodeShardKey(sid uint64, shardId uint32) []byte {
-	ret := make([]byte, 0, len(catalogKeyPrefix)+len(keyInfix)+8+len(shardKeyPrefix)+len(keyInfix)+4)
-	ret = append(ret, catalogKeyPrefix...)
-	ret = append(ret, keyInfix...)
-	binary.BigEndian.PutUint64(ret[len(catalogKeyPrefix)+len(keyInfix):], sid)
-	ret = append(ret, shardKeyPrefix...)
-	ret = append(ret, keyInfix...)
-	binary.BigEndian.PutUint32(ret[cap(ret)-4:], shardId)
+	ret := make([]byte, len(shardKeyPrefix)+len(keyInfix)+8+len(keyInfix)+4)
+	copy(ret, shardKeyPrefix)
+	copy(ret[len(shardKeyPrefix):], keyInfix)
+	binary.BigEndian.PutUint64(ret[len(shardKeyPrefix)+len(keyInfix):], sid)
+	copy(ret[len(ret)-4-len(keyInfix):], keyInfix)
+	binary.BigEndian.PutUint32(ret[len(ret)-4:], shardId)
 	return ret
 }
 
 func (k *keysGenerator) encodeRouteKey(ver uint64) []byte {
-	ret := make([]byte, 0, len(routeKeyPrefix)+len(keyInfix)+8)
-	ret = append(ret, catalogKeyPrefix...)
-	ret = append(ret, keyInfix...)
-	binary.BigEndian.PutUint64(ret[cap(ret)-8:], ver)
+	ret := make([]byte, len(routeKeyPrefix)+len(keyInfix)+8)
+	copy(ret, routeKeyPrefix)
+	copy(ret[len(routeKeyPrefix):], keyInfix)
+	binary.BigEndian.PutUint64(ret[len(ret)-8:], ver)
 	return ret
 }
 
 func (k *keysGenerator) encodeSpaceKeyPrefix() []byte {
-	ret := make([]byte, 0, len(catalogKeyPrefix)+len(keyInfix))
-	ret = append(ret, catalogKeyPrefix...)
-	ret = append(ret, keyInfix...)
+	ret := make([]byte, len(catalogKeyPrefix)+len(keyInfix))
+	copy(ret, catalogKeyPrefix)
+	copy(ret[len(catalogKeyPrefix):], keyInfix)
 	return ret
 }
 
 func (k *keysGenerator) encodeShardKeyPrefix(sid uint64) []byte {
-	ret := make([]byte, 0, len(catalogKeyPrefix)+len(keyInfix)+8+len(shardKeyPrefix)+len(keyInfix))
-	ret = append(ret, catalogKeyPrefix...)
-	ret = append(ret, keyInfix...)
-	binary.BigEndian.PutUint64(ret[len(catalogKeyPrefix)+len(keyInfix):], sid)
-	ret = append(ret, shardKeyPrefix...)
-	ret = append(ret, keyInfix...)
+	ret := make([]byte, len(shardKeyPrefix)+len(keyInfix)+8+len(keyInfix))
+	copy(ret, shardKeyPrefix)
+	copy(ret[len(shardKeyPrefix):], keyInfix)
+	binary.BigEndian.PutUint64(ret[len(shardKeyPrefix)+len(keyInfix):], sid)
+	copy(ret[len(ret)-len(keyInfix):], keyInfix)
 	return ret
 }
 
 func (k *keysGenerator) encodeRouteKeyPrefix() []byte {
-	ret := make([]byte, 0, len(routeKeyPrefix)+len(keyInfix))
-	ret = append(ret, catalogKeyPrefix...)
-	ret = append(ret, keyInfix...)
+	ret := make([]byte, len(routeKeyPrefix)+len(keyInfix))
+	copy(ret, routeKeyPrefix)
+	copy(ret[len(routeKeyPrefix):], keyInfix)
 	return ret
 }

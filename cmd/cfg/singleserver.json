@@ -1,10 +1,43 @@
 {
-    "role": "singleserver",
-    "grpc": "9021",
-    "http": "8080",
-    "prof": "9092",
-    "logLevel": "info",
-    "dataDir": "/export/Data/singleserver",
-    "logDir": "/export/Logs/singleserver"
-
+    "roles": ["Single"],
+    "grpc_bind_addr": ":9021",
+    "http_bind_addr": ":8080",
+    "log_level": "info",
+    "audit_log": {
+        "logdir": "./run/auditlog"
+    },
+    "node_config": {
+        "roles": [1,2,3],
+        "addr": "127.0.0.1",
+        "az":   "z0",
+        "http_port": 8080,
+        "grpc_port": 9021,
+        "raft_port": 10200
+    },
+    "store_config": {
+        "path": "./run/store",
+        "kv_option": {
+            "column_family": ["cluster", "id", "catalog", "data"]
+        }
+    },
+    "master_rpc_config": {
+        "master_addresses": "127.0.0.1:9021"
+    },
+    "catalog_config": {
+        "shard_replicate_num": 1,
+        "ino_limit_per_shard": 4000000,
+        "expand_shards_num_per_space": 10,
+        "azs": ["z0"]
+    },
+    "cluster_config": {
+        "cluster_id": 1,
+        "azs": ["z0"],
+        "grpc_port": 9021,
+        "http_port": 8080,
+        "heartbeat_timeout_s": 1,
+        "refresh_interval_s": 1,
+        "shard_server_config": {
+            "grpc_port": 9021
+        }
+    }
 }

@@ -16,7 +16,31 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+const (
+	defaultConnectionTimeoutMs = 100
+	defaultMaxTimeoutMs        = 5000
+	defaultBackoffMaxDelayMs   = 5000
+	defaultBackoffBaseDelayMs  = 200
+	defaultKeepAliveTimeoutS   = 60
+)
+
 func generateDialOpts(cfg *TransportConfig) []grpc.DialOption {
+	if cfg.ConnectTimeoutMs == 0 {
+		cfg.ConnectTimeoutMs = defaultConnectionTimeoutMs
+	}
+	if cfg.MaxTimeoutMs == 0 {
+		cfg.MaxTimeoutMs = defaultMaxTimeoutMs
+	}
+	if cfg.KeepaliveTimeoutS == 0 {
+		cfg.KeepaliveTimeoutS = defaultKeepAliveTimeoutS
+	}
+	if cfg.BackoffMaxDelayMs == 0 {
+		cfg.BackoffMaxDelayMs = defaultBackoffMaxDelayMs
+	}
+	if cfg.BackoffBaseDelayMs == 0 {
+		cfg.BackoffBaseDelayMs = defaultBackoffBaseDelayMs
+	}
+
 	dialOpts := []grpc.DialOption{
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallSendMsgSize(math.MaxInt64),
@@ -38,7 +62,6 @@ func generateDialOpts(cfg *TransportConfig) []grpc.DialOption {
 		grpc.WithChainUnaryInterceptor(unaryInterceptorWithTracer),
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"LoadBalancingPolicy": "%s"}`, roundrobin.Name)),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	}
 	return dialOpts
 }

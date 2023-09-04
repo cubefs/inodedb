@@ -11,9 +11,9 @@ import (
 )
 
 type Config struct {
-	MasterConfig *client.MasterConfig    `json:"master_config"`
-	NodeConfig   *proto.Node             `json:"node_config"`
-	ServerConfig *client.TransportConfig `json:"server_config"`
+	MasterConfig client.MasterConfig    `json:"master_config"`
+	NodeConfig   proto.Node             `json:"node_config"`
+	ServerConfig client.TransportConfig `json:"server_config"`
 }
 
 type Router struct {
@@ -23,7 +23,7 @@ type Router struct {
 func NewRouter(cfg *Config) *Router {
 	_, ctx := trace.StartSpanFromContext(context.Background(), "")
 	c := catalog.NewCatalog(ctx, &catalog.Config{
-		ServerConfig: &catalog.ShardServerConfig{
+		ServerConfig: catalog.ShardServerConfig{
 			TransportConfig: cfg.ServerConfig,
 		},
 		MasterConfig: cfg.MasterConfig,

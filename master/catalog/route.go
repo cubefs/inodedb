@@ -78,7 +78,7 @@ func (r *routeMgr) InsertRouteItems(ctx context.Context, items []*routeItemInfo)
 	atomic.StoreUint64(&r.stableRouteVersion, maxStableRouteVersion)
 }
 
-func (r *routeMgr) GetRouteItems(ctx context.Context, ver uint64) []*routeItemInfo {
+func (r *routeMgr) GetRouteItems(ctx context.Context, ver uint64) (ret []*routeItemInfo, isLatest bool) {
 	r.lock.RLock()
 	defer r.lock.RUnlock()
 
@@ -154,9 +154,16 @@ func (r *routeItemRing) put(item *routeItemInfo) {
 	}
 }
 
-func (r *routeItemRing) getFrom(ver uint64) (ret []*routeItemInfo) {
-	if r.getMinVer() > ver || r.getMaxVer() < ver {
-		return nil
+func (r *routeItemRing) getFrom(ver uint64) (ret []*routeItemInfo, isLatest bool) {
+	if r.head == r.tail {
+		return nil, true
+	}
+	if r.getMinVer() > ver {
+		return nil, false
+	}
+
+	if r.getMaxVer() <= ver {
+		return nil, true
 	}
 
 	headVer := r.data[r.head].RouteVersion
@@ -168,7 +175,7 @@ func (r *routeItemRing) getFrom(ver uint64) (ret []*routeItemInfo) {
 			break
 		}
 	}
-	return ret
+	return ret, false
 }
 
 func (r *routeItemRing) getMinVer() uint64 {

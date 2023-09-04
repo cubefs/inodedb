@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+
 	"google.golang.org/grpc"
 
 	sc "github.com/cubefs/inodedb/client"
@@ -25,8 +26,8 @@ type Transporter interface {
 }
 
 type ShardServerConfig struct {
-	TransportConfig *sc.TransportConfig `json:"transport"`
-	MasterClient    *sc.MasterClient    `json:"-"`
+	TransportConfig sc.TransportConfig `json:"transport"`
+	MasterClient    *sc.MasterClient   `json:"-"`
 }
 
 type transporter struct {
@@ -38,7 +39,7 @@ var defaultClient Transporter
 func NewShardServerClient(ctx context.Context, cfg *ShardServerConfig) error {
 	serverClient, err := sc.NewShardServerClient(&sc.ShardServerConfig{
 		MasterClient:    cfg.MasterClient,
-		TransportConfig: *cfg.TransportConfig,
+		TransportConfig: cfg.TransportConfig,
 	})
 	if err != nil {
 		return err
@@ -50,7 +51,6 @@ func NewShardServerClient(ctx context.Context, cfg *ShardServerConfig) error {
 }
 
 func (c *transporter) GetClient(ctx context.Context, nodeId uint32) (ShardServerClient, error) {
-
 	client, err := c.shardServerClient.GetClient(ctx, nodeId)
 	if err != nil {
 		return nil, err

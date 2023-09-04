@@ -7,9 +7,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cubefs/cubefs/blobstore/util/errors"
+
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/inodedb/common/raft"
-	"github.com/cubefs/inodedb/errors"
+	apierrors "github.com/cubefs/inodedb/errors"
 	"github.com/cubefs/inodedb/master/cluster/client"
 	idGenerator "github.com/cubefs/inodedb/master/idgenerator"
 	"github.com/cubefs/inodedb/master/store"
@@ -94,7 +96,7 @@ func (c *cluster) SetRaftGroup(raftGroup raft.Group) {
 func (c *cluster) GetNode(ctx context.Context, nodeId uint32) (*proto.Node, error) {
 	n := c.allNodes.Get(nodeId)
 	if n == nil {
-		return nil, errors.ErrNotFound
+		return nil, apierrors.ErrNotFound
 	}
 	n.lock.RLock()
 	info := n.info.ToProtoNode()
@@ -104,13 +106,13 @@ func (c *cluster) GetNode(ctx context.Context, nodeId uint32) (*proto.Node, erro
 }
 
 func (c *cluster) GetClient(ctx context.Context, nodeId uint32) (client.ShardServerClient, error) {
-	span := trace.SpanFromContextSafe(ctx)
 	if c.client == nil {
 		c.lock.Lock()
 		if c.client == nil {
 			sc, err := client.NewClient(ctx, c.cfg.ShardServerConfig)
 			if err != nil {
-				span.Fatalf("new shard server client failed: %s", err)
+				c.lock.Unlock()
+				return nil, errors.Info(err, "new shard server client failed: %s")
 			}
 			c.client = sc
 		}
@@ -118,7 +120,7 @@ func (c *cluster) GetClient(ctx context.Context, nodeId uint32) (client.ShardSer
 	}
 	n := c.allNodes.Get(nodeId)
 	if n == nil {
-		return nil, errors.ErrNotFound
+		return nil, apierrors.ErrNotFound
 	}
 	return c.client.GetShardServerClient(ctx, nodeId)
 }
@@ -128,17 +130,17 @@ func (c *cluster) Alloc(ctx context.Context, args *AllocArgs) ([]*nodeInfo, erro
 
 	if !c.isValidAz(args.AZ) {
 		span.Warnf("alloc args az[%s] invalid", args.AZ)
-		return nil, errors.ErrInvalidAz
+		return nil, apierrors.ErrInvalidAz
 	}
 
 	if !c.isValidRole(args.Role) {
 		span.Warnf("alloc args role[%d] invalid", args.Role)
-		return nil, errors.ErrInvalidNodeRole
+		return nil, apierrors.ErrInvalidNodeRole
 	}
 
 	value, ok := c.allocators.Load(args.Role)
 	if !ok {
-		return nil, errors.ErrNodeRoleNotExist
+		return nil, apierrors.ErrNodeRoleNotExist
 	}
 	mgr := value.(Allocator)
 	alloc, err := mgr.Alloc(ctx, args)
@@ -153,22 +155,22 @@ func (c *cluster) Register(ctx context.Context, args *proto.Node) (uint32, error
 	span.Debugf("register node, args : %+v", args)
 	if !c.isValidAz(args.Az) {
 		span.Warnf("register node az[%s] not match", args.Az)
-		return 0, errors.ErrInvalidAz
+		return 0, apierrors.ErrInvalidAz
 	}
 
 	if len(args.Roles) == 0 {
-		return 0, errors.ErrInvalidNodeRole
+		return 0, apierrors.ErrInvalidNodeRole
 	}
 
 	for _, role := range args.Roles {
 		if !c.isValidRole(role) {
 			span.Warnf("register node role[%d] not match", role)
-			return 0, errors.ErrInvalidNodeRole
+			return 0, apierrors.ErrInvalidNodeRole
 		}
 	}
 	if get := c.allNodes.GetByName(args.Addr); get != nil {
-		span.Errorf("the node[%s] already exist in cluster", args.Addr)
-		return 0, errors.ErrNodeAlreadyExist
+		span.Warnf("the node[%s] already exist in cluster", args.Addr)
+		return get.nodeId, nil
 	}
 
 	_, id, err := c.idGenerator.Alloc(ctx, nodeIdName, 1)
@@ -204,7 +206,7 @@ func (c *cluster) Unregister(ctx context.Context, nodeId uint32) error {
 	n := c.allNodes.Get(nodeId)
 	if n == nil {
 		span.Errorf("node[%d] not found", nodeId)
-		return errors.ErrNodeDoesNotFound
+		return apierrors.ErrNodeDoesNotFound
 	}
 	data := c.encodeNodeId(nodeId)
 	// todo 1. raft
@@ -228,7 +230,7 @@ func (c *cluster) ListNodeInfo(ctx context.Context, roles []proto.NodeRole) ([]*
 	for _, role := range roles {
 		if !c.isValidRole(role) {
 			span.Warnf("list node role[%d] invalid", role)
-			return nil, errors.ErrInvalidNodeRole
+			return nil, apierrors.ErrInvalidNodeRole
 		}
 		c.allNodes.Range(func(n *node) error {
 			if n.Contains(ctx, role) {
@@ -249,7 +251,7 @@ func (c *cluster) HandleHeartbeat(ctx context.Context, args *HeartbeatArgs) erro
 	n := c.allNodes.Get(args.NodeID)
 	if n == nil {
 		span.Errorf("node[%d] not found", args.NodeID)
-		return errors.ErrNodeDoesNotFound
+		return apierrors.ErrNodeDoesNotFound
 	}
 	data, err := json.Marshal(args)
 	if err != nil {
@@ -309,7 +311,9 @@ func (c *cluster) refresh(ctx context.Context) {
 
 		info := n.GetInfo()
 		for _, role := range info.Roles {
-			mgrs[role].Put(ctx, n)
+			if _, ok := c.allocatorFuncMap[role]; ok {
+				mgrs[role].Put(ctx, n)
+			}
 		}
 	}
 
@@ -320,9 +324,11 @@ func (c *cluster) refresh(ctx context.Context) {
 
 func (c *cluster) loop() {
 	_, ctxNew := trace.StartSpanFromContext(context.Background(), "")
-	ticker := time.NewTicker(time.Duration(c.cfg.RefreshIntervalS) * time.Second)
+
 	go func() {
+		ticker := time.NewTicker(time.Duration(c.cfg.RefreshIntervalS) * time.Second)
 		defer ticker.Stop()
+
 		for {
 			select {
 			case <-ticker.C:
