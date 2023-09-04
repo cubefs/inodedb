@@ -105,29 +105,29 @@ message GetSpaceResponse {
 }
 
 message AddShardRequest {
-	uint64 sid  = 1 [json_name="space_id"];
-	string space_name = 2 [json_name="space_name"];
-	uint32 shard_id = 3 [json_name="shard_id"];
-	uint64 epoch = 4 [json_name="epoch"];
-	uint64 ino_limit = 5 [json_name="ino_limit"];
-	repeated uint32 replicates = 6 [json_name="replicates"];
+	uint64 sid  = 1;
+	string space_name = 2;
+	uint32 shard_id = 3;
+	uint64 epoch = 4;
+	uint64 ino_limit = 5;
+	repeated uint32 replicates = 6;
 }
 
 message AddShardResponse {
 }
 
 message UpdateShardRequest {
-	string space_name = 1 [json_name="space_name"];
-	uint32 shard_id = 2 [json_name="shard_id"];
-	uint64 epoch = 3 [json_name="epoch"];
+	string space_name = 1;
+	uint32 shard_id = 2;
+	uint64 epoch = 3;
 }
 
 message UpdateShardResponse {
 }
 
 message GetShardRequest {
-	string space_name = 1 [json_name="space_name"];
-	uint32 shard_id = 2 [json_name="shard_id"];
+	string space_name = 1;
+	uint32 shard_id = 2;
 }
 
 message GetShardResponse {
@@ -200,10 +200,10 @@ message Query { }
 message HighlightRequest { }
 
 message SearchRequest {
-	string space_name = 1 [json_name="space_name"];
+	string space_name = 1;
 	Query query = 2;
 	int32 count = 3;
-	string sorted_by = 4[json_name="sorted_by"];
+	string sorted_by = 4;
 	repeated string fields = 5;
 }
 

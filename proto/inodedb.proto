@@ -142,11 +142,12 @@ message CatalogChangeSpaceDelete {
 
 message CatalogChangeShardAdd {
 	uint64 sid = 1;
-	uint32 shard_id = 2;
-	uint64 epoch = 3;
-	uint64 ino_limit = 4;
-	uint32 leader = 5;
-	repeated uint32 replicates = 6;
+	string name = 2;
+	uint32 shard_id = 3;
+	uint64 epoch = 4;
+	uint64 ino_limit = 5;
+	uint32 leader = 6;
+	repeated uint32 replicates = 7;
 }
 
 message ShardTask {
