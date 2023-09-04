@@ -15,6 +15,7 @@ import (
 const (
 	RaftOpRegisterNode raft.Op = iota + 1
 	RaftOpUnregisterNode
+	RaftOpUpdateNode
 	RaftOpHeartbeat
 )
 
@@ -34,6 +35,8 @@ func (c *cluster) Apply(ctx context.Context, ops []raft.Op, datas [][]byte, cont
 			return c.applyUnregister(newCtx, datas[i])
 		case RaftOpHeartbeat:
 			return c.applyHeartbeat(newCtx, datas[i])
+		case RaftOpUpdateNode:
+			return c.applyUpdate(ctx, datas[i])
 		default:
 			span.Panicf("unsupported operation type: %d", op)
 		}
@@ -80,6 +83,37 @@ func (c *cluster) applyRegister(ctx context.Context, data []byte) error {
 	}
 	c.allNodes.PutNoLock(newNode)
 	span.Debugf("register node success, node: %+v", newNode.info)
+	return nil
+}
+
+func (c *cluster) applyUpdate(ctx context.Context, data []byte) error {
+	span := trace.SpanFromContextSafe(ctx)
+
+	info := &nodeInfo{}
+	err := info.Unmarshal(data)
+	if err != nil {
+		return err
+	}
+
+	c.allNodes.Lock()
+	defer c.allNodes.Unlock()
+
+	if n := c.allNodes.GetByNameNoLock(info.Addr); n == nil {
+		span.Warnf("node[%s] not exist", info.Addr)
+		return nil
+	}
+
+	nodeId := info.Id
+	newNode := &node{
+		nodeId:  nodeId,
+		info:    info,
+		expires: time.Now().Add(time.Duration(c.cfg.HeartbeatTimeoutS) * time.Second),
+	}
+	if err = c.storage.Put(ctx, info); err != nil {
+		return err
+	}
+	c.allNodes.PutNoLock(newNode)
+	span.Debugf("update node success, node: %+v", newNode.info)
 	return nil
 }
 

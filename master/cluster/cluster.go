@@ -181,9 +181,30 @@ func (c *cluster) Register(ctx context.Context, args *proto.Node) (uint32, error
 			return 0, apierrors.ErrInvalidNodeRole
 		}
 	}
-	if get := c.allNodes.GetByName(args.Addr); get != nil {
+
+	get := c.allNodes.GetByName(args.Addr)
+	if get != nil && get.GetInfo().CompareRoles(args.Roles) {
 		span.Warnf("the node[%s] already exist in cluster", args.Addr)
 		return get.nodeId, nil
+	}
+
+	if get != nil {
+		info := get.GetInfo()
+		info.UpdateRoles(args.Roles)
+		data, err := info.Marshal()
+		if err != nil {
+			return 0, err
+		}
+		_, err = c.raftGroup.Propose(ctx, &raft.ProposeRequest{
+			Module:     module,
+			Op:         RaftOpUpdateNode,
+			Data:       data,
+			WithResult: false,
+		})
+		if err != nil {
+			return 0, err
+		}
+		return info.Id, c.applyUpdate(ctx, data)
 	}
 
 	_, id, err := c.idGenerator.Alloc(ctx, nodeIdName, 1)
@@ -313,7 +334,7 @@ func (c *cluster) refresh(ctx context.Context) {
 	})
 
 	span := trace.SpanFromContextSafe(ctx)
-	span.Debugf("refresh allocator nodes: %+v", allNodes)
+	span.Infof("refresh allocator nodes: %+v", allNodes)
 
 	mgrs := make(map[proto.NodeRole]Allocator, len(c.allocatorFuncMap))
 	for role, f := range c.allocatorFuncMap {

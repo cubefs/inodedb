@@ -40,6 +40,7 @@ func (a *allocator) Alloc(ctx context.Context, args *AllocArgs) ([]*nodeInfo, er
 	span := trace.SpanFromContextSafe(ctx)
 
 	if _, ok := a.azAllocators[args.AZ]; !ok {
+		span.Warnf("current az has no nodes to alloc, az: %s", args.AZ)
 		return nil, errors.ErrNoAvailableNode
 	}
 

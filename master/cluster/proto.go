@@ -25,6 +25,26 @@ type nodeInfo struct {
 	State       proto.NodeState  `json:"state"`
 }
 
+func (s *nodeInfo) CompareRoles(roles []proto.NodeRole) bool {
+	if len(s.Roles) != len(roles) {
+		return false
+	}
+	mp := make(map[proto.NodeRole]bool, len(s.Roles))
+	for _, role := range s.Roles {
+		mp[role] = true
+	}
+	for _, role := range roles {
+		if !mp[role] {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *nodeInfo) UpdateRoles(roles []proto.NodeRole) {
+	s.Roles = roles
+}
+
 func (s *nodeInfo) ToProtoNode() *proto.Node {
 	roles := make([]proto.NodeRole, len(s.Roles))
 	copy(roles, s.Roles)
