@@ -41,7 +41,7 @@ type RPCServer struct {
 func NewRPCServer(server *Server) *RPCServer {
 	rs := &RPCServer{Server: server}
 
-	s := grpc.NewServer(grpc.ChainUnaryInterceptor( /*rs.unaryInterceptorWithTracer,*/ rs.unaryInterceptorWithAuditLog))
+	s := grpc.NewServer(grpc.ChainUnaryInterceptor(rs.unaryInterceptorWithTracer, rs.unaryInterceptorWithAuditLog))
 	if rs.master != nil {
 		proto.RegisterInodeDBMasterServer(s, rs)
 	}
@@ -94,7 +94,7 @@ func (r *RPCServer) Cluster(ctx context.Context, req *proto.ClusterRequest) (*pr
 }
 
 func (r *RPCServer) CreateSpace(ctx context.Context, req *proto.CreateSpaceRequest) (*proto.CreateSpaceResponse, error) {
-	span, ctx := trace.StartSpanFromContext(ctx, "")
+	span := trace.SpanFromContext(ctx)
 	span.Infof("receive CreateSpace request: %+v", req)
 	err := r.master.CreateSpace(ctx, req.Name, req.Type, req.DesiredShards, req.FixedFields)
 	if err != nil {
@@ -143,7 +143,7 @@ func (r *RPCServer) Heartbeat(ctx context.Context, req *proto.HeartbeatRequest) 
 }
 
 func (r *RPCServer) Report(ctx context.Context, req *proto.ReportRequest) (*proto.ReportResponse, error) {
-	span := trace.SpanFromContextSafe(ctx)
+	span := trace.SpanFromContext(ctx)
 	tasks, err := r.master.Report(ctx, req.Id, req.Infos)
 	if err != nil {
 		span.Errorf("report failed: %s", errors.Detail(err))
@@ -163,7 +163,7 @@ func (r *RPCServer) GetNode(ctx context.Context, req *proto.GetNodeRequest) (*pr
 }
 
 func (r *RPCServer) GetCatalogChanges(ctx context.Context, req *proto.GetCatalogChangesRequest) (*proto.GetCatalogChangesResponse, error) {
-	span, ctx := trace.StartSpanFromContext(ctx, "")
+	span := trace.SpanFromContext(ctx)
 	routeVersion, items, err := r.master.GetCatalogChanges(ctx, req.RouteVersion, req.NodeId)
 	if err != nil {
 		span.Errorf("get catalog changes failed: %s", err)
@@ -188,7 +188,6 @@ func (r *RPCServer) GetRoleNodes(ctx context.Context, req *proto.GetRoleNodesReq
 // Shard Server API
 
 func (r *RPCServer) AddShard(ctx context.Context, req *proto.AddShardRequest) (*proto.AddShardResponse, error) {
-	_, ctx = trace.StartSpanFromContext(ctx, "")
 	shardServer := r.shardServer
 	err := shardServer.AddShard(ctx, req.SpaceName, req.ShardId, req.Epoch, req.InoLimit, req.Replicates)
 	return &proto.AddShardResponse{}, err
@@ -229,7 +228,6 @@ func (r *RPCServer) ShardInsertItem(ctx context.Context, req *proto.InsertItemRe
 }
 
 func (r *RPCServer) ShardUpdateItem(ctx context.Context, req *proto.UpdateItemRequest) (*proto.UpdateItemResponse, error) {
-	_, ctx = trace.StartSpanFromContext(ctx, "")
 	shardServer := r.shardServer
 	space, err := shardServer.GetSpace(ctx, req.SpaceName)
 	if err != nil {
@@ -415,9 +413,9 @@ func (r *RPCServer) unaryInterceptorWithTracer(ctx context.Context, req interfac
 	}
 	reqId, ok := md[proto.ReqIdKey]
 	if ok {
-		trace.StartSpanFromContextWithTraceID(ctx, "", reqId[0])
+		_, ctx = trace.StartSpanFromContextWithTraceID(ctx, "", reqId[0])
 	} else {
-		trace.SpanFromContextSafe(ctx)
+		_, ctx = trace.StartSpanFromContext(ctx, "")
 	}
 
 	resp, err = handler(ctx, req)
