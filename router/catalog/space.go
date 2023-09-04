@@ -160,7 +160,7 @@ func (s *Space) Search(ctx context.Context, req *proto.SearchRequest) (*proto.Se
 
 func (s *Space) locateShard(ctx context.Context, ino uint64) *shard {
 	span := trace.SpanFromContextSafe(ctx)
-	sid := uint32(ino / proto.ShardRangeStepSize)
+	sid := uint32(ino/proto.ShardRangeStepSize) + 1
 	get := s.shards.Get(sid)
 	if get == nil {
 		if err := s.getCatalogChange(ctx); err != nil {

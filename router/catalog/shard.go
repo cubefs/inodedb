@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+
 	"github.com/cubefs/inodedb/proto"
 )
 
@@ -13,7 +14,12 @@ type shard struct {
 }
 
 func (s *shard) InsertItem(ctx context.Context, req *proto.InsertItemRequest) (uint64, error) {
-	sc, err := defaultClient.GetClient(ctx, s.info.LeaderId)
+	leader := s.info.LeaderId
+	if s.info.LeaderId == 0 {
+		leader = s.info.Nodes[0]
+	}
+	sc, err := defaultClient.GetClient(ctx, leader)
+
 	if err != nil {
 		return 0, err
 	}
@@ -25,7 +31,11 @@ func (s *shard) InsertItem(ctx context.Context, req *proto.InsertItemRequest) (u
 }
 
 func (s *shard) UpdateItem(ctx context.Context, req *proto.UpdateItemRequest) error {
-	sc, err := defaultClient.GetClient(ctx, s.info.LeaderId)
+	leader := s.info.LeaderId
+	if s.info.LeaderId == 0 {
+		leader = s.info.Nodes[0]
+	}
+	sc, err := defaultClient.GetClient(ctx, leader)
 	if err != nil {
 		return err
 	}
@@ -37,7 +47,11 @@ func (s *shard) UpdateItem(ctx context.Context, req *proto.UpdateItemRequest) er
 }
 
 func (s *shard) DeleteItem(ctx context.Context, req *proto.DeleteItemRequest) error {
-	sc, err := defaultClient.GetClient(ctx, s.info.LeaderId)
+	leader := s.info.LeaderId
+	if s.info.LeaderId == 0 {
+		leader = s.info.Nodes[0]
+	}
+	sc, err := defaultClient.GetClient(ctx, leader)
 	if err != nil {
 		return err
 	}
@@ -49,7 +63,11 @@ func (s *shard) DeleteItem(ctx context.Context, req *proto.DeleteItemRequest) er
 }
 
 func (s *shard) GetItem(ctx context.Context, req *proto.GetItemRequest) (*proto.Item, error) {
-	sc, err := defaultClient.GetClient(ctx, s.info.LeaderId)
+	leader := s.info.LeaderId
+	if s.info.LeaderId == 0 {
+		leader = s.info.Nodes[0]
+	}
+	sc, err := defaultClient.GetClient(ctx, leader)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +79,11 @@ func (s *shard) GetItem(ctx context.Context, req *proto.GetItemRequest) (*proto.
 }
 
 func (s *shard) Link(ctx context.Context, req *proto.LinkRequest) error {
-	sc, err := defaultClient.GetClient(ctx, s.info.LeaderId)
+	leader := s.info.LeaderId
+	if s.info.LeaderId == 0 {
+		leader = s.info.Nodes[0]
+	}
+	sc, err := defaultClient.GetClient(ctx, leader)
 	if err != nil {
 		return err
 	}
@@ -73,7 +95,11 @@ func (s *shard) Link(ctx context.Context, req *proto.LinkRequest) error {
 }
 
 func (s *shard) Unlink(ctx context.Context, req *proto.UnlinkRequest) error {
-	sc, err := defaultClient.GetClient(ctx, s.info.LeaderId)
+	leader := s.info.LeaderId
+	if s.info.LeaderId == 0 {
+		leader = s.info.Nodes[0]
+	}
+	sc, err := defaultClient.GetClient(ctx, leader)
 	if err != nil {
 		return err
 	}
@@ -85,7 +111,11 @@ func (s *shard) Unlink(ctx context.Context, req *proto.UnlinkRequest) error {
 }
 
 func (s *shard) List(ctx context.Context, req *proto.ListRequest) (ret []*proto.Link, err error) {
-	sc, err := defaultClient.GetClient(ctx, s.info.LeaderId)
+	leader := s.info.LeaderId
+	if s.info.LeaderId == 0 {
+		leader = s.info.Nodes[0]
+	}
+	sc, err := defaultClient.GetClient(ctx, leader)
 	if err != nil {
 		return nil, err
 	}
