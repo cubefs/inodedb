@@ -24,7 +24,7 @@ type Transporter interface {
 }
 
 type Config struct {
-	GrpcPort        uint32             `json:"grpc_port"`
+	GrpcPort        uint32             `json:"-"`
 	TransportConfig sc.TransportConfig `json:"transport_config"`
 }
 

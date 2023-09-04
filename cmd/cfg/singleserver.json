@@ -34,10 +34,7 @@
         "azs": ["z0"],
         "grpc_port": 9021,
         "http_port": 8080,
-        "heartbeat_timeout_s": 1,
-        "refresh_interval_s": 1,
-        "shard_server_config": {
-            "grpc_port": 9021
-        }
+        "heartbeat_timeout_s": 10,
+        "refresh_interval_s": 5
     }
 }

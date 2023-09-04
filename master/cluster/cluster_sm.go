@@ -79,7 +79,7 @@ func (c *cluster) applyRegister(ctx context.Context, data []byte) error {
 		return err
 	}
 	c.allNodes.PutNoLock(newNode)
-
+	span.Debugf("register node success, node: %+v", newNode.info)
 	return nil
 }
 

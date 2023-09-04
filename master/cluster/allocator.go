@@ -39,6 +39,10 @@ func (a *allocator) Put(ctx context.Context, n *node) {
 func (a *allocator) Alloc(ctx context.Context, args *AllocArgs) ([]*nodeInfo, error) {
 	span := trace.SpanFromContextSafe(ctx)
 
+	if _, ok := a.azAllocators[args.AZ]; !ok {
+		return nil, errors.ErrNoAvailableNode
+	}
+
 	if args.RackWare {
 		return a.allocFromRack(ctx, args)
 	}
@@ -52,8 +56,13 @@ func (a *allocator) Alloc(ctx context.Context, args *AllocArgs) ([]*nodeInfo, er
 
 	nodes := azAllocator.allNodes.alloc(args.Count, excludes)
 	for _, newNode := range nodes {
-		allocNodes = append(allocNodes, newNode.GetInfo())
+		info := newNode.GetInfo()
+		allocNodes = append(allocNodes, info)
+		azAllocator.rackNodeSets[info.Rack].updateTotalShardCount(1)
 	}
+
+	// update total shard count of az
+	azAllocator.allNodes.updateTotalShardCount(int32(len(allocNodes)))
 
 	if len(allocNodes) < args.Count {
 		span.Warnf("alloc nodes failed from az[%s], need: %d, get: %d", args.AZ, args.Count, len(allocNodes))
@@ -114,9 +123,11 @@ RETRY:
 			if rackMap[weightedRackNodeSets[i].rack] >= weightedRackNodeSets[i].num {
 				continue
 			}
-			rackMap[weightedRackNodeSets[i].rack] += 1
+			rackMap[weightedRackNodeSets[i].rack]++
 			_totalWeight -= weightedRackNodeSets[i].weight
-			weightedRackNodeSets[i].weight -= 1
+			if weightedRackNodeSets[i].weight > 0 {
+				weightedRackNodeSets[i].weight--
+			}
 			weightedRackNodeSets[chosenIdx], weightedRackNodeSets[i] = weightedRackNodeSets[i], weightedRackNodeSets[chosenIdx]
 			chosenIdx++
 			need--
@@ -131,7 +142,7 @@ RETRY:
 	if need > 0 {
 		span.Info("can't find enough rack, try duplicated rack")
 		chosenIdx = 0
-		_totalWeight = totalWeight - int32(args.Count-need)
+		_totalWeight = totalWeight
 		goto RETRY
 	}
 

@@ -18,7 +18,10 @@ import (
 	"github.com/cubefs/inodedb/proto"
 )
 
-const defaultSplitMapNum = 16
+const (
+	defaultSplitMapNum      = 16
+	defaultRefreshIntervalS = 5
+)
 
 type Cluster interface {
 	GetNode(ctx context.Context, nodeId uint32) (*proto.Node, error)
@@ -69,6 +72,11 @@ type cluster struct {
 }
 
 func NewCluster(ctx context.Context, cfg *Config) Cluster {
+
+	if cfg.RefreshIntervalS == 0 {
+		cfg.RefreshIntervalS = defaultRefreshIntervalS
+	}
+
 	c := &cluster{
 		clusterId:        cfg.ClusterId,
 		cfg:              cfg,
@@ -85,6 +93,7 @@ func NewCluster(ctx context.Context, cfg *Config) Cluster {
 	}
 	c.allocatorFuncMap[proto.NodeRole_ShardServer] = NewShardServerAllocator
 	c.Load(ctx)
+	c.loop()
 
 	return c
 }
@@ -109,6 +118,10 @@ func (c *cluster) GetClient(ctx context.Context, nodeId uint32) (client.ShardSer
 	if c.client == nil {
 		c.lock.Lock()
 		if c.client == nil {
+			if c.cfg.ShardServerConfig == nil {
+				c.cfg.ShardServerConfig = &client.Config{}
+			}
+			c.cfg.ShardServerConfig.GrpcPort = c.cfg.GrpcPort
 			sc, err := client.NewClient(ctx, c.cfg.ShardServerConfig)
 			if err != nil {
 				c.lock.Unlock()
@@ -298,6 +311,9 @@ func (c *cluster) refresh(ctx context.Context) {
 		allNodes = append(allNodes, n)
 		return nil
 	})
+
+	span := trace.SpanFromContextSafe(ctx)
+	span.Debugf("refresh allocator nodes: %+v", allNodes)
 
 	mgrs := make(map[proto.NodeRole]Allocator, len(c.allocatorFuncMap))
 	for role, f := range c.allocatorFuncMap {
