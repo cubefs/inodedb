@@ -1,12 +1,13 @@
 package client
 
 type InodeDBConfig struct {
-	ShardServerConfig
+	RouterConfig
 }
 
 type InodeDBClient struct {
 	*MasterClient
 	*ShardServerClient
+	*RouterClient
 }
 
 func NewInodeDBClient(cfg *InodeDBConfig) (*InodeDBClient, error) {
@@ -26,8 +27,15 @@ func NewInodeDBClient(cfg *InodeDBConfig) (*InodeDBClient, error) {
 		return nil, err
 	}
 
+	cfg.RouterConfig.MasterClient = masterClient
+	routerClient, err := NewRouterClient(&cfg.RouterConfig)
+	if err != nil {
+		return nil, err
+	}
+
 	return &InodeDBClient{
 		MasterClient:      masterClient,
 		ShardServerClient: shardServerClient,
+		RouterClient:      routerClient,
 	}, nil
 }

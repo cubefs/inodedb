@@ -109,7 +109,7 @@ func NewServer(cfg *Config) *Server {
 		case proto.NodeRole_Single.String():
 			server.master = newMaster()
 			server.shardServer = &shardserver.ShardServer{}
-			// server.router = &router.Router{}
+			server.router = &router.Router{}
 			// server.shardServer = newShardServer()
 			// server.router = newRouter()
 		default:

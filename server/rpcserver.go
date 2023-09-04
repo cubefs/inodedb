@@ -10,20 +10,19 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/cubefs/inodedb/shardserver"
-	shardServerStore "github.com/cubefs/inodedb/shardserver/store"
-
-	"github.com/cubefs/inodedb/master/cluster"
-
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
 	apierrors "github.com/cubefs/inodedb/errors"
+	"github.com/cubefs/inodedb/master/cluster"
 	"github.com/cubefs/inodedb/proto"
-	"google.golang.org/grpc"
+	"github.com/cubefs/inodedb/router"
+	"github.com/cubefs/inodedb/shardserver"
+	shardServerStore "github.com/cubefs/inodedb/shardserver/store"
 )
 
 var auditLogPool = sync.Pool{
@@ -74,11 +73,12 @@ func (r *RPCServer) Serve(addr string) {
 			MasterConfig: r.cfg.MasterRpcConfig,
 			NodeConfig:   r.cfg.NodeConfig,
 		})
-		/*r.router = router.NewRouter(&router.Config{
+		time.Sleep(100 * time.Millisecond)
+		r.router = router.NewRouter(&router.Config{
 			ServerConfig: r.cfg.ServerRpcConfig,
 			MasterConfig: r.cfg.MasterRpcConfig,
 			NodeConfig:   r.cfg.NodeConfig,
-		})*/
+		})
 	}
 }
 

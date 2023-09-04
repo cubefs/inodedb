@@ -21,8 +21,9 @@ var (
 
 func TestInodeDBClient(t *testing.T) {
 	inodeDBClient, err := NewInodeDBClient(&InodeDBConfig{
-		ShardServerConfig: ShardServerConfig{
+		RouterConfig: RouterConfig{
 			MasterAddresses: "127.0.0.1:9021",
+			RouterAddresses: "127.0.0.1:9021",
 		},
 	})
 	if err != nil {
@@ -198,6 +199,101 @@ func TestInodeDBClient(t *testing.T) {
 
 		for _, ino := range []uint64{parentIno, childIno} {
 			_, err = shardServerClient.ShardDeleteItem(ctx, &proto.DeleteItemRequest{
+				SpaceName: spaceName,
+				Ino:       ino,
+			})
+			if err != nil {
+				span.Fatalf("delete item failed: %s", err)
+			}
+		}
+	}()
+	func() {
+		resp, err := inodeDBClient.InsertItem(ctx, &proto.InsertItemRequest{
+			SpaceName:      spaceName,
+			PreferredShard: 1,
+			Item: &proto.Item{
+				Fields: []*proto.Field{
+					{Name: fieldMetas[0].Name, Value: []byte("v1")},
+					{Name: fieldMetas[1].Name, Value: []byte("v2")},
+					{Name: fieldMetas[2].Name, Value: []byte("v3")},
+				},
+			},
+		})
+		if err != nil {
+			span.Fatalf("insert item failed: %s", err)
+		}
+		span.Infof("parent ino: %d", resp.Ino)
+
+		parentIno := resp.Ino
+
+		resp, err = inodeDBClient.InsertItem(ctx, &proto.InsertItemRequest{
+			SpaceName:      spaceName,
+			PreferredShard: 1,
+			Item: &proto.Item{
+				Fields: []*proto.Field{
+					{Name: fieldMetas[0].Name, Value: []byte("v1")},
+					{Name: fieldMetas[1].Name, Value: []byte("v2")},
+					{Name: fieldMetas[2].Name, Value: []byte("v3")},
+				},
+			},
+		})
+		if err != nil {
+			span.Fatalf("insert item failed: %s", err)
+		}
+		span.Infof("child ino: %d", resp.Ino)
+		childIno := resp.Ino
+
+		_, err = inodeDBClient.Link(ctx, &proto.LinkRequest{
+			SpaceName: spaceName,
+			Link: &proto.Link{
+				Parent: parentIno,
+				Name:   "file1",
+				Child:  childIno,
+			},
+		})
+		if err != nil {
+			span.Fatalf("link failed: %s", err)
+		}
+
+		listResp, err := inodeDBClient.List(ctx, &proto.ListRequest{
+			SpaceName: spaceName,
+			Ino:       parentIno,
+			Start:     "",
+			Num:       10,
+		})
+		if err != nil {
+			span.Fatalf("list item failed: %s", err)
+		}
+		for _, link := range listResp.Links {
+			span.Infof("list info: %+v", link)
+		}
+
+		_, err = inodeDBClient.Unlink(ctx, &proto.UnlinkRequest{
+			SpaceName: spaceName,
+			Unlink: &proto.Unlink{
+				Parent: parentIno,
+				Name:   "file1",
+			},
+		})
+		if err != nil {
+			span.Fatalf("unlink failed: %s", err)
+		}
+
+		listResp, err = inodeDBClient.List(ctx, &proto.ListRequest{
+			SpaceName: spaceName,
+			Ino:       parentIno,
+			Start:     "",
+			Num:       10,
+		})
+		if err != nil {
+			span.Fatalf("list item failed: %s", err)
+		}
+		for _, link := range listResp.Links {
+			span.Infof("unlink list info: %+v", link)
+		}
+
+		for _, ino := range []uint64{parentIno, childIno} {
+			_, err = inodeDBClient.DeleteItem(ctx, &proto.DeleteItemRequest{
 				SpaceName: spaceName,
 				Ino:       ino,
 			})
