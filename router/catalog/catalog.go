@@ -24,7 +24,7 @@ type Config struct {
 type Catalog struct {
 	routeVersion uint64
 
-	service      *service
+	transporter  *transporter
 	masterClient *sc.MasterClient
 	spaces       *concurrentSpaces
 	singleRun    *singleflight.Group
@@ -39,11 +39,6 @@ func NewCatalog(ctx context.Context, cfg *Config) *Catalog {
 	}
 
 	cfg.ServerConfig.MasterClient = masterClient
-	err = NewShardServerClient(ctx, &cfg.ServerConfig)
-	if err != nil {
-		span.Fatalf("new shard server client failed: %s", err)
-	}
-
 	if cfg.NodeConfig.GrpcPort == 0 {
 		span.Fatalf("invalid node[%+v] config port", cfg.NodeConfig)
 	}
@@ -54,20 +49,23 @@ func NewCatalog(ctx context.Context, cfg *Config) *Catalog {
 		}
 	}
 
-	service := NewService(masterClient, &cfg.NodeConfig)
-	if err = service.Register(ctx); err != nil {
+	newTransporter, err := NewTransporter(&cfg.ServerConfig, &cfg.NodeConfig)
+	if err != nil {
+		span.Fatalf("new transporter failed: %s", err)
+	}
+	if err = newTransporter.Register(ctx); err != nil {
 		span.Fatalf("register router to master failed: %s", err)
 	}
 
 	catalog := &Catalog{
-		service:      service,
+		transporter:  newTransporter,
 		masterClient: masterClient,
 		singleRun:    &singleflight.Group{},
 		spaces:       newConcurrentSpaces(defaultSplitMapNum),
 	}
 
 	// heartbeat to master
-	catalog.service.StartHeartbeat(ctx)
+	catalog.transporter.StartHeartbeat(ctx)
 
 	// start get all change of catalog
 	err = catalog.GetCatalogChanges(ctx)
@@ -123,7 +121,7 @@ func (c *Catalog) GetCatalogChanges(ctx context.Context) error {
 				if err = item.Item.UnmarshalTo(spaceItem); err != nil {
 					return nil, err
 				}
-				space := NewSpace(ctx, spaceItem.Name, spaceItem.Sid, c.GetCatalogChanges)
+				space := newSpace(ctx, spaceItem.Name, spaceItem.Sid, c.GetCatalogChanges)
 				c.spaces.Put(space)
 
 			case proto.CatalogChangeType_DeleteSpace:
@@ -158,7 +156,7 @@ func (c *Catalog) GetCatalogChanges(ctx context.Context) error {
 }
 
 func (c *Catalog) Close() {
-	c.service.Close()
+	c.transporter.Close()
 }
 
 // concurrentSpaces is an effective data struct (concurrent map implements)

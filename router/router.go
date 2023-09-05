@@ -17,7 +17,7 @@ type Config struct {
 }
 
 type Router struct {
-	Catalog *catalog.Catalog
+	*catalog.Catalog
 }
 
 func NewRouter(cfg *Config) *Router {

@@ -7,8 +7,8 @@ import (
 )
 
 type shard struct {
-	routeVersion uint64
-	shardId      uint32
+	epoch   uint64
+	shardId uint32
 
 	info *ShardInfo
 }
@@ -18,8 +18,7 @@ func (s *shard) InsertItem(ctx context.Context, req *proto.InsertItemRequest) (u
 	if s.info.LeaderId == 0 {
 		leader = s.info.Nodes[0]
 	}
-	sc, err := defaultClient.GetClient(ctx, leader)
-
+	sc, err := GetDefaultTransporter().GetClient(ctx, leader)
 	if err != nil {
 		return 0, err
 	}
@@ -35,7 +34,7 @@ func (s *shard) UpdateItem(ctx context.Context, req *proto.UpdateItemRequest) er
 	if s.info.LeaderId == 0 {
 		leader = s.info.Nodes[0]
 	}
-	sc, err := defaultClient.GetClient(ctx, leader)
+	sc, err := GetDefaultTransporter().GetClient(ctx, leader)
 	if err != nil {
 		return err
 	}
@@ -51,7 +50,7 @@ func (s *shard) DeleteItem(ctx context.Context, req *proto.DeleteItemRequest) er
 	if s.info.LeaderId == 0 {
 		leader = s.info.Nodes[0]
 	}
-	sc, err := defaultClient.GetClient(ctx, leader)
+	sc, err := GetDefaultTransporter().GetClient(ctx, leader)
 	if err != nil {
 		return err
 	}
@@ -67,7 +66,7 @@ func (s *shard) GetItem(ctx context.Context, req *proto.GetItemRequest) (*proto.
 	if s.info.LeaderId == 0 {
 		leader = s.info.Nodes[0]
 	}
-	sc, err := defaultClient.GetClient(ctx, leader)
+	sc, err := GetDefaultTransporter().GetClient(ctx, leader)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +82,7 @@ func (s *shard) Link(ctx context.Context, req *proto.LinkRequest) error {
 	if s.info.LeaderId == 0 {
 		leader = s.info.Nodes[0]
 	}
-	sc, err := defaultClient.GetClient(ctx, leader)
+	sc, err := GetDefaultTransporter().GetClient(ctx, leader)
 	if err != nil {
 		return err
 	}
@@ -99,7 +98,7 @@ func (s *shard) Unlink(ctx context.Context, req *proto.UnlinkRequest) error {
 	if s.info.LeaderId == 0 {
 		leader = s.info.Nodes[0]
 	}
-	sc, err := defaultClient.GetClient(ctx, leader)
+	sc, err := GetDefaultTransporter().GetClient(ctx, leader)
 	if err != nil {
 		return err
 	}
@@ -115,7 +114,7 @@ func (s *shard) List(ctx context.Context, req *proto.ListRequest) (ret []*proto.
 	if s.info.LeaderId == 0 {
 		leader = s.info.Nodes[0]
 	}
-	sc, err := defaultClient.GetClient(ctx, leader)
+	sc, err := GetDefaultTransporter().GetClient(ctx, leader)
 	if err != nil {
 		return nil, err
 	}

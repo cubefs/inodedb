@@ -2,11 +2,12 @@ package catalog
 
 import (
 	"context"
-	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/cubefs/cubefs/blobstore/common/trace"
 
 	"github.com/cubefs/inodedb/errors"
 	"github.com/cubefs/inodedb/proto"
@@ -29,7 +30,7 @@ type Space struct {
 
 type getCatalogChangeFunc func(ctx context.Context) error
 
-func NewSpace(ctx context.Context, spaceName string, sid uint64, f getCatalogChangeFunc) *Space {
+func newSpace(ctx context.Context, spaceName string, sid uint64, f getCatalogChangeFunc) *Space {
 	return &Space{
 		sid:              sid,
 		name:             spaceName,
@@ -43,16 +44,15 @@ func (s *Space) AddShard(info *ShardInfo) {
 		return
 	}
 	newShard := &shard{
-		routeVersion: info.Epoch,
-		shardId:      info.ShardId,
-		info:         info,
+		epoch:   info.Epoch,
+		shardId: info.ShardId,
+		info:    info,
 	}
 	s.shards.Put(newShard)
 
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	s.shardIds = append(s.shardIds, info.ShardId)
-
 }
 
 func (s *Space) GetShard(ctx context.Context, shardId uint32) *shard {
@@ -60,7 +60,6 @@ func (s *Space) GetShard(ctx context.Context, shardId uint32) *shard {
 }
 
 func (s *Space) InsertItem(ctx context.Context, item *proto.Item) (uint64, error) {
-
 	shardId := s.getRandShardId()
 	shard := s.GetShard(ctx, shardId)
 
@@ -79,7 +78,6 @@ func (s *Space) InsertItem(ctx context.Context, item *proto.Item) (uint64, error
 }
 
 func (s *Space) UpdateItem(ctx context.Context, item *proto.Item) error {
-
 	shard := s.locateShard(ctx, item.Ino)
 	if shard == nil {
 		return errors.ErrInoRangeNotFound
@@ -160,15 +158,15 @@ func (s *Space) Search(ctx context.Context, req *proto.SearchRequest) (*proto.Se
 
 func (s *Space) locateShard(ctx context.Context, ino uint64) *shard {
 	span := trace.SpanFromContextSafe(ctx)
-	sid := uint32(ino/proto.ShardRangeStepSize) + 1
-	get := s.shards.Get(sid)
+	shardId := uint32(ino/proto.ShardRangeStepSize) + 1
+	get := s.shards.Get(shardId)
 	if get == nil {
 		if err := s.getCatalogChange(ctx); err != nil {
 			span.Errorf("get catalog change from master failed, err: %s", err)
 			return nil
 		}
 	}
-	return s.shards.Get(sid)
+	return s.shards.Get(shardId)
 }
 
 func (s *Space) getRandShardId() uint32 {
