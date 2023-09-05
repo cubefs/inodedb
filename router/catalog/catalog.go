@@ -35,7 +35,7 @@ func NewCatalog(ctx context.Context, cfg *Config) *Catalog {
 
 	masterClient, err := sc.NewMasterClient(&cfg.MasterConfig)
 	if err != nil {
-		span.Fatalf("new master client failed: %s", err)
+		span.Fatalf("new master transport failed: %s", err)
 	}
 
 	cfg.ServerConfig.MasterClient = masterClient
@@ -49,16 +49,16 @@ func NewCatalog(ctx context.Context, cfg *Config) *Catalog {
 		}
 	}
 
-	newTransporter, err := NewTransporter(&cfg.ServerConfig, &cfg.NodeConfig)
+	tr, err := NewTransporter(&cfg.ServerConfig, &cfg.NodeConfig)
 	if err != nil {
 		span.Fatalf("new transporter failed: %s", err)
 	}
-	if err = newTransporter.Register(ctx); err != nil {
+	if err = tr.Register(ctx); err != nil {
 		span.Fatalf("register router to master failed: %s", err)
 	}
 
 	catalog := &Catalog{
-		transporter:  newTransporter,
+		transporter:  tr,
 		masterClient: masterClient,
 		singleRun:    &singleflight.Group{},
 		spaces:       newConcurrentSpaces(defaultSplitMapNum),
@@ -138,12 +138,11 @@ func (c *Catalog) GetCatalogChanges(ctx context.Context) error {
 				}
 				space := c.spaces.Get(shardItem.Sid)
 				space.AddShard(&ShardInfo{
-					ShardId:   shardItem.ShardId,
-					Epoch:     shardItem.Epoch,
-					SpaceName: space.name,
-					Nodes:     shardItem.Replicates,
-					LeaderId:  shardItem.Leader,
-				})
+					ShardId:  shardItem.ShardId,
+					Epoch:    shardItem.Epoch,
+					Nodes:    shardItem.Replicates,
+					LeaderId: shardItem.Leader,
+				}, c.transporter)
 			default:
 				span.Panicf("parse catalog change from master failed, err: %s", errors.ErrUnknownOperationType)
 			}

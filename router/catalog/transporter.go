@@ -37,8 +37,6 @@ type transporter struct {
 	lock sync.RWMutex
 }
 
-var defaultTransporter *transporter
-
 func NewTransporter(cfg *ShardServerConfig, info *proto.Node) (*transporter, error) {
 	serverClient, err := sc.NewShardServerClient(&sc.ShardServerConfig{
 		MasterClient:    cfg.MasterClient,
@@ -47,17 +45,12 @@ func NewTransporter(cfg *ShardServerConfig, info *proto.Node) (*transporter, err
 	if err != nil {
 		return nil, err
 	}
-	defaultTransporter = &transporter{
+	return &transporter{
 		shardServerClient: serverClient,
 		info:              info,
 		done:              make(chan struct{}),
 		masterClient:      cfg.MasterClient,
-	}
-	return defaultTransporter, nil
-}
-
-func GetDefaultTransporter() *transporter {
-	return defaultTransporter
+	}, nil
 }
 
 func (s *transporter) Register(ctx context.Context) error {
