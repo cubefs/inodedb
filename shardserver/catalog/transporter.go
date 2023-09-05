@@ -130,10 +130,10 @@ func (t *transporter) GetNode(ctx context.Context, nodeId uint32) (*proto.Node, 
 
 func (t *transporter) StartHeartbeat(ctx context.Context) {
 	heartbeatTicker := time.NewTicker(1 * time.Second)
-	defer heartbeatTicker.Stop()
 	span := trace.SpanFromContext(ctx)
 
 	go func() {
+		defer heartbeatTicker.Stop()
 		for {
 			select {
 			case <-heartbeatTicker.C:

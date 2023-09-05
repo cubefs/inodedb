@@ -157,6 +157,9 @@ func (s *shard) Link(ctx context.Context, l *proto.Link) error {
 	if !s.checkInoMatchRange(l.Parent) {
 		return apierrors.ErrInoMismatchShardRange
 	}
+	if !s.checkInoMatchRange(l.Child) {
+		return apierrors.ErrInoMismatchShardRange
+	}
 
 	data, err := pb.Marshal(l)
 	if err != nil {
