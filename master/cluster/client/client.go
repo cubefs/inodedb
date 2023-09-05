@@ -32,7 +32,7 @@ type transporter struct {
 	shardServerClient *sc.ShardServerClient
 }
 
-func NewClient(ctx context.Context, cfg *Config) (Transporter, error) {
+func NewTransporter(ctx context.Context, cfg *Config) (Transporter, error) {
 	localIP, err := util.GetLocalIP()
 	if err != nil {
 		return nil, err

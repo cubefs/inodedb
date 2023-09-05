@@ -58,7 +58,7 @@ type cluster struct {
 	allNodes   *concurrentNodes
 
 	cfg         *Config
-	client      client.Transporter
+	transporter client.Transporter
 	raftGroup   raft.Group
 	storage     *storage
 	idGenerator idGenerator.IDGenerator
@@ -72,7 +72,6 @@ type cluster struct {
 }
 
 func NewCluster(ctx context.Context, cfg *Config) Cluster {
-
 	if cfg.RefreshIntervalS == 0 {
 		cfg.RefreshIntervalS = defaultRefreshIntervalS
 	}
@@ -115,19 +114,19 @@ func (c *cluster) GetNode(ctx context.Context, nodeId uint32) (*proto.Node, erro
 }
 
 func (c *cluster) GetClient(ctx context.Context, nodeId uint32) (client.ShardServerClient, error) {
-	if c.client == nil {
+	if c.transporter == nil {
 		c.lock.Lock()
-		if c.client == nil {
+		if c.transporter == nil {
 			if c.cfg.ShardServerConfig == nil {
 				c.cfg.ShardServerConfig = &client.Config{}
 			}
 			c.cfg.ShardServerConfig.GrpcPort = c.cfg.GrpcPort
-			sc, err := client.NewClient(ctx, c.cfg.ShardServerConfig)
+			transporter, err := client.NewTransporter(ctx, c.cfg.ShardServerConfig)
 			if err != nil {
 				c.lock.Unlock()
-				return nil, errors.Info(err, "new shard server client failed: %s")
+				return nil, errors.Info(err, "new shard server transporter failed: %s")
 			}
-			c.client = sc
+			c.transporter = transporter
 		}
 		c.lock.Unlock()
 	}
@@ -135,7 +134,7 @@ func (c *cluster) GetClient(ctx context.Context, nodeId uint32) (client.ShardSer
 	if n == nil {
 		return nil, apierrors.ErrNotFound
 	}
-	return c.client.GetShardServerClient(ctx, nodeId)
+	return c.transporter.GetShardServerClient(ctx, nodeId)
 }
 
 func (c *cluster) Alloc(ctx context.Context, args *AllocArgs) ([]*nodeInfo, error) {
@@ -343,6 +342,7 @@ func (c *cluster) refresh(ctx context.Context) {
 
 	for _, n := range allNodes {
 		if !n.IsAvailable() {
+			span.Debugf("node not available, node: %#v, time: %s", n.info, n.expires.String())
 			continue
 		}
 
