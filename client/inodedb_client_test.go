@@ -42,7 +42,7 @@ func TestInodeDBClient(t *testing.T) {
 		resp, err := inodeDBClient.CreateSpace(ctx, &proto.CreateSpaceRequest{
 			Name:          spaceName,
 			Type:          proto.SpaceType_Inode,
-			DesiredShards: 10,
+			DesiredShards: 1,
 			FixedFields:   fieldMetas,
 		})
 		if err != nil {

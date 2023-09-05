@@ -7,12 +7,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
 
-	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/inodedb/common/raft"
 	apierrors "github.com/cubefs/inodedb/errors"
-	"github.com/cubefs/inodedb/master/cluster/client"
+	"github.com/cubefs/inodedb/master/cluster/transport"
 	idGenerator "github.com/cubefs/inodedb/master/idgenerator"
 	"github.com/cubefs/inodedb/master/store"
 	"github.com/cubefs/inodedb/proto"
@@ -26,7 +26,7 @@ const (
 type Cluster interface {
 	GetNode(ctx context.Context, nodeId uint32) (*proto.Node, error)
 	Alloc(ctx context.Context, args *AllocArgs) ([]*nodeInfo, error)
-	GetClient(ctx context.Context, nodeId uint32) (client.ShardServerClient, error)
+	GetClient(ctx context.Context, nodeId uint32) (transport.ShardServerClient, error)
 	Register(ctx context.Context, args *proto.Node) (uint32, error)
 	Unregister(ctx context.Context, nodeID uint32) error
 	ListNodeInfo(ctx context.Context, roles []proto.NodeRole) ([]*proto.Node, error)
@@ -36,13 +36,13 @@ type Cluster interface {
 }
 
 type Config struct {
-	ClusterId         uint32         `json:"cluster_id"`
-	Azs               []string       `json:"azs"`
-	GrpcPort          uint32         `json:"grpc_port"`
-	HttpPort          uint32         `json:"http_port"`
-	HeartbeatTimeoutS int            `json:"heartbeat_timeout_s"`
-	RefreshIntervalS  int            `json:"refresh_interval_s"`
-	ShardServerConfig *client.Config `json:"shard_server_config"`
+	ClusterId         uint32            `json:"cluster_id"`
+	Azs               []string          `json:"azs"`
+	GrpcPort          uint32            `json:"grpc_port"`
+	HttpPort          uint32            `json:"http_port"`
+	HeartbeatTimeoutS int               `json:"heartbeat_timeout_s"`
+	RefreshIntervalS  int               `json:"refresh_interval_s"`
+	ShardServerConfig *transport.Config `json:"shard_server_config"`
 
 	Store       *store.Store            `json:"-"`
 	IdGenerator idGenerator.IDGenerator `json:"-"`
@@ -58,7 +58,7 @@ type cluster struct {
 	allNodes   *concurrentNodes
 
 	cfg         *Config
-	transporter client.Transporter
+	transporter transport.Transporter
 	raftGroup   raft.Group
 	storage     *storage
 	idGenerator idGenerator.IDGenerator
@@ -113,15 +113,15 @@ func (c *cluster) GetNode(ctx context.Context, nodeId uint32) (*proto.Node, erro
 	return info, nil
 }
 
-func (c *cluster) GetClient(ctx context.Context, nodeId uint32) (client.ShardServerClient, error) {
+func (c *cluster) GetClient(ctx context.Context, nodeId uint32) (transport.ShardServerClient, error) {
 	if c.transporter == nil {
 		c.lock.Lock()
 		if c.transporter == nil {
 			if c.cfg.ShardServerConfig == nil {
-				c.cfg.ShardServerConfig = &client.Config{}
+				c.cfg.ShardServerConfig = &transport.Config{}
 			}
 			c.cfg.ShardServerConfig.GrpcPort = c.cfg.GrpcPort
-			transporter, err := client.NewTransporter(ctx, c.cfg.ShardServerConfig)
+			transporter, err := transport.NewTransporter(ctx, c.cfg.ShardServerConfig)
 			if err != nil {
 				c.lock.Unlock()
 				return nil, errors.Info(err, "new shard server transporter failed: %s")
