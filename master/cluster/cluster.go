@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"log"
 	"sync"
 	"time"
 
@@ -19,8 +20,9 @@ import (
 )
 
 const (
-	defaultSplitMapNum      = 16
-	defaultRefreshIntervalS = 5
+	defaultSplitMapNum       = 16
+	defaultRefreshIntervalS  = 5
+	defaultHeartbeatTimeoutS = 30
 )
 
 type Cluster interface {
@@ -72,8 +74,9 @@ type cluster struct {
 }
 
 func NewCluster(ctx context.Context, cfg *Config) Cluster {
-	if cfg.RefreshIntervalS == 0 {
-		cfg.RefreshIntervalS = defaultRefreshIntervalS
+	err := initConfig(cfg)
+	if err != nil {
+		log.Fatalf("init config failed: err: %s", err)
 	}
 
 	c := &cluster{
@@ -394,4 +397,20 @@ func (c *cluster) isValidRole(role proto.NodeRole) bool {
 func (c *cluster) isValidAz(az string) bool {
 	_, ok := c.azs[az]
 	return ok
+}
+
+func initConfig(cfg *Config) error {
+	if len(cfg.Azs) == 0 {
+		return errors.New("at least config one az for cluster")
+	}
+	if cfg.GrpcPort == 0 && cfg.HttpPort == 0 {
+		return errors.New("need config http port or grpc port")
+	}
+	if cfg.RefreshIntervalS <= 0 {
+		cfg.RefreshIntervalS = defaultRefreshIntervalS
+	}
+	if cfg.HeartbeatTimeoutS <= 0 {
+		cfg.HeartbeatTimeoutS = defaultHeartbeatTimeoutS
+	}
+	return nil
 }

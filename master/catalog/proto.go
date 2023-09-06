@@ -18,11 +18,6 @@ const (
 	SpaceExpandStatusUpdateRoute = uint8(1)
 )
 
-const (
-	routerCF = "router"
-	shardCF  = "shard"
-)
-
 // proto for storage encoding/decoding and function return value
 
 type SpaceStatus uint8

@@ -98,6 +98,10 @@ type (
 
 func NewCatalog(ctx context.Context, cfg *Config) Catalog {
 	span := trace.SpanFromContext(ctx)
+	err := initConfig(cfg)
+	if err != nil {
+		span.Fatalf("init config failed for catalog, err: %s", err)
+	}
 
 	c := &catalog{
 		spaces:      newConcurrentSpaces(defaultSplitMapNum),
@@ -691,6 +695,22 @@ func (c *catalog) expandSpaceUpdateRoute(ctx context.Context, space *space) erro
 func (c *catalog) genNewEpoch(ctx context.Context, step int) (base, new uint64, err error) {
 	base, new, err = c.idGenerator.Alloc(ctx, epochIdName, step)
 	return
+}
+
+func initConfig(cfg *Config) error {
+	if len(cfg.AZs) == 0 {
+		return errors.New("at least config one az for master")
+	}
+	if cfg.ShardReplicateNum <= 0 {
+		cfg.ShardReplicateNum = defaultShardReplicateNum
+	}
+	if cfg.ExpandShardsNumPerSpace <= 0 {
+		cfg.ExpandShardsNumPerSpace = defaultExpandShardsNumPerSpace
+	}
+	if cfg.InoLimitPerShard <= 0 {
+		cfg.InoLimitPerShard = defaultInoLimitPerShard
+	}
+	return nil
 }
 
 // concurrentSpaces is an effective data struct (concurrent map implements)
