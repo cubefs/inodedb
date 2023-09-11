@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
@@ -29,7 +30,7 @@ func (c *catalog) Apply(ctx context.Context, op raft.Op, data []byte) error {
 	case RaftOpCreateSpace:
 		return c.applyCreateSpace(ctx, data)
 	default:
-		return errors.New("unsupported operation")
+		return errors.New(fmt.Sprintf("unsupported operation type: %d", op))
 	}
 }
 

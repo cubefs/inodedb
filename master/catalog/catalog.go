@@ -419,6 +419,8 @@ func (c *catalog) GetCatalogChanges(ctx context.Context, fromRouterVersion uint6
 				Leader:     shardInfo.Leader,
 				Replicates: shardInfo.Replicates,
 			})
+		default:
+
 		}
 
 		if err != nil {
@@ -570,6 +572,7 @@ func (c *catalog) createSpaceShards(ctx context.Context, space *space, startShar
 		if err := c.applyExpandSpaceShards(ctx, data); err != nil {
 			return err
 		}
+	default:
 	}
 
 	return nil

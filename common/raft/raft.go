@@ -102,9 +102,6 @@ func (req *ProposeRequest) Unmarshal(raw []byte) error {
 	return nil
 }
 
-func (resp *ProposeResponse) Close() {
-}
-
 type group struct {
 	applyIndex       uint64
 	stableApplyIndex uint64
@@ -139,14 +136,16 @@ func (r *group) Propose(ctx context.Context, req *ProposeRequest) (*ProposeRespo
 	if err := r.raft.Propose(ctx, data); err != nil {
 		return nil, err
 	}
-
 	if !req.WithResult {
 		return nil, nil
 	}
+
 	ret, ok := r.proposeResponses.Load(req.respKey)
 	if !ok {
 		return nil, errors.New("no result return but with result expected")
 	}
+
+	r.proposeResponses.Delete(req.respKey)
 	return &ProposeResponse{
 		Data:    ret,
 		respKey: req.respKey,
@@ -154,6 +153,7 @@ func (r *group) Propose(ctx context.Context, req *ProposeRequest) (*ProposeRespo
 }
 
 func (r *group) Start() {
+	return
 }
 
 func (r *group) Stat() *Stat {
@@ -161,6 +161,7 @@ func (r *group) Stat() *Stat {
 }
 
 func (r *group) Close() {
+	return
 }
 
 func (r *group) Apply(ctx context.Context, data []byte, index uint64) error {

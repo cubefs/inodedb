@@ -3,6 +3,7 @@ package catalog
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/cubefs/inodedb/proto"
 )
@@ -46,6 +47,8 @@ func (r *routeItemInfo) Unmarshal(data []byte) error {
 	case proto.CatalogChangeType_AddShard:
 		r.ItemDetail = &routeItemShardAdd{}
 		return json.Unmarshal(data, r)
+	default:
+		panic(fmt.Sprintf("unsupported route item type: %d", r.Type))
 	}
 	return errors.New("unsupported route item type")
 }

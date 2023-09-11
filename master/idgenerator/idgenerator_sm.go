@@ -16,6 +16,7 @@ package idgenerator
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
@@ -52,6 +53,8 @@ func (s *idGenerator) Apply(ctx context.Context, op raft.Op, data []byte) error 
 		if err != nil {
 			return errors.Info(err, "apply commit failed").Detail(err)
 		}
+	default:
+		return errors.New(fmt.Sprintf("unsupported operation type: %d", op))
 	}
 
 	return nil
@@ -62,4 +65,5 @@ func (s *idGenerator) Flush(ctx context.Context) error {
 }
 
 func (s *idGenerator) NotifyLeaderChange(ctx context.Context, leader uint64, host string) {
+	return
 }

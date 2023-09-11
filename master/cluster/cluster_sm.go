@@ -3,13 +3,14 @@ package cluster
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/cubefs/cubefs/blobstore/clustermgr/base"
 	"github.com/cubefs/cubefs/blobstore/common/trace"
-
 	"github.com/cubefs/inodedb/common/raft"
-	"github.com/cubefs/inodedb/errors"
+	apierrors "github.com/cubefs/inodedb/errors"
 )
 
 const (
@@ -24,7 +25,6 @@ const (
 )
 
 func (c *cluster) Apply(ctx context.Context, ops []raft.Op, datas [][]byte, contexts []base.ProposeContext) error {
-	span := trace.SpanFromContextSafe(ctx)
 	for i := range ops {
 		op := ops[i]
 		_, newCtx := trace.StartSpanFromContextWithTraceID(ctx, "", contexts[i].ReqID)
@@ -38,7 +38,7 @@ func (c *cluster) Apply(ctx context.Context, ops []raft.Op, datas [][]byte, cont
 		case RaftOpUpdateNode:
 			return c.applyUpdate(ctx, datas[i])
 		default:
-			span.Panicf("unsupported operation type: %d", op)
+			return errors.New(fmt.Sprintf("unsupported operation type: %d", op))
 		}
 	}
 	return nil
@@ -49,6 +49,7 @@ func (c *cluster) Flush(ctx context.Context) error {
 }
 
 func (c *cluster) NotifyLeaderChange(ctx context.Context, leader uint64, host string) {
+	return
 }
 
 func (c *cluster) GetModuleName() string {
@@ -144,7 +145,7 @@ func (c *cluster) applyHeartbeat(ctx context.Context, data []byte) error {
 
 	n := c.allNodes.Get(args.NodeID)
 	if n == nil {
-		return errors.ErrNodeNotExist
+		return apierrors.ErrNodeNotExist
 	}
 	expires := time.Now().Add(time.Duration(c.cfg.HeartbeatTimeoutS) * time.Second)
 	n.HandleHeartbeat(ctx, args.ShardCount, expires)

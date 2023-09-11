@@ -275,6 +275,7 @@ func (c *Catalog) initRoute(ctx context.Context) error {
 			spaceName, _ := c.spaceIdToNames.Load(spaceItem.Sid)
 			c.spaces.Delete(spaceName.(string))
 			c.spaceIdToNames.Delete(spaceItem.Sid)
+		default:
 		}
 		c.updateRouteVersion(routeItem.RouteVersion)
 	}

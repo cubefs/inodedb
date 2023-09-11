@@ -60,7 +60,9 @@ func (lr *LBResolver) ResolveNow(opts resolver.ResolveNowOptions) {
 	lr.cc.UpdateState(newState)
 }
 
-func (lr *LBResolver) Close() {}
+func (lr *LBResolver) Close() {
+	return
+}
 
 type ServiceDiscoveryBuilder struct {
 	masterClient *MasterClient
