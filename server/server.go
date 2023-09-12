@@ -110,8 +110,6 @@ func NewServer(cfg *Config) *Server {
 			server.master = newMaster()
 			server.shardServer = &shardserver.ShardServer{}
 			server.router = &router.Router{}
-			// server.shardServer = newShardServer()
-			// server.router = newRouter()
 		default:
 			log.Fatalf("unknown node role")
 		}

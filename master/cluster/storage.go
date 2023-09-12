@@ -7,6 +7,8 @@ import (
 	"github.com/cubefs/inodedb/common/kvstore"
 )
 
+const CF = "node"
+
 var (
 	nodeKeyPrefix = []byte("n")
 	keyInfix      = []byte("/")
@@ -17,7 +19,7 @@ type storage struct {
 }
 
 func (s *storage) Load(ctx context.Context) ([]*nodeInfo, error) {
-	lr := s.kvStore.List(ctx, clusterCF, nil, nil, nil)
+	lr := s.kvStore.List(ctx, CF, nil, nil, nil)
 	defer lr.Close()
 
 	var res []*nodeInfo
@@ -50,12 +52,12 @@ func (s *storage) Put(ctx context.Context, info *nodeInfo) error {
 	if err != nil {
 		return err
 	}
-	return s.kvStore.SetRaw(ctx, clusterCF, key, marshal, nil)
+	return s.kvStore.SetRaw(ctx, CF, key, marshal, nil)
 }
 
 func (s *storage) Get(ctx context.Context, nodeId uint32) (*nodeInfo, error) {
 	key := encodeNodeKey(nodeId)
-	v, err := s.kvStore.Get(ctx, clusterCF, key, nil)
+	v, err := s.kvStore.Get(ctx, CF, key, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +73,7 @@ func (s *storage) Get(ctx context.Context, nodeId uint32) (*nodeInfo, error) {
 
 func (s *storage) Delete(ctx context.Context, nodeId uint32) error {
 	key := encodeNodeKey(nodeId)
-	return s.kvStore.Delete(ctx, clusterCF, key, nil)
+	return s.kvStore.Delete(ctx, CF, key, nil)
 }
 
 func encodeNodeKey(nodeId uint32) []byte {

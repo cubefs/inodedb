@@ -19,7 +19,12 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strconv"
 	"syscall"
+
+	"github.com/cubefs/inodedb/proto"
+
+	"github.com/cubefs/inodedb/util"
 
 	"github.com/cubefs/cubefs/blobstore/common/config"
 	"github.com/cubefs/cubefs/blobstore/common/profile"
@@ -34,8 +39,8 @@ import (
 type Config struct {
 	server.Config
 
-	HttpBindAddr  string    `json:"http_bind_addr"`
-	GRPCBindAddr  string    `json:"grpc_bind_addr"`
+	HttpBindPort  uint32    `json:"http_bind_port"`
+	GrpcBindPort  uint32    `json:"grpc_bind_port"`
 	MaxProcessors int       `json:"max_processors"`
 	LogLevel      log.Level `json:"log_level"`
 }
@@ -47,10 +52,8 @@ func main() {
 	if err := config.Load(cfg); err != nil {
 		log.Fatal(errors.Detail(err))
 	}
-	if cfg.MaxProcessors > 0 {
-		runtime.GOMAXPROCS(cfg.MaxProcessors)
-	}
 
+	initConfig(cfg)
 	registerLogLevel()
 	modifyOpenFiles()
 	log.SetOutputLevel(cfg.LogLevel)
@@ -58,11 +61,11 @@ func main() {
 	startServer := server.NewServer(&cfg.Config)
 	// start http server
 	httpServer := server.NewHttpServer(startServer)
-	httpServer.Serve(cfg.HttpBindAddr)
+	httpServer.Serve(":" + strconv.Itoa(int(cfg.HttpBindPort)))
 
 	// start grpc server
 	grpcServer := server.NewRPCServer(startServer)
-	grpcServer.Serve(cfg.GRPCBindAddr)
+	grpcServer.Serve(":" + strconv.Itoa(int(cfg.GrpcBindPort)))
 
 	// wait for signal
 	ch := make(chan os.Signal, 1)
@@ -110,4 +113,58 @@ func modifyOpenFiles() {
 	}
 	log.Info("system limit: ", rLimit)
 	return
+}
+
+func initConfig(cfg *Config) {
+	cfg.NodeConfig.GrpcPort = cfg.GrpcBindPort
+	cfg.NodeConfig.HttpPort = cfg.HttpBindPort
+	cfg.ClusterConfig.GrpcPort = cfg.GrpcBindPort
+	cfg.ClusterConfig.HttpPort = cfg.HttpBindPort
+
+	if cfg.AuditLog.LogDir == "" {
+		cfg.AuditLog.LogDir = "./run/audit_log"
+	}
+	if cfg.StoreConfig.Path == "" {
+		cfg.StoreConfig.Path = "./run/store"
+	}
+	if cfg.MaxProcessors > 0 {
+		runtime.GOMAXPROCS(cfg.MaxProcessors)
+	}
+
+	if cfg.NodeConfig.Addr == "" {
+		var err error
+		cfg.NodeConfig.Addr, err = util.GetLocalIP()
+		if err != nil {
+			log.Fatalf("can't get local ip address, please set the ip address for the node config")
+		}
+	}
+
+	if len(cfg.ClusterConfig.Azs) == 0 {
+		cfg.ClusterConfig.Azs = []string{"z0"}
+	}
+	cfg.CatalogConfig.AZs = cfg.ClusterConfig.Azs
+	if cfg.NodeConfig.Az == "" {
+		cfg.NodeConfig.Az = cfg.ClusterConfig.Azs[0]
+	}
+
+	if len(cfg.Roles) == 0 {
+		log.Fatalf("node roles must be set")
+	}
+InitRoles:
+	for _, role := range cfg.Roles {
+		switch role {
+		case proto.NodeRole_Single.String():
+			cfg.NodeConfig.Roles = []proto.NodeRole{proto.NodeRole_ShardServer, proto.NodeRole_Router, proto.NodeRole_Master}
+			cfg.CatalogConfig.ShardReplicateNum = 1
+			cfg.MasterRpcConfig.MasterAddresses = "127.0.0.1:" + strconv.Itoa(int(cfg.GrpcBindPort))
+			cfg.ClusterConfig.ClusterId = 1
+			break InitRoles
+		case proto.NodeRole_Master.String():
+			cfg.NodeConfig.Roles = append(cfg.NodeConfig.Roles, proto.NodeRole_Master)
+		case proto.NodeRole_Router.String():
+			cfg.NodeConfig.Roles = append(cfg.NodeConfig.Roles, proto.NodeRole_Router)
+		case proto.NodeRole_ShardServer.String():
+			cfg.NodeConfig.Roles = append(cfg.NodeConfig.Roles, proto.NodeRole_ShardServer)
+		}
+	}
 }

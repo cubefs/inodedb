@@ -4,13 +4,12 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
-
+	"github.com/cubefs/cubefs/blobstore/util/log"
 	"github.com/cubefs/inodedb/common/raft"
 	apierrors "github.com/cubefs/inodedb/errors"
 	"github.com/cubefs/inodedb/master/cluster/transport"

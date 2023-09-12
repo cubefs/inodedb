@@ -9,7 +9,6 @@ import (
 // proto for set encoding/decoding and function return value
 
 const (
-	clusterCF  = "cluster"
 	nodeIdName = "node"
 )
 

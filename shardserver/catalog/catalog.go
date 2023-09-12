@@ -13,7 +13,6 @@ import (
 	apierrors "github.com/cubefs/inodedb/errors"
 	"github.com/cubefs/inodedb/proto"
 	"github.com/cubefs/inodedb/shardserver/store"
-	"github.com/cubefs/inodedb/util"
 )
 
 const defaultBTreeDegree = 32
@@ -43,19 +42,14 @@ func NewCatalog(ctx context.Context, cfg *Config) *Catalog {
 		span.Fatalf("new master client failed: %s", err)
 	}
 
-	store, err := store.NewStore(ctx, &cfg.StoreConfig)
-	if err != nil {
-		span.Fatalf("new store instance failed: %s", err)
-	}
-
 	if cfg.NodeConfig.GrpcPort == 0 || cfg.NodeConfig.RaftPort == 0 {
 		span.Fatalf("invalid node[%+v] config port", cfg.NodeConfig)
 	}
-	if cfg.NodeConfig.Addr == "" {
-		cfg.NodeConfig.Addr, err = util.GetLocalIP()
-		if err != nil {
-			span.Fatalf("can't get local ip address, please set the ip address for the node config")
-		}
+
+	cfg.StoreConfig.KVOption.ColumnFamily = append(cfg.StoreConfig.KVOption.ColumnFamily, lockCF, dataCF, writeCF)
+	store, err := store.NewStore(ctx, &cfg.StoreConfig)
+	if err != nil {
+		span.Fatalf("new store instance failed: %s", err)
 	}
 
 	transporter := newTransporter(masterClient, &cfg.NodeConfig)

@@ -9,9 +9,9 @@ import (
 	"github.com/cubefs/inodedb/common/kvstore"
 )
 
-var (
-	cf = kvstore.CF("catalog")
+const CF = "catalog"
 
+var (
 	catalogKeyPrefix = []byte("c")
 	routeKeyPrefix   = []byte("r")
 	shardKeyPrefix   = []byte("s")
@@ -36,11 +36,11 @@ func (s *storage) CreateSpace(ctx context.Context, info *spaceInfo) error {
 		return err
 	}
 
-	return s.kvStore.SetRaw(ctx, cf, s.keysGenerator.encodeSpaceKey(info.Sid), data, nil)
+	return s.kvStore.SetRaw(ctx, CF, s.keysGenerator.encodeSpaceKey(info.Sid), data, nil)
 }
 
 func (s *storage) ListSpaces(ctx context.Context) (ret []*spaceInfo, err error) {
-	lr := s.kvStore.List(ctx, cf, s.keysGenerator.encodeSpaceKeyPrefix(), nil, nil)
+	lr := s.kvStore.List(ctx, CF, s.keysGenerator.encodeSpaceKeyPrefix(), nil, nil)
 	defer lr.Close()
 
 	for {
@@ -75,8 +75,8 @@ func (s *storage) DeleteSpace(ctx context.Context, sid uint64, info *routeItemIn
 	batch := s.kvStore.NewWriteBatch()
 	defer batch.Close()
 
-	batch.Delete(cf, s.keysGenerator.encodeSpaceKey(sid))
-	batch.Put(cf, s.keysGenerator.encodeRouteKey(info.RouteVersion), data)
+	batch.Delete(CF, s.keysGenerator.encodeSpaceKey(sid))
+	batch.Put(CF, s.keysGenerator.encodeRouteKey(info.RouteVersion), data)
 	return s.kvStore.Write(ctx, batch, nil)
 }
 
@@ -88,14 +88,14 @@ func (s *storage) UpsertSpaceShardsAndRouteItems(ctx context.Context, info *spac
 	if err != nil {
 		return err
 	}
-	batch.Put(cf, s.keysGenerator.encodeSpaceKey(info.Sid), data)
+	batch.Put(CF, s.keysGenerator.encodeSpaceKey(info.Sid), data)
 
 	for i := range shards {
 		shardData, err := shards[i].Marshal()
 		if err != nil {
 			return err
 		}
-		batch.Put(cf, s.keysGenerator.encodeShardKey(info.Sid, shards[i].ShardId), shardData)
+		batch.Put(CF, s.keysGenerator.encodeShardKey(info.Sid, shards[i].ShardId), shardData)
 	}
 
 	for i := range routeItems {
@@ -103,14 +103,14 @@ func (s *storage) UpsertSpaceShardsAndRouteItems(ctx context.Context, info *spac
 		if err != nil {
 			return err
 		}
-		batch.Put(cf, s.keysGenerator.encodeRouteKey(routeItems[i].RouteVersion), routeItemData)
+		batch.Put(CF, s.keysGenerator.encodeRouteKey(routeItems[i].RouteVersion), routeItemData)
 	}
 
 	return s.kvStore.Write(ctx, batch, nil)
 }
 
 func (s *storage) ListShards(ctx context.Context, sid uint64) (ret []*shardInfo, err error) {
-	lr := s.kvStore.List(ctx, cf, s.keysGenerator.encodeShardKeyPrefix(sid), nil, nil)
+	lr := s.kvStore.List(ctx, CF, s.keysGenerator.encodeShardKeyPrefix(sid), nil, nil)
 	defer lr.Close()
 
 	for {
@@ -136,7 +136,7 @@ func (s *storage) ListShards(ctx context.Context, sid uint64) (ret []*shardInfo,
 }
 
 func (s *storage) GetFirstRouteItem(ctx context.Context) (*routeItemInfo, error) {
-	lr := s.kvStore.List(ctx, cf, s.keysGenerator.encodeRouteKeyPrefix(), nil, nil)
+	lr := s.kvStore.List(ctx, CF, s.keysGenerator.encodeRouteKeyPrefix(), nil, nil)
 	defer lr.Close()
 
 	kg, vg, err := lr.ReadNext()
@@ -155,7 +155,7 @@ func (s *storage) GetFirstRouteItem(ctx context.Context) (*routeItemInfo, error)
 }
 
 func (s *storage) ListRouteItems(ctx context.Context) (ret []*routeItemInfo, err error) {
-	lr := s.kvStore.List(ctx, cf, s.keysGenerator.encodeRouteKeyPrefix(), nil, nil)
+	lr := s.kvStore.List(ctx, CF, s.keysGenerator.encodeRouteKeyPrefix(), nil, nil)
 	defer lr.Close()
 
 	for {
@@ -182,7 +182,7 @@ func (s *storage) DeleteOldestRouteItems(ctx context.Context, before uint64) err
 	batch := s.kvStore.NewWriteBatch()
 	defer batch.Close()
 
-	batch.DeleteRange(cf, s.keysGenerator.encodeRouteKey(0), s.keysGenerator.encodeRouteKey(before))
+	batch.DeleteRange(CF, s.keysGenerator.encodeRouteKey(0), s.keysGenerator.encodeRouteKey(before))
 	return s.kvStore.Write(ctx, batch, nil)
 }
 

@@ -2,6 +2,7 @@ package master
 
 import (
 	"context"
+
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/inodedb/common/raft"
 	"github.com/cubefs/inodedb/master/catalog"
@@ -24,6 +25,7 @@ type Master struct {
 func NewMaster(cfg *Config) *Master {
 	span, ctx := trace.StartSpanFromContext(context.Background(), "")
 
+	cfg.StoreConfig.KVOption.ColumnFamily = append(cfg.StoreConfig.KVOption.ColumnFamily, catalog.CF, cluster.CF, idgenerator.CF)
 	store, err := store.NewStore(ctx, &cfg.StoreConfig)
 	if err != nil {
 		span.Fatalf("new store failed: %s", err)

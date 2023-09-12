@@ -7,14 +7,14 @@ import (
 	"github.com/cubefs/inodedb/common/kvstore"
 )
 
-var cf = kvstore.CF("id")
+var CF = kvstore.CF("id")
 
 type storage struct {
 	kvStore kvstore.Store
 }
 
 func (s *storage) Load(ctx context.Context) (map[string]uint64, error) {
-	lr := s.kvStore.List(ctx, cf, nil, nil, nil)
+	lr := s.kvStore.List(ctx, CF, nil, nil, nil)
 	defer lr.Close()
 
 	ret := make(map[string]uint64)
@@ -38,7 +38,7 @@ func (s *storage) Load(ctx context.Context) (map[string]uint64, error) {
 func (s *storage) Put(ctx context.Context, name string, commit uint64) error {
 	key := encodeName(name)
 	value := encodeValue(commit)
-	err := s.kvStore.SetRaw(ctx, cf, key, value, nil)
+	err := s.kvStore.SetRaw(ctx, CF, key, value, nil)
 	if err != nil {
 		return err
 	}
@@ -47,7 +47,7 @@ func (s *storage) Put(ctx context.Context, name string, commit uint64) error {
 
 func (s *storage) Get(ctx context.Context, name string) (uint64, error) {
 	key := encodeName(name)
-	v, err := s.kvStore.Get(ctx, cf, key, nil)
+	v, err := s.kvStore.Get(ctx, CF, key, nil)
 	if err != nil {
 		return 0, err
 	}
