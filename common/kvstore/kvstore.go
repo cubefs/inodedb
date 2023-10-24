@@ -94,9 +94,12 @@ type (
 	ListReader interface {
 		ReadNext() (key KeyGetter, val ValueGetter, err error)
 		ReadNextCopy() (key []byte, value []byte, err error)
+		ReadPrev() (key KeyGetter, val ValueGetter, err error)
+		ReadPrevCopy() (key []byte, value []byte, err error)
 		ReadLast() (key KeyGetter, val ValueGetter, err error)
+		SeekToLast()
+		SeekForPrev(key []byte) (err error)
 		SeekTo(key []byte)
-		SeekToPrefix(prefix []byte)
 		SetFilterKey(key []byte)
 		Close()
 	}

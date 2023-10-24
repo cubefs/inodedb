@@ -68,6 +68,7 @@ type (
 	listReader struct {
 		iterator      *rdb.Iterator
 		prefix        []byte
+		marker        []byte
 		filterKeys    [][]byte
 		filterKeysTmp [][]byte
 		isFirst       bool
@@ -317,6 +318,63 @@ func (lr *listReader) ReadNextCopy() (key []byte, value []byte, err error) {
 	return
 }
 
+func (lr *listReader) ReadPrev() (key KeyGetter, val ValueGetter, err error) {
+	if lr.isFirst {
+		if err = lr.iterator.Err(); err != nil {
+			return nil, nil, err
+		}
+		if !lr.iterator.Valid() {
+			return nil, nil, nil
+		}
+		if lr.prefix == nil || lr.iterator.ValidForPrefix(lr.prefix) {
+			kg := keyGetter{key: lr.iterator.Key()}
+			vg := &valueGetter{value: lr.iterator.Value()}
+			lr.isFirst = false
+			if lr.filterKey(kg) {
+				lr.removeFilterKey(kg)
+				return lr.ReadPrev()
+			}
+			return kg, vg, nil
+		}
+		return nil, nil, nil
+	}
+	// move into prev kv
+	lr.iterator.Prev()
+	if err = lr.iterator.Err(); err != nil {
+		return nil, nil, err
+	}
+	if !lr.iterator.Valid() {
+		return nil, nil, nil
+	}
+	if lr.prefix == nil || lr.iterator.ValidForPrefix(lr.prefix) {
+		kg := keyGetter{key: lr.iterator.Key()}
+		vg := &valueGetter{value: lr.iterator.Value()}
+		if lr.filterKey(kg) {
+			lr.removeFilterKey(kg)
+			return lr.ReadPrev()
+		}
+		return kg, vg, nil
+	}
+	return nil, nil, nil
+}
+
+func (lr *listReader) ReadPrevCopy() (key []byte, value []byte, err error) {
+	kg, vg, err := lr.ReadPrev()
+	if err != nil {
+		return nil, nil, err
+	}
+	if kg != nil && vg != nil {
+		key = make([]byte, len(kg.Key()))
+		value = make([]byte, vg.Size())
+		copy(key, kg.Key())
+		copy(value, vg.Value())
+		kg.Close()
+		vg.Close()
+		return
+	}
+	return
+}
+
 func (lr *listReader) ReadLast() (key KeyGetter, val ValueGetter, err error) {
 	if lr.prefix == nil {
 		lr.iterator.SeekToLast()
@@ -348,19 +406,33 @@ func (lr *listReader) ReadLast() (key KeyGetter, val ValueGetter, err error) {
 	return
 }
 
+func (lr *listReader) SeekToLast() {
+	lr.iterator.SeekToLast()
+}
+
+func (lr *listReader) SeekForPrev(key []byte) (err error) {
+	lr.iterator.SeekForPrev(key)
+	if lr.prefix == nil || lr.marker != nil {
+		return
+	}
+	for {
+		if err = lr.iterator.Err(); err != nil {
+			return
+		}
+		if !lr.iterator.Valid() {
+			return
+		}
+		if lr.iterator.ValidForPrefix(lr.prefix) {
+			return
+		}
+		lr.iterator.Prev()
+	}
+}
+
 func (lr *listReader) SeekTo(key []byte) {
 	lr.isFirst = true
 	lr.prefix = nil
 	lr.iterator.Seek(key)
-	for i := range lr.filterKeysTmp {
-		lr.SetFilterKey(lr.filterKeysTmp[i])
-	}
-}
-
-func (lr *listReader) SeekToPrefix(prefix []byte) {
-	lr.isFirst = true
-	lr.prefix = prefix
-	lr.iterator.Seek(prefix)
 	for i := range lr.filterKeysTmp {
 		lr.SetFilterKey(lr.filterKeysTmp[i])
 	}
@@ -552,6 +624,7 @@ func (s *rocksdb) List(ctx context.Context, col CF, prefix []byte, marker []byte
 
 	lr := &listReader{
 		iterator: t,
+		marker:   marker,
 		prefix:   prefix,
 		isFirst:  true,
 	}
