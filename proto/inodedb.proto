@@ -2,9 +2,9 @@ syntax = "proto3";
 
 import "google/protobuf/any.proto";
 
-package proto;
+package inodedb.proto;
 
-option go_package = "github.com/cubefs/inodedb/proto";
+option go_package = "./;proto";
 
 enum ClusterOperation {
 	Join = 0;
