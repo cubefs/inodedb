@@ -9,6 +9,8 @@
 *.dylib
 cmd/run/
 cmd/cmd
+cmd/cmd_profile*
+cmd/profile/
 
 # Test binary, built with `go test -c`
 *.test
