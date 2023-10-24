@@ -10,7 +10,6 @@ import (
 	"github.com/cubefs/inodedb/proto"
 	"github.com/cubefs/inodedb/shardserver/catalog/persistent"
 	"github.com/cubefs/inodedb/shardserver/store"
-	pb "google.golang.org/protobuf/proto"
 )
 
 type Space struct {
@@ -42,13 +41,13 @@ func (s *Space) Load(ctx context.Context) error {
 			break
 		}
 
-		shardInfo := &persistent.ShardInfo{}
-		if err := pb.Unmarshal(vg.Value(), shardInfo); err != nil {
+		shardInfo := &shardInfo{}
+		if err := shardInfo.Unmarshal(vg.Value()); err != nil {
 			return errors.Info(err, "unmarshal shard info failed")
 		}
 
 		shard := createShard(&shardConfig{
-			ShardInfo: shardInfo,
+			shardInfo: shardInfo,
 			store:     s.store,
 		})
 		s.shards.Store(shardInfo.ShardId, shard)
@@ -67,7 +66,7 @@ func (s *Space) AddShard(ctx context.Context, shardId uint32, epoch uint64, inoL
 		return nil
 	}
 
-	shardInfo := &persistent.ShardInfo{
+	shardInfo := &shardInfo{
 		ShardId:   shardId,
 		Sid:       s.sid,
 		InoCursor: calculateStartIno(shardId),
@@ -79,7 +78,7 @@ func (s *Space) AddShard(ctx context.Context, shardId uint32, epoch uint64, inoL
 	kvStore := s.store.KVStore()
 	key := make([]byte, shardPrefixSize())
 	encodeShardPrefix(s.sid, shardId, key)
-	value, err := pb.Marshal(shardInfo)
+	value, err := shardInfo.Marshal()
 	if err != nil {
 		return err
 	}
@@ -89,7 +88,7 @@ func (s *Space) AddShard(ctx context.Context, shardId uint32, epoch uint64, inoL
 	}
 
 	shard := createShard(&shardConfig{
-		ShardInfo: shardInfo,
+		shardInfo: shardInfo,
 		store:     s.store,
 	})
 	s.shards.Store(shardId, shard)

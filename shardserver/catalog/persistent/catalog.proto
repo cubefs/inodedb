@@ -5,29 +5,29 @@ package persistent;
 option go_package = "github.com/cubefs/inodedb/shard/catalog/persistent";
 
 message ShardInfo {
-  uint32 ShardId = 1;
-  uint64 sid = 2;
-  uint64 ino_cursor = 3;
-  uint64 ino_used = 4;
-  uint64 ino_limit = 5;
-  uint64 epoch = 6;
-  repeated uint32 nodes = 7;
+    uint32 ShardId = 1;
+    uint64 sid = 2;
+    uint64 ino_cursor = 3;
+    uint64 ino_used = 4;
+    uint64 ino_limit = 5;
+    uint64 epoch = 6;
+    repeated uint32 nodes = 7;
 }
 
 message Item {
-  uint64 ino = 1;
-  uint64 links = 2;
-  repeated Field fields = 3;
+    uint64 ino = 1;
+    uint64 links = 2;
+    repeated Field fields = 3;
 }
 
 message Link {
-  uint64 parent = 1;
-  string name = 2;
-  uint64 child = 3;
-  repeated Field fields = 4;
+    uint64 parent = 1;
+    string name = 2;
+    uint64 child = 3;
+    repeated Field fields = 4;
 }
 
 message Field {
-  string name = 1;
-  bytes value = 2;
+    string name = 1;
+    bytes value = 2;
 }

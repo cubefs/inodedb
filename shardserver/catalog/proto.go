@@ -24,6 +24,16 @@ type Timestamp struct{}
 
 // proto for storage encoding/decoding and function return value
 
+type shardInfo persistent.ShardInfo
+
+func (s *shardInfo) Marshal() ([]byte, error) {
+	return pb.Marshal((*persistent.ShardInfo)(s))
+}
+
+func (s *shardInfo) Unmarshal(raw []byte) error {
+	return pb.Unmarshal(raw, (*persistent.ShardInfo)(s))
+}
+
 type item persistent.Item
 
 // Marshal return marshaled data of item

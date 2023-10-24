@@ -135,6 +135,10 @@ func (c *Catalog) GetShard(ctx context.Context, spaceName string, shardID uint32
 func (c *Catalog) loop(ctx context.Context) {
 	reportTicker := time.NewTicker(60 * time.Second)
 	routeUpdateTicker := time.NewTicker(5 * time.Second)
+	defer func() {
+		reportTicker.Stop()
+		routeUpdateTicker.Stop()
+	}()
 
 	for {
 		select {

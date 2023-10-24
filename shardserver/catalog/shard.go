@@ -23,7 +23,7 @@ import (
 const keyLocksNum = 1024
 
 type shardConfig struct {
-	*persistent.ShardInfo
+	*shardInfo
 	store *store.Store
 }
 
@@ -34,7 +34,7 @@ func createShard(cfg *shardConfig) *shard {
 	}
 
 	shard := &shard{
-		ShardInfo: cfg.ShardInfo,
+		shardInfo: cfg.shardInfo,
 
 		startIno:  calculateStartIno(cfg.ShardId),
 		store:     cfg.store,
@@ -57,7 +57,7 @@ type shardStats struct {
 }
 
 type shard struct {
-	*persistent.ShardInfo
+	*shardInfo
 
 	startIno    uint64
 	shardKeys   *shardKeysGenerator
@@ -345,7 +345,7 @@ func (s *shard) saveShardInfo(ctx context.Context) error {
 	kvStore := s.store.KVStore()
 	key := make([]byte, shardPrefixSize())
 	encodeShardPrefix(s.Sid, s.ShardId, key)
-	value, err := pb.Marshal(s.ShardInfo)
+	value, err := s.shardInfo.Marshal()
 	if err != nil {
 		return err
 	}
