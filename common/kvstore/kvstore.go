@@ -111,7 +111,7 @@ type (
 		Value() []byte
 		Read([]byte) (n int, err error)
 		Size() int
-		Close() error
+		Close()
 	}
 	Snapshot interface {
 		Close()

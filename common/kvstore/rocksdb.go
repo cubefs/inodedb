@@ -256,9 +256,9 @@ func (vg *valueGetter) Size() int {
 	return vg.value.Size()
 }
 
-func (vg *valueGetter) Close() error {
+func (vg *valueGetter) Close() {
 	vg.value.Free()
-	return nil
+	return
 }
 
 func (lr *listReader) ReadNext() (key KeyGetter, val ValueGetter, err error) {
