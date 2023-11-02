@@ -249,11 +249,15 @@ func (s *shard) List(ctx context.Context, ino uint64, start string, num uint32) 
 	return
 }
 
-func (s *shard) UpdateShard(shardInfo *persistent.ShardInfo) error {
+func (s *shard) UpdateShard(ctx context.Context, shardInfo *persistent.ShardInfo) error {
 	s.lock.Lock()
+	oldEpoch := s.Epoch
 	s.Epoch = shardInfo.Epoch
+	if err := s.saveShardInfo(ctx, false); err != nil {
+		s.Epoch = oldEpoch
+		return err
+	}
 	s.lock.Unlock()
-	// TODO: do persistent
 
 	return nil
 }
@@ -338,9 +342,11 @@ func (s *shard) decreaseInoUsed() {
 	}
 }
 
-func (s *shard) saveShardInfo(ctx context.Context) error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+func (s *shard) saveShardInfo(ctx context.Context, withLock bool) error {
+	if withLock {
+		s.lock.Lock()
+		defer s.lock.Unlock()
+	}
 
 	kvStore := s.store.KVStore()
 	key := make([]byte, shardPrefixSize())

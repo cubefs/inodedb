@@ -88,7 +88,7 @@ func (s *shard) applyInsertItem(ctx context.Context, data []byte) error {
 	s.increaseInoUsed()
 
 	// TODO: move this into raft flush progress
-	return s.saveShardInfo(ctx)
+	return s.saveShardInfo(ctx, true)
 }
 
 func (s *shard) applyUpdateItem(ctx context.Context, data []byte) error {
@@ -143,7 +143,7 @@ func (s *shard) applyDeleteItem(ctx context.Context, data []byte) error {
 
 	s.decreaseInoUsed()
 	// TODO: move this into raft flush progress
-	return s.saveShardInfo(ctx)
+	return s.saveShardInfo(ctx, true)
 }
 
 func (s *shard) applyLink(ctx context.Context, data []byte) error {

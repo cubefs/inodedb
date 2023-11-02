@@ -103,7 +103,7 @@ func (s *Space) UpdateShard(ctx context.Context, shardId uint32, epoch uint64) e
 		return err
 	}
 
-	return shard.UpdateShard(&persistent.ShardInfo{
+	return shard.UpdateShard(ctx, &persistent.ShardInfo{
 		Epoch: epoch,
 	})
 }
