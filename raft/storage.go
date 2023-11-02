@@ -1,16 +1,17 @@
 package raft
 
 import (
-	"context"
 	"encoding/binary"
 	"fmt"
 	"math"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/cubefs/inodedb/common/kvstore"
 	"github.com/google/uuid"
+	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
 )
 
@@ -31,24 +32,29 @@ type storageConfig struct {
 }
 
 func newStorage(cfg storageConfig) (*storage, error) {
-	value, err := cfg.raw.Get(encodeHardStateKey(cfg.id))
-	if err != nil && err != kvstore.ErrNotFound {
-		return nil, err
-	}
-	defer value.Close()
-
-	hs := &raftpb.HardState{}
-	if err := hs.Unmarshal(value.Data()); err != nil {
-		return nil, err
-	}
-
 	storage := &storage{
 		id:               cfg.id,
-		hardState:        *hs,
 		rawStg:           cfg.raw,
 		stateMachine:     cfg.sm,
 		snapshotRecorder: newSnapshotRecorder(cfg.maxSnapshotNum, cfg.snapshotTimeout),
 	}
+
+	value, err := cfg.raw.Get(encodeHardStateKey(cfg.id))
+	if err != nil && err != kvstore.ErrNotFound {
+		return nil, err
+	}
+	if value != nil {
+		defer value.Close()
+	}
+
+	if value != nil {
+		hs := &raftpb.HardState{}
+		if err := hs.Unmarshal(value.Value()); err != nil {
+			return nil, err
+		}
+		storage.hardState = *hs
+	}
+
 	members := make(map[uint64]Member)
 	for i := range cfg.members {
 		members[cfg.members[i].NodeID] = cfg.members[i]
@@ -67,9 +73,11 @@ type storage struct {
 	hardState    raftpb.HardState
 	membersMu    struct {
 		sync.RWMutex
-		members map[uint64]Member
-		cs      raftpb.ConfState
+		members   map[uint64]Member
+		confState raftpb.ConfState
 	}
+	// snapshotMu avoiding create snapshot and truncate log running currently
+	snapshotMu sync.RWMutex
 
 	rawStg           Storage
 	stateMachine     StateMachine
@@ -78,36 +86,44 @@ type storage struct {
 
 // InitialState returns the saved HardState and ConfState information.
 func (s *storage) InitialState() (hs raftpb.HardState, cs raftpb.ConfState, err error) {
-	return s.hardState, s.membersMu.cs, nil
+	return s.hardState, s.membersMu.confState, nil
 }
 
 // Entries returns a slice of log entries in the range [lo,hi).
 // MaxSize limits the total size of the log entries returned, but
 // Entries returns at least one entry if any.
-func (s *storage) Entries(lo, hi, maxSize uint64) (ret []raftpb.Entry, err error) {
+func (s *storage) Entries(lo, hi, maxSize uint64) ([]raftpb.Entry, error) {
 	iter := s.rawStg.Iter(encodeIndexLogKey(s.id, lo))
 	defer iter.Close()
 
+	ret := make([]raftpb.Entry, 0)
 	for {
-		if !iter.Next() {
+		keyGetter, valGetter, err := iter.ReadNext()
+		if err != nil {
+			return nil, err
+		}
+		if keyGetter == nil || valGetter == nil {
 			break
 		}
-		if iter.Err() != nil {
-			return nil, iter.Err()
+
+		if _, index := decodeIndexLogKey(keyGetter.Key()); index >= hi {
+			break
 		}
 
 		entry := &raftpb.Entry{}
-		if err := entry.Unmarshal(iter.Value().Data()); err != nil {
+		if err = entry.Unmarshal(valGetter.Value()); err != nil {
+			valGetter.Close()
 			return nil, err
 		}
+		valGetter.Close()
 		ret = append(ret, *entry)
 
 		if uint64(len(ret)) == maxSize {
-			return
+			break
 		}
 	}
 
-	return
+	return ret, nil
 }
 
 // Term returns the term of entry i, which must be in the range
@@ -115,13 +131,25 @@ func (s *storage) Entries(lo, hi, maxSize uint64) (ret []raftpb.Entry, err error
 // FirstIndex is retained for matching purposes even though the
 // rest of that entry may not be available.
 func (s *storage) Term(i uint64) (uint64, error) {
+	if i == 0 {
+		return 0, nil
+	}
+	// the first index log may not be found after apply snapshot,
+	// so return hard state commit first when i is equal to hard state's commit
+	if s.hardState.Commit == i {
+		return s.hardState.Term, nil
+	}
+	if firstIndex := atomic.LoadUint64(&s.firstIndex); firstIndex > i {
+		return 0, raft.ErrCompacted
+	}
+
 	value, err := s.rawStg.Get(encodeIndexLogKey(s.id, i))
 	if err != nil {
 		return 0, err
 	}
 
 	entry := &raftpb.Entry{}
-	if err := entry.Unmarshal(value.Data()); err != nil {
+	if err := entry.Unmarshal(value.Value()); err != nil {
 		return 0, err
 	}
 
@@ -130,8 +158,8 @@ func (s *storage) Term(i uint64) (uint64, error) {
 
 // LastIndex returns the index of the last entry in the log.
 func (s *storage) LastIndex() (uint64, error) {
-	if s.lastIndex > 0 {
-		return s.lastIndex, nil
+	if lastIndex := atomic.LoadUint64(&s.lastIndex); lastIndex > 0 {
+		return lastIndex, nil
 	}
 
 	iterator := s.rawStg.Iter(nil)
@@ -140,20 +168,22 @@ func (s *storage) LastIndex() (uint64, error) {
 	if err := iterator.SeekForPrev(encodeIndexLogKey(s.id, math.MaxUint64)); err != nil {
 		return 0, err
 	}
-	if !iterator.Next() {
+	_, valGetter, err := iterator.ReadPrev()
+	if err != nil {
+		return 0, err
+	}
+	if valGetter == nil {
 		return 0, nil
 	}
-	if iterator.Err() != nil {
-		return 0, iterator.Err()
-	}
+	defer valGetter.Close()
 
 	entry := &raftpb.Entry{}
-	if err := entry.Unmarshal(iterator.Value().Data()); err != nil {
+	if err := entry.Unmarshal(valGetter.Value()); err != nil {
 		return 0, err
 	}
 
-	s.lastIndex = entry.Index
-	return s.lastIndex, nil
+	atomic.StoreUint64(&s.lastIndex, entry.Index)
+	return entry.Index, nil
 }
 
 // FirstIndex returns the index of the first log entry that is
@@ -168,15 +198,18 @@ func (s *storage) FirstIndex() (uint64, error) {
 	iterator := s.rawStg.Iter(encodeIndexLogKey(s.id, 0))
 	defer iterator.Close()
 
-	if !iterator.Next() {
-		return 0, nil
+	_, valGetter, err := iterator.ReadNext()
+	if err != nil {
+		return 0, err
 	}
-	if iterator.Err() != nil {
-		return 0, iterator.Err()
+	// initial index log should return at least 1
+	if valGetter == nil {
+		return 1, nil
 	}
 
+	defer valGetter.Close()
 	entry := &raftpb.Entry{}
-	if err := entry.Unmarshal(iterator.Value().Data()); err != nil {
+	if err := entry.Unmarshal(valGetter.Value()); err != nil {
 		return 0, err
 	}
 
@@ -189,12 +222,15 @@ func (s *storage) FirstIndex() (uint64, error) {
 // so raft state machine could know that Storage needs some time to prepare
 // outgoingSnapshot and call Snapshot later.
 func (s *storage) Snapshot() (raftpb.Snapshot, error) {
+	s.snapshotMu.Lock()
+	defer s.snapshotMu.Unlock()
+
 	var members []Member
 	s.membersMu.RLock()
 	for _, member := range s.membersMu.members {
 		members = append(members, member)
 	}
-	cs := s.membersMu.cs
+	cs := s.membersMu.confState
 	s.membersMu.RUnlock()
 
 	smSnap := s.stateMachine.Snapshot()
@@ -210,27 +246,37 @@ func (s *storage) Snapshot() (raftpb.Snapshot, error) {
 	if smSnapIndex > appliedIndex {
 		return raftpb.Snapshot{}, fmt.Errorf("state machine outgoingSnapshot index[%d] greater than applied index[%d]", smSnapIndex, appliedIndex)
 	}
+	firstIndex := atomic.LoadUint64(&s.firstIndex)
+	if smSnapIndex < firstIndex {
+		return raftpb.Snapshot{}, fmt.Errorf("state machine outgoingSnapshot index[%d] less than first log index[%d]", smSnapIndex, firstIndex)
+	}
 
 	term, err := s.Term(smSnapIndex)
 	if err != nil {
 		return raftpb.Snapshot{}, err
 	}
 
-	snapshot := newOutgoingSnapshot(&RaftSnapshotHeader{
-		ID:                 uuid.New().String(),
-		RaftMessageRequest: nil,
-	}, smSnap)
-	s.snapshotRecorder.Set(snapshot)
-	success = true
+	snapID := uuid.New().String()
 
-	return raftpb.Snapshot{
-		Data: []byte(snapshot.ID),
+	snapshot := raftpb.Snapshot{
+		Data: []byte(snapID),
 		Metadata: raftpb.SnapshotMetadata{
 			ConfState: cs,
-			Index:     appliedIndex,
+			Index:     smSnapIndex,
 			Term:      term,
 		},
-	}, nil
+	}
+
+	outgoingSnap := newOutgoingSnapshot(snapID, smSnap)
+	// as the snapshot may be used in different follower's snapshot transmitting
+	// we set finalizer for every snapshot and do close after gc recycle
+	runtime.SetFinalizer(outgoingSnap, func(snap *outgoingSnapshot) {
+		snap.Close()
+	})
+	s.snapshotRecorder.Set(outgoingSnap)
+	success = true
+
+	return snapshot, nil
 }
 
 func (s *storage) AppliedIndex() uint64 {
@@ -245,11 +291,13 @@ func (s *storage) SetAppliedIndex(index uint64) {
 func (s *storage) SaveHardStateAndEntries(hs raftpb.HardState, entries []raftpb.Entry) error {
 	batch := s.rawStg.NewBatch()
 
-	value, err := hs.Marshal()
-	if err != nil {
-		return err
+	if !raft.IsEmptyHardState(hs) {
+		value, err := hs.Marshal()
+		if err != nil {
+			return err
+		}
+		batch.Put(encodeHardStateKey(s.id), value)
 	}
-	batch.Put(encodeHardStateKey(s.id), value)
 
 	lastIndex := uint64(0)
 	for i := range entries {
@@ -270,13 +318,22 @@ func (s *storage) SaveHardStateAndEntries(hs raftpb.HardState, entries []raftpb.
 		atomic.StoreUint64(&s.lastIndex, lastIndex)
 	}
 
-	s.hardState = hs
+	if !raft.IsEmptyHardState(hs) {
+		s.hardState = hs
+	}
+
 	return nil
 }
 
 // Truncate may be called by top level application concurrently
-func (s *storage) Truncate(ctx context.Context, index uint64) error {
-	// todo: can not truncate log index which large than the alive outgoingSnapshot's index
+func (s *storage) Truncate(index uint64) error {
+	s.snapshotMu.RLock()
+	defer s.snapshotMu.RUnlock()
+
+	oldestSnap := s.snapshotRecorder.Pop()
+	if oldestSnap != nil && index > oldestSnap.st.Index() {
+		return fmt.Errorf("can not truncate log index[%d] which large than the alive outgoingSnapshot's index[%d]", index, oldestSnap.st.Index())
+	}
 
 	batch := s.rawStg.NewBatch()
 	batch.DeleteRange(encodeIndexLogKey(s.id, 0), encodeIndexLogKey(s.id, index))
@@ -310,20 +367,37 @@ func (s *storage) NewBatch() Batch {
 
 func (s *storage) MemberChange(member *Member) {
 	s.membersMu.Lock()
-	s.membersMu.members[member.NodeID] = *member
-	s.membersMu.Unlock()
+	defer s.membersMu.Unlock()
+
+	switch member.Type {
+	case MemberChangeType_AddMember:
+		s.membersMu.members[member.NodeID] = *member
+	case MemberChangeType_RemoveMember:
+		delete(s.membersMu.members, member.NodeID)
+	}
+
+	s.updateConfState()
+}
+
+func (s *storage) Close() {
+	s.snapshotRecorder.Close()
+	return
 }
 
 func (s *storage) updateConfState() {
-	s.membersMu.Lock()
+	learners := make([]uint64, 0)
+	voters := make([]uint64, 0)
+
 	for _, m := range s.membersMu.members {
 		if m.Learner {
-			s.membersMu.cs.Learners = append(s.membersMu.cs.Learners, m.NodeID)
+			learners = append(learners, m.NodeID)
 		} else {
-			s.membersMu.cs.Voters = append(s.membersMu.cs.Voters, m.NodeID)
+			voters = append(voters, m.NodeID)
 		}
 	}
-	s.membersMu.Unlock()
+	s.membersMu.confState.Learners = learners
+	s.membersMu.confState.Voters = voters
+
 	return
 }
 
@@ -335,6 +409,12 @@ func encodeIndexLogKey(id uint64, index uint64) []byte {
 	binary.BigEndian.PutUint64(b[8+len(groupPrefix)+len(logIndexInfix):], index)
 
 	return b
+}
+
+func decodeIndexLogKey(b []byte) (id uint64, index uint64) {
+	id = binary.BigEndian.Uint64(b[len(groupPrefix):])
+	index = binary.BigEndian.Uint64(b[len(groupPrefix)+8+len(logIndexInfix):])
+	return
 }
 
 func encodeHardStateKey(id uint64) []byte {

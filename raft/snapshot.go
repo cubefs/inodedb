@@ -2,7 +2,6 @@ package raft
 
 import (
 	"container/list"
-	"context"
 	"fmt"
 	"io"
 	"sync"
@@ -11,73 +10,42 @@ import (
 	"go.etcd.io/etcd/raft/v3"
 )
 
-// outgoingSnapshotStream is the minimal interface on a GRPC stream required
-// to send a outgoingSnapshot over the network.
-type outgoingSnapshotStream interface {
-	Send(request *RaftSnapshotRequest) error
-	Recv() (*RaftSnapshotResponse, error)
-}
-
-func newOutgoingSnapshot(header *RaftSnapshotHeader, st Snapshot) *outgoingSnapshot {
+func newOutgoingSnapshot(id string, st Snapshot) *outgoingSnapshot {
 	return &outgoingSnapshot{
-		RaftSnapshotHeader: header,
-		st:                 st,
+		id: id,
+		st: st,
 	}
 }
 
 // RaftSnapshotHeader
 type outgoingSnapshot struct {
-	*RaftSnapshotHeader
-
+	id     string
 	st     Snapshot
 	expire time.Time
 }
 
-// todo: limit the snapshot transmitting speed
-func (s *outgoingSnapshot) Send(ctx context.Context, stream outgoingSnapshotStream) error {
-	// send header firstly
-	req := &RaftSnapshotRequest{Header: s.RaftSnapshotHeader}
-	if err := stream.Send(req); err != nil {
-		return err
-	}
-	req.Header = nil
-
-	for !req.Final {
-		batch, err := s.st.ReadBatch()
-		if err != nil {
-			if err != io.EOF {
-				return err
-			}
-			req.Final = true
-		}
-
-		if batch != nil {
-			req.Data = batch.Data()
-		}
-		if err := stream.Send(req); err != nil {
-			if batch != nil {
-				batch.Close()
-			}
-			return err
-		}
-
-		batch.Close()
-		req.Data = nil
-		req.Seq++
-	}
-
-	return nil
+// BatchData return snapshot batch data
+// Return io.EOF error when no more new batch data
+func (s *outgoingSnapshot) BatchData() (Batch, error) {
+	batch, err := s.st.ReadBatch()
+	return batch, err
 }
 
 func (s *outgoingSnapshot) Close() {
 	s.st.Close()
 }
 
-func newIncomingSnapshot(header *RaftSnapshotHeader, stream SnapshotResponseStream) *incomingSnapshot {
+func newIncomingSnapshot(header *RaftSnapshotHeader, storage incomingSnapshotStorage, stream SnapshotResponseStream) *incomingSnapshot {
 	return &incomingSnapshot{
 		RaftSnapshotHeader: header,
+		storage:            storage,
 		stream:             stream,
+		seq:                1,
 	}
+}
+
+type incomingSnapshotStorage interface {
+	NewBatch() Batch
 }
 
 // incomingSnapshot held the incoming snapshot and implements the Snapshot interface
@@ -87,11 +55,10 @@ type incomingSnapshot struct {
 
 	final   bool
 	seq     uint32
-	storage *storage
+	storage incomingSnapshotStorage
 	stream  SnapshotResponseStream
 }
 
-// todo: limit the snapshot transmitting speed
 func (i *incomingSnapshot) ReadBatch() (Batch, error) {
 	if i.final {
 		return nil, io.EOF
@@ -143,7 +110,7 @@ func newSnapshotRecorder(maxSnapshot int, timeout time.Duration) *snapshotRecord
 }
 
 type snapshotRecorder struct {
-	sync.Mutex
+	sync.RWMutex
 
 	maxSnapshot int
 	timeout     time.Duration
@@ -163,14 +130,26 @@ func (s *snapshotRecorder) Set(st *outgoingSnapshot) error {
 		}
 		s.evictList.Remove(elem)
 		elem.Value.(*outgoingSnapshot).Close()
-		delete(s.snaps, snap.ID)
+		delete(s.snaps, snap.id)
 	}
-	if _, hit := s.snaps[st.ID]; hit {
-		return fmt.Errorf("outgoingSnapshot(%s) exist", st.ID)
+	if _, hit := s.snaps[st.id]; hit {
+		return fmt.Errorf("outgoingSnapshot(%s) exist", st.id)
 	}
 	st.expire = time.Now().Add(s.timeout)
-	s.snaps[st.ID] = s.evictList.PushBack(st)
+	s.snaps[st.id] = s.evictList.PushBack(st)
 	return nil
+}
+
+func (s *snapshotRecorder) Pop() *outgoingSnapshot {
+	s.RLock()
+	defer s.RUnlock()
+
+	if s.evictList.Len() == 0 {
+		return nil
+	}
+	elem := s.evictList.Front()
+	snap := elem.Value.(*outgoingSnapshot)
+	return snap
 }
 
 func (s *snapshotRecorder) Get(key string) *outgoingSnapshot {
@@ -192,7 +171,9 @@ func (s *snapshotRecorder) Delete(key string) {
 
 	if v, ok := s.snaps[key]; ok {
 		delete(s.snaps, key)
-		v.Value.(*outgoingSnapshot).Close()
+		// as the snapshot may be used in different follower's snapshot transmitting
+		// we can't close the snapshot directly after recorder delete
+		// v.Value.(*outgoingSnapshot).Close()
 		s.evictList.Remove(v)
 	}
 }
@@ -203,7 +184,6 @@ func (s *snapshotRecorder) Close() {
 
 	for key, val := range s.snaps {
 		delete(s.snaps, key)
-		val.Value.(*outgoingSnapshot).Close()
 		s.evictList.Remove(val)
 	}
 }

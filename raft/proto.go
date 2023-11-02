@@ -8,7 +8,7 @@ import (
 
 type (
 	StateMachine interface {
-		Apply(cxt context.Context, ms []ProposalData, index uint64) (rets []interface{}, err error)
+		Apply(cxt context.Context, pd []ProposalData, index uint64) (rets []interface{}, err error)
 		LeaderChange(peerID uint64) error
 		ApplyMemberChange(cc *Member, index uint64) error
 		Snapshot() Snapshot
@@ -21,33 +21,35 @@ type (
 		Write(b Batch) error
 		Put(key, value []byte) error
 	}
+	// Snapshot return state machine's snapshot data.
+	// For load considerations, it's the responsibility of the state machine
+	// to limit the snapshot transmitting speed
 	Snapshot interface {
 		// ReadBatch read batch data for snapshot transmit
 		// io.EOF should be return when read end of snapshot
 		// Note: it is the responsibility for the caller to close the Batch
 		ReadBatch() (Batch, error)
-		Term() uint64
 		Index() uint64
 		Close() error
 	}
 	AddressResolver interface {
-		Resolve(nodeId uint64) (Addr, error)
+		Resolve(nodeID uint64) (Addr, error)
 	}
 	Addr interface {
 		String() string
 	}
+	KeyGetter interface {
+		Key() []byte
+		Close()
+	}
 	ValGetter interface {
-		Data() []byte
+		Value() []byte
 		Close()
 	}
 	Iterator interface {
 		SeekForPrev(prev []byte) error
-		Next() bool
-		Prev() bool
-		Err() error
-		ValidPrefix() bool
-		Key() ValGetter
-		Value() ValGetter
+		ReadNext() (key KeyGetter, val ValGetter, err error)
+		ReadPrev() (key KeyGetter, val ValGetter, err error)
 		Close()
 	}
 	Batch interface {
@@ -61,7 +63,7 @@ type (
 
 type (
 	Stat struct {
-		Id             uint64   `json:"nodeId"`
+		ID             uint64   `json:"nodeID"`
 		Term           uint64   `json:"term"`
 		Vote           uint64   `json:"vote"`
 		Commit         uint64   `json:"commit"`
@@ -70,7 +72,7 @@ type (
 		Applied        uint64   `json:"applied"`
 		RaftApplied    uint64   `json:"raftApplied"`
 		LeadTransferee uint64   `json:"transferee"`
-		Peers          []uint64 `json:"peers"`
+		Nodes          []uint64 `json:"nodes"`
 	}
 
 	ProposalResponse struct {
@@ -79,7 +81,8 @@ type (
 
 	proposalRequest struct {
 		entryType raftpb.EntryType
-		data      *ProposalData
+		data      []byte
+		// data      *ProposalData
 	}
 	proposalResult struct {
 		reply interface{}

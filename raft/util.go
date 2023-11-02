@@ -2,7 +2,9 @@ package raft
 
 import (
 	"context"
+	"errors"
 	"math"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -35,27 +37,50 @@ func (g *idGenerator) Next() uint64 {
 	return g.prefix | lowBit(suffix, 48)
 }
 
-func newNotify() notify {
-	// todo: reuse ch with channel pool
-	return make(chan proposalResult, 1)
+func newNotify(timeoutCtx context.Context) notify {
+	n := notifyPool.Get().(notify)
+	n.timeoutCtx = timeoutCtx
+	return n
 }
 
-type notify chan proposalResult
+type notify struct {
+	ch         chan proposalResult
+	timeoutCtx context.Context
+}
 
 func (n notify) Notify(ret proposalResult) {
 	select {
-	case n <- ret:
+	case n.ch <- ret:
 	default:
 	}
 }
 
 func (n notify) Wait(ctx context.Context) (ret proposalResult, err error) {
 	select {
-	case err = <-ctx.Done():
+	case <-ctx.Done():
+		err = ctx.Err()
 		return
-	case ret = <-n:
+	case <-n.timeoutCtx.Done():
+		err = errors.New("notify timeout")
+		return
+	case ret = <-n.ch:
 		return
 	}
+}
+
+// Release put notify back into pool
+// Note that don't release Wait error notify into pool
+func (n notify) Release() {
+	notifyPool.Put(n)
+}
+
+// reuse with notify pool
+var notifyPool = sync.Pool{
+	New: func() interface{} {
+		return notify{
+			ch: make(chan proposalResult, 1),
+		}
+	},
 }
 
 func lowBit(x uint64, n uint) uint64 {

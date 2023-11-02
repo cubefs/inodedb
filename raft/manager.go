@@ -3,10 +3,10 @@ package raft
 import (
 	"context"
 	"math/rand"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
@@ -16,20 +16,20 @@ import (
 
 const (
 	stateQueued uint8 = 1 << iota
-	stateProcessTick
-	stateProcessRaftRequestMsg
 	stateProcessReady
+	stateProcessRaftRequestMsg
+	stateProcessTick
 )
 
 const (
 	defaultGroupStateMuShardCount = 32
 	defaultTickIntervalMS         = 200
 	defaultHeartbeatTickInterval  = 10
-	defaultElectionTickInterval   = 10 * defaultHeartbeatTickInterval
+	defaultElectionTickInterval   = 5 * defaultHeartbeatTickInterval
 	defaultWorkerNum              = 96
 	defaultSnapshotWorkerNum      = 16
 	defaultSnapshotTimeoutS       = 3600
-	defaultSizePerMsg             = 1 << 20
+	defaultSizePerMsg             = uint64(1 << 20)
 	defaultInflightMsg            = 128
 	defaultProposeMsgNum          = 256
 	defaultSnapshotNum            = 3
@@ -41,13 +41,15 @@ type (
 	Manager interface {
 		CreateRaftGroup(ctx context.Context, cfg *GroupConfig) error
 		GetRaftGroup(id uint64) (Group, error)
+		RemoveRaftGroup(ctx context.Context, id uint64)
+		Close()
 	}
 
 	groupHandler interface {
 		HandlePropose(ctx context.Context, id uint64, req proposalRequest) error
 		HandleSnapshot(ctx context.Context, id uint64, message raftpb.Message) error
 		HandleSendRaftMessageRequest(ctx context.Context, req *RaftMessageRequest, class connectionClass) error
-		HandleSendRaftSnapshotRequest(ctx context.Context, snapshot *outgoingSnapshot) error
+		HandleSendRaftSnapshotRequest(ctx context.Context, snapshot *outgoingSnapshot, req *RaftMessageRequest) error
 		HandleSignalToWorker(ctx context.Context, id uint64)
 		HandleMaybeCoalesceHeartbeat(ctx context.Context, groupId uint64, msg *raftpb.Message) bool
 		HandleNextID() uint64
@@ -64,6 +66,7 @@ type (
 		ProcessRaftSnapshotRequest(ctx context.Context, req *RaftSnapshotRequest, stream SnapshotResponseStream) error
 		SaveHardStateAndEntries(ctx context.Context, hs raftpb.HardState, entries []raftpb.Entry) error
 		ApplyLeaderChange(nodeID uint64) error
+		ApplySnapshot(ctx context.Context, snap raftpb.Snapshot) error
 		ApplyCommittedEntries(ctx context.Context, entries []raftpb.Entry) (err error)
 		ApplyReadIndex(ctx context.Context, readState raft.ReadState)
 		AddUnreachableRemoteReplica(remote uint64)
@@ -140,7 +143,6 @@ type (
 	}
 	GroupConfig struct {
 		ID      uint64
-		Term    uint64
 		Applied uint64
 		Members []Member
 		SM      StateMachine
@@ -168,19 +170,31 @@ func NewManager(cfg *Config) (Manager, error) {
 		cfg:           cfg,
 		done:          make(chan struct{}),
 	}
+	manager.coalescedMu.heartbeats = make(map[uint64][]RaftHeartbeat)
+	manager.coalescedMu.heartbeatResponses = make(map[uint64][]RaftHeartbeat)
+	for i := range manager.groupStateMu {
+		manager.groupStateMu[i] = &struct {
+			sync.RWMutex
+			state map[uint64]groupState
+		}{state: make(map[uint64]groupState)}
+	}
 
 	cfg.TransportConfig.Resolver = &cacheAddressResolver{resolver: cfg.Resolver}
-	cfg.TransportConfig.Handler = (*internalTransportHandler)()
+	cfg.TransportConfig.Handler = (*internalTransportHandler)(manager)
 
 	manager.transport = newTransport(&cfg.TransportConfig)
+
 	for i := 0; i < cfg.MaxWorkerNum; i++ {
 		workerCh := make(chan groupState)
 		manager.workerChs = append(manager.workerChs, workerCh)
-		go (*internalGroupHandler)(manager).worker(workerCh)
+		go (*internalGroupHandler)(manager).worker(i, workerCh)
 	}
 	for i := 0; i < cfg.MaxSnapshotWorkerNum; i++ {
 		go (*internalGroupHandler)(manager).snapshotWorker()
 	}
+
+	go manager.raftTickLoop()
+	go manager.coalescedHeartbeatsLoop()
 
 	return manager, nil
 }
@@ -196,7 +210,7 @@ type manager struct {
 		heartbeats         map[uint64][]RaftHeartbeat
 		heartbeatResponses map[uint64][]RaftHeartbeat
 	}
-	groupStateMu [defaultGroupStateMuShardCount]struct {
+	groupStateMu [defaultGroupStateMuShardCount]*struct {
 		sync.RWMutex
 		state map[uint64]groupState
 	}
@@ -239,9 +253,13 @@ func (m *manager) CreateRaftGroup(ctx context.Context, cfg *GroupConfig) error {
 
 	g := &group{
 		id:           cfg.ID,
-		nodeID:       m.cfg.NodeID,
 		appliedIndex: cfg.Applied,
 
+		cfg: groupConfig{
+			nodeID:           m.cfg.NodeID,
+			proposeTimeout:   time.Duration(m.cfg.ProposeTimeoutMS) * time.Millisecond,
+			readIndexTimeout: time.Duration(m.cfg.ReadIndexTimeoutMS) * time.Millisecond,
+		},
 		sm:      cfg.SM,
 		storage: storage,
 		handler: (*internalGroupHandler)(m),
@@ -266,9 +284,19 @@ func (m *manager) GetRaftGroup(id uint64) (Group, error) {
 	return v.(Group), nil
 }
 
-func (m *manager) RemoveRaftGroup(id uint64) {
-	m.groups.LoadAndDelete(id)
-	m.proposalQueues.LoadAndDelete(id)
+func (m *manager) RemoveRaftGroup(ctx context.Context, id uint64) {
+	v, ok := m.groups.LoadAndDelete(id)
+	m.proposalQueues.Delete(id)
+	m.raftMessageQueues.Delete(id)
+
+	if ok {
+		v.(Group).Close()
+	}
+}
+
+func (m *manager) Close() {
+	m.transport.Close()
+	close(m.done)
 }
 
 func (h *internalGroupHandler) processTick(ctx context.Context, g groupProcessor) {
@@ -293,6 +321,8 @@ func (h *internalGroupHandler) processRaftRequestMsg(ctx context.Context, g grou
 	for i := range infos {
 		info := &infos[i]
 		if pErr := g.ProcessRaftMessageRequest(ctx, info.req); pErr != nil {
+			span.Errorf("process raft message request failed: %s", pErr)
+
 			hadError = true
 			if err := info.respStream.Send(newRaftMessageResponse(info.req, newError(ErrCodeGroupHandleRaftMessage, pErr.Error()))); err != nil {
 				// Seems excessive to log this on every occurrence as the other side
@@ -326,19 +356,25 @@ func (h *internalGroupHandler) processRaftRequestMsg(ctx context.Context, g grou
 func (h *internalGroupHandler) processReady(ctx context.Context, g groupProcessor) {
 	span := trace.SpanFromContext(ctx)
 
-	if err := h.processProposal(g); err != nil {
+	if err := h.processProposal(ctx, g); err != nil {
 		span.Fatalf("process proposal msg failed: %s", err)
 	}
 
-	var rd raft.Ready
+	var (
+		hasReady bool
+		rd       raft.Ready
+	)
 	g.WithRaftRawNodeLocked(func(rn *raft.RawNode) error {
-		hasReady := rn.HasReady()
+		hasReady = rn.HasReady()
 		if !hasReady {
 			return nil
 		}
 		rd = rn.Ready()
 		return nil
 	})
+	if !hasReady {
+		return
+	}
 
 	if rd.SoftState != nil {
 		if err := g.ApplyLeaderChange(rd.SoftState.Lead); err != nil {
@@ -346,12 +382,26 @@ func (h *internalGroupHandler) processReady(ctx context.Context, g groupProcesso
 		}
 	}
 
-	g.ProcessSendRaftMessage(ctx, rd.Messages)
-
-	if err := g.SaveHardStateAndEntries(ctx, rd.HardState, rd.Entries); err != nil {
-		span.Fatalf("save hard state and entries failed: %s", err)
+	if !raft.IsEmptySnap(rd.Snapshot) {
+		if err := g.ApplySnapshot(ctx, rd.Snapshot); err != nil {
+			span.Fatalf("apply raft snapshot failed: %s", err)
+		}
 	}
+
+	if len(rd.Messages) > 0 {
+		span.Debugf("node[%d] send request: %+v", h.cfg.NodeID, rd.Messages)
+		g.ProcessSendRaftMessage(ctx, rd.Messages)
+	}
+
+	if !raft.IsEmptyHardState(rd.HardState) || len(rd.Entries) > 0 {
+		// todo: don't fatal but return error to upper application
+		if err := g.SaveHardStateAndEntries(ctx, rd.HardState, rd.Entries); err != nil {
+			span.Fatalf("save hard state and entries failed: %s", err)
+		}
+	}
+
 	if len(rd.CommittedEntries) > 0 {
+		// todo: don't fatal but return error to upper application
 		if err := g.ApplyCommittedEntries(ctx, rd.CommittedEntries); err != nil {
 			span.Fatalf("apply committed entries failed: %s", err)
 		}
@@ -366,28 +416,31 @@ func (h *internalGroupHandler) processReady(ctx context.Context, g groupProcesso
 	})
 }
 
-func (h *internalGroupHandler) processProposal(g groupProcessor) (err error) {
-	var data []byte
+func (h *internalGroupHandler) processProposal(ctx context.Context, g groupProcessor) (err error) {
 	v, ok := h.proposalQueues.Load(g.ID())
 	if !ok {
-		// todo: log
+		span := trace.SpanFromContext(ctx)
+		span.Warnf("proposal queue has been deleted, group id: %d", g.ID())
 		return nil
 	}
-	queue := v.(*proposalQueue)
+	queue := v.(proposalQueue)
 
-	// TODO: reuse with entries pool as it's capacity is fixed
-	entries := make([]raftpb.Entry, 0, h.cfg.MaxProposeMsgNum)
+	entries := proposalEntriesPool.Get().([]raftpb.Entry)
+	defer func() {
+		entries = entries[:0]
+		proposalEntriesPool.Put(entries)
+	}()
 	queue.Iter(func(p proposalRequest) bool {
-		data, err = p.data.Marshal()
-		if err != nil {
-			return false
-		}
 		entries = append(entries, raftpb.Entry{
 			Type: p.entryType,
-			Data: data,
+			Data: p.data,
 		})
 		return true
 	})
+
+	if len(entries) == 0 {
+		return nil
+	}
 
 	return g.WithRaftRawNodeLocked(func(rn *raft.RawNode) error {
 		return rn.Step(raftpb.Message{
@@ -422,7 +475,8 @@ func (m *manager) raftTickLoop() {
 	}
 }
 
-func (m *manager) coalescedHeartbeatsLoop(ctx context.Context) {
+func (m *manager) coalescedHeartbeatsLoop() {
+	_, ctx := trace.StartSpanFromContext(context.Background(), "coalescedHeartbeatsLoop")
 	ticker := time.NewTicker(time.Duration(m.cfg.CoalescedHeartbeatsInterval) * time.Millisecond)
 	defer ticker.Stop()
 
@@ -513,7 +567,8 @@ type internalGroupHandler manager
 func (h *internalGroupHandler) HandlePropose(ctx context.Context, id uint64, req proposalRequest) error {
 	v, ok := h.proposalQueues.Load(id)
 	if !ok {
-		// todo: log
+		span := trace.SpanFromContext(ctx)
+		span.Warnf("proposal queue has been deleted, group id: %d", id)
 		return nil
 	}
 	queue := v.(proposalQueue)
@@ -539,6 +594,12 @@ func (h *internalGroupHandler) HandleSnapshot(ctx context.Context, id uint64, me
 }
 
 func (h *internalGroupHandler) HandleMaybeCoalesceHeartbeat(ctx context.Context, groupId uint64, msg *raftpb.Message) bool {
+	// Note: ReadIndex with safe option on leader will broadcast heartbeat request to other nodes
+	// We can not coalesce these request and should return false
+	if len(msg.Context) > 0 {
+		return false
+	}
+
 	var hbMap map[uint64][]RaftHeartbeat
 
 	switch msg.Type {
@@ -568,8 +629,8 @@ func (h *internalGroupHandler) HandleSendRaftMessageRequest(ctx context.Context,
 	return h.transport.SendAsync(ctx, req, class)
 }
 
-func (h *internalGroupHandler) HandleSendRaftSnapshotRequest(ctx context.Context, snapshot *outgoingSnapshot) error {
-	return h.transport.SendSnapshot(ctx, snapshot)
+func (h *internalGroupHandler) HandleSendRaftSnapshotRequest(ctx context.Context, snapshot *outgoingSnapshot, req *RaftMessageRequest) error {
+	return h.transport.SendSnapshot(ctx, snapshot, req)
 }
 
 func (h *internalGroupHandler) HandleSignalToWorker(ctx context.Context, id uint64) {
@@ -584,35 +645,48 @@ func (h *internalGroupHandler) signalToWorker(groupID uint64, state uint8) {
 	if !h.enqueueGroupState(groupID, state) {
 		return
 	}
+	// log.Infof("do signal to group id[%d], state: %d, node id: %d", groupID, state, h.cfg.NodeID)
 
 	count := atomic.AddUint32(&h.workerRoundRobinCount, 1)
 	for {
 		select {
 		case h.workerChs[int(count)%len(h.workerChs)] <- groupState{state: state, id: groupID}:
-			break
+			// log.Infof("do signal to worker[%d] success, group id: %d, state: %d,  node id: %d", int(count)%len(h.workerChs), groupID, state, h.cfg.NodeID)
+			return
+		case <-h.done:
+			return
 		default:
+			// log.Infof("do signal to worker[%d] failed, retry again. group id: %d, state: %d, node id: %d", int(count)%len(h.workerChs), groupID, state, h.cfg.NodeID)
 			count = count + uint32(rand.Int31n(int32(len(h.workerChs))))
 		}
 	}
 }
 
 // worker do raft state processing job, one raft group will be run in the worker pool with one worker only.
-func (h *internalGroupHandler) worker(ch chan groupState) {
+func (h *internalGroupHandler) worker(wid int, ch chan groupState) {
 	for {
 		select {
 		case in := <-ch:
-			_, ctx := trace.StartSpanFromContext(context.Background(), "")
+			span, ctx := trace.StartSpanFromContextWithTraceID(context.Background(), "", "worker-"+strconv.Itoa(wid)+"/"+strconv.FormatUint(in.id, 10))
 			v, ok := h.groups.Load(in.id)
 			if !ok {
-				// TODO: log warn as group may be remove when raft group migrate happened
+				span.Warnf("group[%d] has been removed", in.id)
+				// remove the group state as group has been removed
+				h.removeGroupStateForce(in.id)
 				continue
 			}
-			group := v.(groupProcessor)
+			group := (*internalGroupProcessor)(v.(*group))
 
 		AGAIN:
+			span.Debugf("start raft state processing, group state: %+v", in)
 
-			// reset group state into queued, avaid raft group processing currently in worker pool
-			h.setGroupStateForce(group.ID(), stateQueued)
+			// reset group state into queued, avoid raft group processing currently in worker pool
+			// group state may be updated after we get it from input channel, so we need to get the latest state before
+			// set stateQueued state into this group
+			state := h.setGroupStateForce(group.ID(), stateQueued)
+			if state != in.state {
+				in.state = state
+			}
 
 			// process group request msg
 			if in.state&stateProcessRaftRequestMsg != 0 {
@@ -632,13 +706,22 @@ func (h *internalGroupHandler) worker(ch chan groupState) {
 				h.processReady(ctx, group)
 			}
 
-			state := h.getGroupState(group.ID())
+			state = h.findAndRemoveGroupState(group.ID(), stateQueued)
+			span.Debugf("worker done, find and remove group state, new state: %d", state)
 			if state == stateQueued {
 				continue
 			}
-			// new state signal coming, we do the group processing job again in this worker
+			// new state signal coming, we do the group state processing job again in this worker
 			in.state = state
 			goto AGAIN
+
+			/*state := h.getGroupState(group.ID())
+			if state == stateQueued {
+				continue
+			}
+
+			in.state = state
+			goto AGAIN*/
 
 		case <-h.done:
 			return
@@ -650,13 +733,13 @@ func (h *internalGroupHandler) snapshotWorker() {
 	for {
 		select {
 		case m := <-h.snapshotQueue:
-			_, ctx := trace.StartSpanFromContext(context.Background(), "")
+			span, ctx := trace.StartSpanFromContext(context.Background(), "")
 			v, ok := h.groups.Load(m.groupID)
 			if !ok {
-				// todo: add log when group has been removed
+				span.Warnf("group[%d] has been removed", m.groupID)
 				continue
 			}
-			group := v.(groupProcessor)
+			group := (*internalGroupProcessor)(v.(*group))
 			group.ProcessSendSnapshot(ctx, m.message)
 		case <-h.done:
 			return
@@ -684,31 +767,48 @@ func (h *internalGroupHandler) enqueueGroupState(groupID uint64, state uint8) (e
 		enqueued = true
 	}
 	stateMu.state[groupID] = newState
-
 	return
 }
 
-func (h *internalGroupHandler) setGroupStateForce(groupID uint64, state uint8) {
+func (h *internalGroupHandler) setGroupStateForce(groupID uint64, state uint8) (currentState uint8) {
 	muIndex := groupID % uint64(len(h.groupStateMu))
 	stateMu := h.groupStateMu[muIndex]
 
 	stateMu.Lock()
 	defer stateMu.Unlock()
 
+	currentState = stateMu.state[groupID].state
 	stateMu.state[groupID] = groupState{
 		state: state,
 		id:    groupID,
 	}
+
+	return
 }
 
-func (h *internalGroupHandler) getGroupState(groupID uint64) (state uint8) {
+func (h *internalGroupHandler) findAndRemoveGroupState(groupID uint64, oldState uint8) (newState uint8) {
 	muIndex := groupID % uint64(len(h.groupStateMu))
 	stateMu := h.groupStateMu[muIndex]
 
-	stateMu.RLock()
-	defer stateMu.RUnlock()
+	stateMu.Lock()
+	defer stateMu.Unlock()
 
-	return stateMu.state[groupID].state
+	groupState := stateMu.state[groupID].state
+	if groupState == oldState {
+		delete(stateMu.state, groupID)
+		return oldState
+	}
+	return groupState
+}
+
+func (h *internalGroupHandler) removeGroupStateForce(groupID uint64) {
+	muIndex := groupID % uint64(len(h.groupStateMu))
+	stateMu := h.groupStateMu[muIndex]
+
+	stateMu.Lock()
+	defer stateMu.Unlock()
+
+	delete(stateMu.state, groupID)
 }
 
 type internalTransportHandler manager
@@ -726,6 +826,7 @@ func (t *internalTransportHandler) HandleRaftRequest(
 		t.uncoalesceBeats(ctx, req.HeartbeatResponses, raftpb.MsgHeartbeatResp, respStream)
 		return nil
 	}
+	span.Debugf("node[%d] receive request: %+v", t.cfg.NodeID, req)
 	enqueue := t.handleRaftUncoalescedRequest(ctx, req, respStream)
 	if enqueue {
 		(*internalGroupHandler)(t).signalToWorker(req.GroupID, stateProcessRaftRequestMsg)
@@ -735,40 +836,51 @@ func (t *internalTransportHandler) HandleRaftRequest(
 }
 
 func (t *internalTransportHandler) HandleRaftResponse(ctx context.Context, resp *RaftMessageResponse) error {
+	// todo: dial with these response error return
 	if resp.Err != nil {
+		span := trace.SpanFromContext(ctx)
+		span.Error("HandleRaftResponse with error: %s", resp.Err)
+
 		switch resp.Err {
-		case ErrGroupHandlerNotFound:
 		case ErrRaftGroupDeleted:
-			// todo: remove raft group
 		case ErrReplicaTooOld:
-			// todo: remove replica
+		case ErrGroupHandleRaftMessage:
+			return resp.Err
+		case ErrGroupNotFound:
+			return resp.Err
 		}
 	}
 	return nil
 }
 
 func (t *internalTransportHandler) HandleRaftSnapshot(ctx context.Context, req *RaftSnapshotRequest, stream SnapshotResponseStream) error {
+	span := trace.SpanFromContext(ctx)
+	span.Debugf("receive raft snapshot request: %+v", req)
+
 	raftMessage := req.Header.RaftMessageRequest
 	v, ok := t.groups.Load(raftMessage.GroupID)
 	if !ok {
 		return stream.Send(&RaftSnapshotResponse{
 			Status:  RaftSnapshotResponse_ERROR,
-			Message: ErrGroupNotFound.Error,
+			Message: ErrGroupNotFound.ErrorMsg,
 		})
 	}
 
-	g := v.(groupProcessor)
+	// send accepted response first before send snapshot data
+	// we must ensure all validation is finished before this send.
+	if err := stream.Send(&RaftSnapshotResponse{
+		Status:  RaftSnapshotResponse_ACCEPTED,
+		Message: "snapshot sender error: no header in the first snapshot request",
+	}); err != nil {
+		return err
+	}
+
+	g := (*internalGroupProcessor)(v.(*group))
 	if err := g.ProcessRaftSnapshotRequest(ctx, req, stream); err != nil {
 		return stream.Send(&RaftSnapshotResponse{
 			Status:  RaftSnapshotResponse_ERROR,
 			Message: err.Error(),
 		})
-	}
-
-	if err := g.WithRaftRawNodeLocked(func(rn *raft.RawNode) error {
-		return rn.Step(raftMessage.Message)
-	}); err != nil {
-		return err
 	}
 
 	return stream.Send(&RaftSnapshotResponse{Status: RaftSnapshotResponse_APPLIED})
@@ -822,19 +934,16 @@ func (t *internalTransportHandler) handleRaftUncoalescedRequest(
 
 	value, ok := t.raftMessageQueues.Load(req.GroupID)
 	if !ok {
-		value, _ = t.raftMessageQueues.LoadOrStore(req.GroupID, unsafe.Pointer(&raftMessageQueue{}))
+		value, _ = t.raftMessageQueues.LoadOrStore(req.GroupID, &raftMessageQueue{})
 	}
 
 	q := value.(*raftMessageQueue)
-	q.Lock()
-	defer q.Unlock()
-
-	q.infos = append(q.infos, raftMessageInfo{
+	queueLen := q.add(raftMessageInfo{
 		req:        req,
 		respStream: respStream,
 	})
 
-	return len(q.infos) == 1
+	return queueLen == 1
 }
 
 type raftMessageInfo struct {
@@ -845,6 +954,14 @@ type raftMessageInfo struct {
 type raftMessageQueue struct {
 	infos []raftMessageInfo
 	sync.Mutex
+}
+
+func (q *raftMessageQueue) add(msg raftMessageInfo) int {
+	q.Lock()
+	defer q.Unlock()
+
+	q.infos = append(q.infos, msg)
+	return len(q.infos)
 }
 
 func (q *raftMessageQueue) drain() ([]raftMessageInfo, bool) {
@@ -908,7 +1025,24 @@ func initConfig(cfg *Config) {
 func initialDefaultConfig(t interface{}, defaultValue interface{}) {
 	switch t.(type) {
 	case *int:
-		*(t.(*int)) = defaultValue.(int)
+		if *(t.(*int)) <= 0 {
+			*(t.(*int)) = defaultValue.(int)
+		}
+	case *uint32:
+		if *(t.(*uint32)) <= 0 {
+			*(t.(*uint32)) = defaultValue.(uint32)
+		}
+
+	case *uint64:
+		if *(t.(*uint64)) <= 0 {
+			*(t.(*uint64)) = defaultValue.(uint64)
+		}
 	default:
 	}
+}
+
+var proposalEntriesPool = sync.Pool{
+	New: func() interface{} {
+		return make([]raftpb.Entry, 0, 32)
+	},
 }

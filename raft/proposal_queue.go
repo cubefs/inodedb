@@ -1,6 +1,8 @@
 package raft
 
-import "context"
+import (
+	"context"
+)
 
 func newProposalQueue(bufferSize int) proposalQueue {
 	return make(chan proposalRequest, bufferSize)
@@ -18,14 +20,14 @@ func (q proposalQueue) Push(ctx context.Context, m proposalRequest) error {
 }
 
 func (q proposalQueue) Iter(f func(m proposalRequest) bool) {
-ITER:
 	for {
 		select {
 		case m := <-q:
 			if !f(m) {
-				break ITER
+				return
 			}
 		default:
+			return
 		}
 	}
 }

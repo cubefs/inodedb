@@ -2,7 +2,7 @@ package raft
 
 import "sync"
 
-// todo: as we store raft group member info into storage,
+// todo: as we store raft group members into storage,
 // shall we implements AddressResolver by raft group?
 type cacheAddressResolver struct {
 	m        sync.Map

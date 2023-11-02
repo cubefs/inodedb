@@ -3,7 +3,9 @@ package raft
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"sync"
+	"time"
 
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
@@ -15,45 +17,55 @@ type Group interface {
 	Propose(ctx context.Context, msg *ProposalData) (ProposalResponse, error)
 	LeaderTransfer(ctx context.Context, peerID uint64) error
 	ReadIndex(ctx context.Context) error
+	Campaign(ctx context.Context) error
 	Truncate(ctx context.Context, index uint64) error
 	MemberChange(ctx context.Context, mc *Member) error
 	Stat() (*Stat, error)
 	Close() error
 }
 
+type groupConfig struct {
+	nodeID           uint64
+	proposeTimeout   time.Duration
+	readIndexTimeout time.Duration
+}
+
 type group struct {
 	id            uint64
-	nodeID        uint64
 	appliedIndex  uint64
 	unreachableMu struct {
 		sync.Mutex
 		remotes map[uint64]struct{}
 	}
 	rawNodeMu struct {
-		sync.Mutex
+		sync.RWMutex
 		rawNode *raft.RawNode
 	}
 	notifies sync.Map
 
+	cfg     groupConfig
 	sm      StateMachine
 	handler groupHandler
 	storage *storage
 }
 
-func (g *group) Propose(ctx context.Context, data *ProposalData) (resp ProposalResponse, err error) {
-	// if data.WithResult {
-	data.notifyID = g.handler.HandleNextID()
-	//}
-
-	err = g.handler.HandlePropose(ctx, g.id, proposalRequest{
-		data: data,
-	})
+func (g *group) Propose(ctx context.Context, pdata *ProposalData) (resp ProposalResponse, err error) {
+	pdata.notifyID = g.handler.HandleNextID()
+	raw, err := pdata.Marshal()
 	if err != nil {
 		return
 	}
 
-	n := newNotify()
-	g.addNotify(data.notifyID, n)
+	timeoutCtx, _ := context.WithTimeout(context.Background(), g.cfg.proposeTimeout)
+	n := newNotify(timeoutCtx)
+	g.addNotify(pdata.notifyID, n)
+
+	err = g.handler.HandlePropose(ctx, g.id, proposalRequest{
+		data: raw,
+	})
+	if err != nil {
+		return
+	}
 
 	ret, err := n.Wait(ctx)
 	if err != nil {
@@ -63,26 +75,48 @@ func (g *group) Propose(ctx context.Context, data *ProposalData) (resp ProposalR
 		return resp, ret.err
 	}
 
+	n.Release()
 	return ProposalResponse{Data: ret.reply}, nil
 }
 
-func (g *group) LeaderTransfer(ctx context.Context, peerID uint64) error {
+func (g *group) LeaderTransfer(ctx context.Context, nodeID uint64) error {
+	span := trace.SpanFromContext(ctx)
+	stat, err := g.Stat()
+	if err != nil {
+		return err
+	}
+	nodeFound := false
+	for _, id := range stat.Nodes {
+		if id == nodeID {
+			nodeFound = true
+			break
+		}
+	}
+	if !nodeFound {
+		return fmt.Errorf("node[%d] not found in node list[%+v]", nodeID, stat.Nodes)
+	}
+
 	(*internalGroupProcessor)(g).WithRaftRawNodeLocked(func(rn *raft.RawNode) error {
-		rn.TransferLeader(peerID)
+		rn.TransferLeader(nodeID)
 		return nil
 	})
+	span.Debug("do signal to worker")
 	g.handler.HandleSignalToWorker(ctx, g.id)
+	return nil
 }
 
 func (g *group) ReadIndex(ctx context.Context) error {
 	notifyID := g.handler.HandleNextID()
-	n := newNotify()
+	timeoutCtx, _ := context.WithTimeout(context.Background(), g.cfg.readIndexTimeout)
+	n := newNotify(timeoutCtx)
 	g.addNotify(notifyID, n)
 
 	(*internalGroupProcessor)(g).WithRaftRawNodeLocked(func(rn *raft.RawNode) error {
 		rn.ReadIndex(notifyIDToBytes(notifyID))
 		return nil
 	})
+	span := trace.SpanFromContext(ctx)
+	span.Debug("do signal to worker")
 	g.handler.HandleSignalToWorker(ctx, g.id)
 
 	ret, err := n.Wait(ctx)
@@ -92,33 +126,49 @@ func (g *group) ReadIndex(ctx context.Context) error {
 	if ret.err != nil {
 		return ret.err
 	}
+
+	n.Release()
+	return nil
+}
+
+func (g *group) Campaign(ctx context.Context) error {
+	err := (*internalGroupProcessor)(g).WithRaftRawNodeLocked(func(rn *raft.RawNode) error {
+		return rn.Campaign()
+	})
+	if err != nil {
+		return err
+	}
+	span := trace.SpanFromContext(ctx)
+	span.Debug("do signal to worker")
+	g.handler.HandleSignalToWorker(ctx, g.id)
 	return nil
 }
 
 func (g *group) Truncate(ctx context.Context, index uint64) error {
-	return g.storage.Truncate(ctx, index)
+	return g.storage.Truncate(index)
 }
 
-func (g *group) MemberChange(ctx context.Context, mc *Member) error {
-	data, err := mc.Marshal()
+func (g *group) MemberChange(ctx context.Context, m *Member) error {
+	cs, err := memberToConfChange(m)
+	if err != nil {
+		return err
+	}
+	cs.ID = g.handler.HandleNextID()
+	data, err := cs.Marshal()
 	if err != nil {
 		return err
 	}
 
-	proposeData := &ProposalData{
-		Data:     data,
-		notifyID: g.handler.HandleNextID(),
-	}
+	timeoutCtx, _ := context.WithTimeout(context.Background(), g.cfg.proposeTimeout)
+	n := newNotify(timeoutCtx)
+	g.addNotify(cs.ID, n)
 
 	if err = g.handler.HandlePropose(ctx, g.id, proposalRequest{
 		entryType: raftpb.EntryConfChange,
-		data:      proposeData,
+		data:      data,
 	}); err != nil {
 		return err
 	}
-
-	n := newNotify()
-	g.addNotify(proposeData.notifyID, n)
 
 	ret, err := n.Wait(ctx)
 	if err != nil {
@@ -128,15 +178,41 @@ func (g *group) MemberChange(ctx context.Context, mc *Member) error {
 		return ret.err
 	}
 
+	n.Release()
 	return nil
 }
 
 func (g *group) Stat() (*Stat, error) {
-	return nil, nil
+	raftStatus := g.raftStatusLocked()
+	peers := make([]uint64, 0, len(raftStatus.Progress))
+	for i := range raftStatus.Progress {
+		peers = append(peers, i)
+	}
+	return &Stat{
+		ID:             g.id,
+		Term:           raftStatus.Term,
+		Vote:           raftStatus.Vote,
+		Commit:         raftStatus.Commit,
+		Leader:         raftStatus.Lead,
+		RaftState:      raftStatus.RaftState.String(),
+		Applied:        g.storage.AppliedIndex(),
+		RaftApplied:    raftStatus.Applied,
+		LeadTransferee: raftStatus.LeadTransferee,
+		Nodes:          peers,
+	}, nil
 }
 
 func (g *group) Close() error {
+	g.storage.Close()
 	return nil
+}
+
+func (g *group) raftStatusLocked() raft.Status {
+	g.rawNodeMu.RLock()
+	status := g.rawNodeMu.rawNode.Status()
+	g.rawNodeMu.RUnlock()
+
+	return status
 }
 
 func (g *group) addNotify(notifyID uint64, n notify) {
@@ -158,7 +234,7 @@ func (g *internalGroupProcessor) ID() uint64 {
 }
 
 func (g *internalGroupProcessor) NodeID() uint64 {
-	return g.nodeID
+	return g.cfg.nodeID
 }
 
 func (g *internalGroupProcessor) WithRaftRawNodeLocked(f func(rn *raft.RawNode) error) error {
@@ -176,6 +252,7 @@ func (g *internalGroupProcessor) ProcessSendRaftMessage(ctx context.Context, mes
 		// add into async queue to process snapshot
 		if msg.Type == raftpb.MsgSnap {
 			if err := g.handler.HandleSnapshot(ctx, g.id, *msg); err != nil {
+				span.Errorf("handle snapshot failed: %s", err)
 				// delete snapshot and report failed when handle snapshot into queue failed
 				g.storage.DeleteSnapshot(string(msg.Snapshot.Data))
 				g.WithRaftRawNodeLocked(func(rn *raft.RawNode) error {
@@ -183,9 +260,16 @@ func (g *internalGroupProcessor) ProcessSendRaftMessage(ctx context.Context, mes
 					return nil
 				})
 			}
+
+			// redirect snapshot message's to into zero, don't send snapshot message
+			msg.To = 0
 		}
 
 		if g.handler.HandleMaybeCoalesceHeartbeat(ctx, g.id, msg) {
+			continue
+		}
+
+		if msg.To == 0 {
 			continue
 		}
 
@@ -221,9 +305,21 @@ func (g *internalGroupProcessor) ProcessSendSnapshot(ctx context.Context, m raft
 	}
 	defer g.storage.DeleteSnapshot(id)
 
-	if err := g.handler.HandleSendRaftSnapshotRequest(ctx, snapshot); err != nil {
+	req := &RaftMessageRequest{
+		GroupID: g.id,
+		From:    m.From,
+		To:      m.To,
+		Message: raftpb.Message{
+			Type:     m.Type,
+			To:       m.To,
+			From:     m.From,
+			Term:     (*group)(g).raftStatusLocked().Term,
+			Snapshot: m.Snapshot,
+		},
+	}
+	if err := g.handler.HandleSendRaftSnapshotRequest(ctx, snapshot, req); err != nil {
+		span.Errorf("handle send raft outgoingSnapshot[%s] request failed: %s", id, errors.Detail(err))
 		g.WithRaftRawNodeLocked(func(rn *raft.RawNode) error {
-			span.Errorf("handle send raft outgoingSnapshot[%s] request failed: %s", id, err)
 			rn.ReportSnapshot(m.To, raft.SnapshotFailure)
 			return nil
 		})
@@ -254,8 +350,21 @@ func (g *internalGroupProcessor) ProcessRaftMessageRequest(ctx context.Context, 
 }
 
 func (g *internalGroupProcessor) ProcessRaftSnapshotRequest(ctx context.Context, req *RaftSnapshotRequest, stream SnapshotResponseStream) error {
-	snapshot := newIncomingSnapshot(req.Header, stream)
-	return g.sm.ApplySnapshot(snapshot)
+	snapshot := newIncomingSnapshot(req.Header, g.storage, stream)
+	if err := g.sm.ApplySnapshot(snapshot); err != nil {
+		return err
+	}
+
+	if err := g.WithRaftRawNodeLocked(func(rn *raft.RawNode) error {
+		return rn.Step(req.Header.RaftMessageRequest.Message)
+	}); err != nil {
+		return err
+	}
+	// raise worker signal
+	span := trace.SpanFromContext(ctx)
+	span.Debug("do signal to worker")
+	g.handler.HandleSignalToWorker(ctx, g.id)
+	return nil
 }
 
 func (g *internalGroupProcessor) SaveHardStateAndEntries(ctx context.Context, hs raftpb.HardState, entries []raftpb.Entry) error {
@@ -264,6 +373,23 @@ func (g *internalGroupProcessor) SaveHardStateAndEntries(ctx context.Context, hs
 
 func (g *internalGroupProcessor) ApplyLeaderChange(nodeID uint64) error {
 	return g.sm.LeaderChange(nodeID)
+}
+
+func (g *internalGroupProcessor) ApplySnapshot(ctx context.Context, snap raftpb.Snapshot) error {
+	// save hard state
+	if err := g.storage.SaveHardStateAndEntries(raftpb.HardState{
+		Commit: snap.Metadata.Index,
+		Term:   snap.Metadata.Term,
+	}, nil); err != nil {
+		return err
+	}
+	// truncate all raft log
+	if err := g.storage.Truncate(snap.Metadata.Index + 1); err != nil {
+		return err
+	}
+	// set applied index
+	g.storage.SetAppliedIndex(snap.Metadata.Index)
+	return nil
 }
 
 func (g *internalGroupProcessor) ApplyCommittedEntries(ctx context.Context, entries []raftpb.Entry) (err error) {
@@ -291,11 +417,13 @@ func (g *internalGroupProcessor) ApplyCommittedEntries(ctx context.Context, entr
 				return errors.Info(err, "apply conf change to state machine failed")
 			}
 		case raftpb.EntryNormal:
+			// initial raft state may propose empty data after leader change
+			// just ignore it and don't call apply to state machine
 			if len(entries[i].Data) == 0 {
 				continue
 			}
 			allProposalData = append(allProposalData, ProposalData{})
-			proposalData := &allProposalData[i]
+			proposalData := &allProposalData[len(allProposalData)-1]
 			if err = proposalData.Unmarshal(entries[i].Data); err != nil {
 				return errors.Info(err, "unmarshal proposal data failed")
 			}
@@ -318,13 +446,16 @@ func (g *internalGroupProcessor) ApplyCommittedEntries(ctx context.Context, entr
 		}
 	}
 
-	g.storage.SetAppliedIndex(latestIndex)
+	// always set storage's applied index into entries last one
+	if len(entries) > 0 {
+		g.storage.SetAppliedIndex(entries[len(entries)-1].Index)
+	}
 
 	return
 }
 
 func (g *internalGroupProcessor) ApplyReadIndex(ctx context.Context, readState raft.ReadState) {
-	notifyID := BytesToNotifyID(readState.RequestCtx)
+	notifyID := bytesToNotifyID(readState.RequestCtx)
 	(*group)(g).doNotify(notifyID, proposalResult{})
 }
 
@@ -376,6 +507,8 @@ func (g *internalGroupProcessor) applyConfChange(ctx context.Context, entry raft
 		return err
 	}
 	g.storage.MemberChange(member)
+
+	(*group)(g).doNotify(cc.ID, proposalResult{})
 	return nil
 }
 
@@ -385,6 +518,30 @@ func notifyIDToBytes(id uint64) []byte {
 	return b
 }
 
-func BytesToNotifyID(b []byte) uint64 {
+func bytesToNotifyID(b []byte) uint64 {
 	return binary.BigEndian.Uint64(b)
+}
+
+func memberToConfChange(m *Member) (cs raftpb.ConfChange, err error) {
+	raw, err := m.Marshal()
+	if err != nil {
+		return
+	}
+
+	cs = raftpb.ConfChange{
+		NodeID:  m.NodeID,
+		Context: raw,
+	}
+	switch m.Type {
+	case MemberChangeType_AddMember:
+		if m.Learner {
+			cs.Type = raftpb.ConfChangeAddLearnerNode
+			break
+		}
+		cs.Type = raftpb.ConfChangeAddNode
+	case MemberChangeType_RemoveMember:
+		cs.Type = raftpb.ConfChangeRemoveNode
+	}
+
+	return
 }

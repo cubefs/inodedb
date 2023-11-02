@@ -17,7 +17,7 @@ enum MemberChangeType {
 
 message Error {
     uint32 error_code = 1;
-    string error = 2;
+    string error_msg = 2;
 }
 
 message ProposalData {

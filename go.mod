@@ -6,7 +6,8 @@ replace github.com/tecbot/gorocksdb v0.0.0-20191217155057-f0fad39f321c => github
 
 require (
 	github.com/cubefs/cubefs v0.0.0-20230620070032-24e766dd7b25
-	github.com/gogo/protobuf v1.3.2 // indirect
+	github.com/gogo/protobuf v1.3.2
+	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/uuid v1.3.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
