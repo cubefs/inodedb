@@ -119,7 +119,8 @@ message Unlink {
 
 message ShardReport {
 	uint64 sid = 1;
-	Shard shard = 2;
+	uint32 node_id = 2;
+	Shard  shard = 3;
 }
 
 message CatalogChangeItem {

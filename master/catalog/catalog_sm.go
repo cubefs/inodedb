@@ -164,7 +164,7 @@ func (c *catalog) applyUpdateSpaceRoute(ctx context.Context, data []byte) error 
 	}}
 	routeItems = append(routeItems, c.genShardRouteItems(ctx, args.Sid, args.ShardInfos)...)
 	if err := c.storage.UpsertSpaceShardsAndRouteItems(ctx, info, args.ShardInfos, routeItems); err != nil {
-		info.Status = SpaceStatusInit
+		info.Status = SpaceStatusUpdateRoute
 		info.Epoch = 0
 		return err
 	}
@@ -196,7 +196,7 @@ func (c *catalog) applyShardReport(ctx context.Context, data []byte) (ret *shard
 
 		shard.lock.Lock()
 		info := shard.info
-		if reportInfo.Shard.Epoch < info.Epoch && isReplicateMember(reportInfo.Shard.Id, info.Replicates) {
+		if reportInfo.Shard.Epoch < info.Epoch && !isReplicateMember(reportInfo.NodeId, info.Replicates) {
 			ret.tasks = append(ret.tasks, &proto.ShardTask{
 				Type:      proto.ShardTaskType_ClearShard,
 				SpaceName: space.GetInfo().Name,
