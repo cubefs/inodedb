@@ -67,3 +67,18 @@ func GetLocalIP() (string, error) {
 
 	return "", errors.New("can not find the local ip address")
 }
+
+func GenUnusedPort() int {
+	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
+	if err != nil {
+		return 0
+	}
+
+	l, err := net.ListenTCP("tcp", addr)
+	if err != nil {
+		return 0
+	}
+	defer l.Close()
+
+	return l.Addr().(*net.TCPAddr).Port
+}
