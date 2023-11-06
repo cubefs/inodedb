@@ -51,6 +51,9 @@ type mockBatch struct{ data []byte }
 // Put mock implementation for Batch interface method.
 func (mb *mockBatch) Put(key, value []byte) {}
 
+// Delete mock implementation for Batch interface method.
+func (mb *mockBatch) Delete(key []byte) {}
+
 // DeleteRange mock implementation for Batch interface method.
 func (mb *mockBatch) DeleteRange(start []byte, end []byte) {}
 

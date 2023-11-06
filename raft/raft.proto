@@ -25,8 +25,7 @@ message ProposalData {
     uint32 op  =2;
     bytes data = 3;
     bytes context = 4;
-    bool with_result = 5;
-    uint64 notify_id = 6 [(gogoproto.customname) = "notifyID"];
+    uint64 notify_id = 5 [(gogoproto.customname) = "notifyID"];
 }
 
 message Member {

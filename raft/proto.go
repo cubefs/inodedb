@@ -8,6 +8,8 @@ import (
 
 type (
 	StateMachine interface {
+		// Apply will notify the state machine to apply all proposal data
+		// Note that the rets slice length should be equal to proposal data slice length
 		Apply(cxt context.Context, pd []ProposalData, index uint64) (rets []interface{}, err error)
 		LeaderChange(peerID uint64) error
 		ApplyMemberChange(cc *Member, index uint64) error
@@ -19,7 +21,6 @@ type (
 		Iter(prefix []byte) Iterator
 		NewBatch() Batch
 		Write(b Batch) error
-		Put(key, value []byte) error
 	}
 	// Snapshot return state machine's snapshot data.
 	// For load considerations, it's the responsibility of the state machine
@@ -33,7 +34,7 @@ type (
 		Close() error
 	}
 	AddressResolver interface {
-		Resolve(nodeID uint64) (Addr, error)
+		Resolve(ctx context.Context, nodeID uint64) (Addr, error)
 	}
 	Addr interface {
 		String() string
@@ -54,6 +55,7 @@ type (
 	}
 	Batch interface {
 		Put(key, value []byte)
+		Delete(key []byte)
 		DeleteRange(start []byte, end []byte)
 		Data() []byte
 		From(data []byte)

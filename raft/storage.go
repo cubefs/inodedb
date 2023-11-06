@@ -335,6 +335,10 @@ func (s *storage) Truncate(index uint64) error {
 		return fmt.Errorf("can not truncate log index[%d] which large than the alive outgoingSnapshot's index[%d]", index, oldestSnap.st.Index())
 	}
 
+	if appliedIndex := s.AppliedIndex(); index > appliedIndex {
+		return fmt.Errorf("truncate index[%d] large than applied index[%d]", index, appliedIndex)
+	}
+
 	batch := s.rawStg.NewBatch()
 	batch.DeleteRange(encodeIndexLogKey(s.id, 0), encodeIndexLogKey(s.id, index))
 	if err := s.rawStg.Write(batch); err != nil {

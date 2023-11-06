@@ -213,7 +213,7 @@ func (t *transport) SendAsync(ctx context.Context, req *RaftMessageRequest, clas
 
 	// span.Infof("send async request: %+v", req)
 	// resolve address from to node id
-	addr, err := t.resolver.Resolve(toNodeID)
+	addr, err := t.resolver.Resolve(ctx, toNodeID)
 	if err != nil {
 		return fmt.Errorf("can't resolve to node id[%d], err: %s", toNodeID, err)
 	}
@@ -314,7 +314,7 @@ func (t *transport) SendSnapshot(ctx context.Context, snapshot *outgoingSnapshot
 }
 
 func (t *transport) getSnapshotStream(ctx context.Context, to uint64) (RaftService_RaftSnapshotClient, error) {
-	addr, err := t.resolver.Resolve(to)
+	addr, err := t.resolver.Resolve(ctx, to)
 	if err != nil {
 		return nil, fmt.Errorf("can't resolve to node id[%d]", to)
 	}

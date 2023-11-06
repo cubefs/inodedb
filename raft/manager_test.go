@@ -68,7 +68,7 @@ func TestManager_CreateGroup(t *testing.T) {
 		Members: testNodes[:1],
 		SM:      sm,
 	}
-	err := m.CreateRaftGroup(ctx, groupConfig)
+	_, err := m.CreateRaftGroup(ctx, groupConfig)
 	require.NoError(t, err)
 
 	defer m.RemoveRaftGroup(ctx, groupConfig.ID)
@@ -101,7 +101,7 @@ func TestManager_GroupInOneServer(t *testing.T) {
 		SM:      sm,
 	}
 	t.Log(groupConfig.Members)
-	err := m.CreateRaftGroup(ctx, groupConfig)
+	_, err := m.CreateRaftGroup(ctx, groupConfig)
 	require.NoError(t, err)
 
 	defer m.RemoveRaftGroup(ctx, groupConfig.ID)
@@ -126,10 +126,9 @@ func TestManager_GroupInOneServer(t *testing.T) {
 	{
 		for i := range kvs {
 			resp, err := group.Propose(ctx, &ProposalData{
-				Module:     nil,
-				Op:         0,
-				Data:       kvs[i].Marshal(),
-				WithResult: true,
+				Module: nil,
+				Op:     0,
+				Data:   kvs[i].Marshal(),
 			})
 			require.NoError(t, err)
 			require.Equal(t, kvs[i].key, resp.Data.(string))
@@ -194,7 +193,7 @@ func TestManager_GroupInMultiServer(t *testing.T) {
 
 	for i, m := range managers {
 		groupConfig.SM = sms[i]
-		err := m.CreateRaftGroup(ctx, groupConfig)
+		_, err := m.CreateRaftGroup(ctx, groupConfig)
 		require.NoError(t, err)
 
 		rawGroup, err := m.GetRaftGroup(groupConfig.ID)
@@ -249,10 +248,9 @@ func TestManager_GroupInMultiServer(t *testing.T) {
 		for index := range []int{leaderIndex, followerIndex} {
 			for i := range kvs {
 				resp, err := groups[index].Propose(ctx, &ProposalData{
-					Module:     nil,
-					Op:         0,
-					Data:       kvs[i].Marshal(),
-					WithResult: true,
+					Module: nil,
+					Op:     0,
+					Data:   kvs[i].Marshal(),
 				})
 				require.NoError(t, err)
 				require.Equal(t, kvs[i].key, resp.Data.(string))
@@ -313,7 +311,7 @@ func TestManager_GroupInMultiServer(t *testing.T) {
 		sm := newTestStateMachine(storage)
 		groupConfig.Members = testNodes
 		groupConfig.SM = sm
-		err = m.CreateRaftGroup(ctx, groupConfig)
+		_, err = m.CreateRaftGroup(ctx, groupConfig)
 		require.NoError(t, err)
 
 		err = groups[leaderIndex].MemberChange(ctx, &newNode)
@@ -347,7 +345,7 @@ func initManager(t *testing.T, ctrl *gomock.Controller, member Member, storagePa
 	span, ctx := trace.StartSpanFromContext(context.Background(), "")
 
 	mockResolver := NewMockAddressResolver(ctrl)
-	mockResolver.EXPECT().Resolve(gomock.Any()).AnyTimes().DoAndReturn(func(nodeID uint64) (Addr, error) {
+	mockResolver.EXPECT().Resolve(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(ctx context.Context, nodeID uint64) (Addr, error) {
 		span.Infof("get node id[%d] address", nodeID)
 		mockAddr := NewMockAddr(ctrl)
 		for i := range testNodes {

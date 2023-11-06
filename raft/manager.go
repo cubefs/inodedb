@@ -39,7 +39,7 @@ const (
 
 type (
 	Manager interface {
-		CreateRaftGroup(ctx context.Context, cfg *GroupConfig) error
+		CreateRaftGroup(ctx context.Context, cfg *GroupConfig) (Group, error)
 		GetRaftGroup(id uint64) (Group, error)
 		RemoveRaftGroup(ctx context.Context, id uint64)
 		Close()
@@ -136,10 +136,10 @@ type (
 		// The default value is 5s.
 		ReadIndexTimeoutMS int
 
-		TransportConfig TransportConfig
-		Logger          raft.Logger
-		Storage         Storage
-		Resolver        AddressResolver
+		TransportConfig TransportConfig `json:"-"`
+		Logger          raft.Logger     `json:"-"`
+		Storage         Storage         `json:"-"`
+		Resolver        AddressResolver `json:"-"`
 	}
 	GroupConfig struct {
 		ID      uint64
@@ -222,7 +222,7 @@ type manager struct {
 	cfg         *Config
 }
 
-func (m *manager) CreateRaftGroup(ctx context.Context, cfg *GroupConfig) error {
+func (m *manager) CreateRaftGroup(ctx context.Context, cfg *GroupConfig) (Group, error) {
 	storage, err := newStorage(storageConfig{
 		id:              cfg.ID,
 		maxSnapshotNum:  m.cfg.MaxSnapshotNum,
@@ -232,7 +232,7 @@ func (m *manager) CreateRaftGroup(ctx context.Context, cfg *GroupConfig) error {
 		sm:              cfg.SM,
 	})
 	if err != nil {
-		return errors.Info(err, "mew raft storage failed")
+		return nil, errors.Info(err, "mew raft storage failed")
 	}
 
 	rawNode, err := raft.NewRawNode(&raft.Config{
@@ -248,7 +248,7 @@ func (m *manager) CreateRaftGroup(ctx context.Context, cfg *GroupConfig) error {
 		Logger:          m.cfg.Logger,
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	g := &group{
@@ -268,12 +268,12 @@ func (m *manager) CreateRaftGroup(ctx context.Context, cfg *GroupConfig) error {
 
 	_, loaded := m.groups.LoadOrStore(cfg.ID, g)
 	if loaded {
-		return errors.New("group already exists")
+		return nil, errors.New("group already exists")
 	}
 
 	queue := newProposalQueue(m.cfg.MaxProposeMsgNum)
 	m.proposalQueues.Store(cfg.ID, queue)
-	return nil
+	return g, nil
 }
 
 func (m *manager) GetRaftGroup(id uint64) (Group, error) {

@@ -208,6 +208,8 @@ type testBatch struct {
 
 func (t *testBatch) Put(key, value []byte) { t.batch.Put(t.cf, key, value) }
 
+func (t *testBatch) Delete(key []byte) { t.batch.Delete(t.cf, key) }
+
 func (t *testBatch) DeleteRange(start []byte, end []byte) {
 	t.batch.DeleteRange(t.cf, start, end)
 }
