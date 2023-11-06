@@ -52,6 +52,7 @@ enum CatalogChangeType {
 
 enum ShardTaskType {
 	ClearShard = 0;
+	Checkpoint = 1;
 }
 
 message Node {
@@ -80,7 +81,12 @@ message Shard {
 	uint64 ino_limit = 3;
 	uint64 ino_used = 4;
 	uint32 leader_id = 5;
-	repeated Node nodes = 6; // nodes related to replicate nodes or stripe nodes
+	repeated ShardNode nodes = 6; // nodes related to replicate nodes or stripe nodes
+}
+
+message ShardNode {
+	uint32 id = 1;
+	bool learner = 2;
 }
 
 message Item {
@@ -148,7 +154,7 @@ message CatalogChangeShardAdd {
 	uint64 epoch = 4;
 	uint64 ino_limit = 5;
 	uint32 leader = 6;
-	repeated uint32 replicates = 7;
+	repeated ShardNode nodes = 7;
 }
 
 message ShardTask {

@@ -26,7 +26,7 @@ const (
 
 type Cluster interface {
 	GetNode(ctx context.Context, nodeId uint32) (*proto.Node, error)
-	Alloc(ctx context.Context, args *AllocArgs) ([]*nodeInfo, error)
+	Alloc(ctx context.Context, args *AllocArgs) ([]*proto.Node, error)
 	GetClient(ctx context.Context, nodeId uint32) (transport.ShardServerClient, error)
 	Register(ctx context.Context, args *proto.Node) (uint32, error)
 	Unregister(ctx context.Context, nodeID uint32) error
@@ -59,7 +59,7 @@ type cluster struct {
 	allNodes   *concurrentNodes
 
 	cfg         *Config
-	transporter transport.Transporter
+	transporter transport.Transport
 	raftGroup   raft.Group
 	storage     *storage
 	idGenerator idGenerator.IDGenerator
@@ -123,7 +123,7 @@ func (c *cluster) GetClient(ctx context.Context, nodeId uint32) (transport.Shard
 				c.cfg.ShardServerConfig = &transport.Config{}
 			}
 			c.cfg.ShardServerConfig.GrpcPort = c.cfg.GrpcPort
-			transporter, err := transport.NewTransporter(ctx, c.cfg.ShardServerConfig)
+			transporter, err := transport.NewTransport(ctx, c.cfg.ShardServerConfig)
 			if err != nil {
 				c.lock.Unlock()
 				return nil, errors.Info(err, "new shard server transporter failed: %s")
@@ -139,7 +139,7 @@ func (c *cluster) GetClient(ctx context.Context, nodeId uint32) (transport.Shard
 	return c.transporter.GetShardServerClient(ctx, nodeId)
 }
 
-func (c *cluster) Alloc(ctx context.Context, args *AllocArgs) ([]*nodeInfo, error) {
+func (c *cluster) Alloc(ctx context.Context, args *AllocArgs) ([]*proto.Node, error) {
 	span := trace.SpanFromContextSafe(ctx)
 
 	if !c.isValidAz(args.AZ) {
@@ -157,11 +157,17 @@ func (c *cluster) Alloc(ctx context.Context, args *AllocArgs) ([]*nodeInfo, erro
 		return nil, apierrors.ErrNodeRoleNotExist
 	}
 	mgr := value.(Allocator)
-	alloc, err := mgr.Alloc(ctx, args)
+	allocRet, err := mgr.Alloc(ctx, args)
 	if err != nil {
 		span.Warnf("alloc failed, err: %s", err)
 	}
-	return alloc, err
+
+	ret := make([]*proto.Node, len(allocRet))
+	for i := range allocRet {
+		ret[i] = allocRet[i].ToProtoNode()
+	}
+
+	return ret, err
 }
 
 func (c *cluster) Register(ctx context.Context, args *proto.Node) (uint32, error) {

@@ -22,6 +22,9 @@ type ShardServer struct {
 
 func NewShardServer(cfg *Config) *ShardServer {
 	_, ctx := trace.StartSpanFromContext(context.Background(), "")
+
+	cfg.StoreConfig.KVOption.CreateIfMissing = true
+	cfg.StoreConfig.RaftOption.CreateIfMissing = true
 	catalog := catalog.NewCatalog(ctx, &catalog.Config{
 		StoreConfig:  cfg.StoreConfig,
 		MasterConfig: cfg.MasterConfig,

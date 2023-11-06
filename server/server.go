@@ -51,7 +51,6 @@ type Server struct {
 }
 
 func NewServer(cfg *Config) *Server {
-	cfg.StoreConfig.KVOption.CreateIfMissing = true
 	// check log dir exist
 	if _, err := os.Stat(cfg.AuditLog.LogDir); os.IsNotExist(err) {
 		os.Mkdir(cfg.AuditLog.LogDir, 0o777)

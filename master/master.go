@@ -25,6 +25,7 @@ type Master struct {
 func NewMaster(cfg *Config) *Master {
 	span, ctx := trace.StartSpanFromContext(context.Background(), "")
 
+	cfg.StoreConfig.KVOption.CreateIfMissing = true
 	cfg.StoreConfig.KVOption.ColumnFamily = append(cfg.StoreConfig.KVOption.ColumnFamily, catalog.CF, cluster.CF, idgenerator.CF)
 	store, err := store.NewStore(ctx, &cfg.StoreConfig)
 	if err != nil {

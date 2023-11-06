@@ -93,12 +93,12 @@ func (s *spaceInfo) Unmarshal(data []byte) error {
 }
 
 type shardInfo struct {
-	ShardId    uint32   `json:"shard_id"`
-	Epoch      uint64   `json:"epoch"`
-	InoLimit   uint64   `json:"ino_limit"`
-	InoUsed    uint64   `json:"ino_used"`
-	Leader     uint32   `json:"leader"`
-	Replicates []uint32 `json:"replicates"`
+	ShardId  uint32      `json:"shard_id"`
+	Epoch    uint64      `json:"epoch"`
+	InoLimit uint64      `json:"ino_limit"`
+	InoUsed  uint64      `json:"ino_used"`
+	Leader   uint32      `json:"leader"`
+	Nodes    []shardNode `json:"nodes"`
 }
 
 func (s *shardInfo) Marshal() ([]byte, error) {
@@ -107,6 +107,11 @@ func (s *shardInfo) Marshal() ([]byte, error) {
 
 func (s *shardInfo) Unmarshal(data []byte) error {
 	return json.Unmarshal(data, s)
+}
+
+type shardNode struct {
+	ID      uint32 `json:"id"`
+	Learner bool   `json:"learner"`
 }
 
 func protoFieldMetasToInternalFieldMetas(fields []*proto.FieldMeta) []FieldMeta {
@@ -128,6 +133,17 @@ func internalFieldMetasToProtoFieldMetas(fields []FieldMeta) []*proto.FieldMeta 
 			Name:    fields[i].Name,
 			Type:    fields[i].Type,
 			Indexed: fields[i].Indexed,
+		}
+	}
+	return ret
+}
+
+func internalShardNodesToProtoShardNodes(nodes []shardNode) []*proto.ShardNode {
+	ret := make([]*proto.ShardNode, len(nodes))
+	for i := range nodes {
+		ret[i] = &proto.ShardNode{
+			Id:      nodes[i].ID,
+			Learner: nodes[i].Learner,
 		}
 	}
 	return ret

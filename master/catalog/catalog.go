@@ -278,12 +278,8 @@ func (c *catalog) GetSpace(ctx context.Context, sid uint64) (*proto.SpaceMeta, e
 			InoUsed:  shardInfo.InoUsed,
 			LeaderId: shardInfo.Leader,
 		}
-		for _, nodeId := range shardInfo.Replicates {
-			node, err := c.cluster.GetNode(ctx, nodeId)
-			if err != nil {
-				return nil, err
-			}
-			shard.Nodes = append(shard.Nodes, node)
+		for _, node := range shardInfo.Nodes {
+			shard.Nodes = append(shard.Nodes, &proto.ShardNode{Id: node.ID, Learner: node.Learner})
 		}
 		meta.Shards[i] = shard
 	}
@@ -411,13 +407,13 @@ func (c *catalog) GetCatalogChanges(ctx context.Context, fromRouterVersion uint6
 			shard := space.GetShard(itemDetail.ShardId)
 			shardInfo := shard.GetInfo()
 			err = ret[i].Item.MarshalFrom(&proto.CatalogChangeShardAdd{
-				Sid:        itemDetail.Sid,
-				Name:       space.GetInfo().Name,
-				ShardId:    itemDetail.ShardId,
-				Epoch:      shardInfo.Epoch,
-				InoLimit:   shardInfo.InoLimit,
-				Leader:     shardInfo.Leader,
-				Replicates: shardInfo.Replicates,
+				Sid:      itemDetail.Sid,
+				Name:     space.GetInfo().Name,
+				ShardId:  itemDetail.ShardId,
+				Epoch:    shardInfo.Epoch,
+				InoLimit: shardInfo.InoLimit,
+				Leader:   shardInfo.Leader,
+				Nodes:    internalShardNodesToProtoShardNodes(shardInfo.Nodes),
 			})
 		default:
 
@@ -509,38 +505,47 @@ func (c *catalog) createSpaceShards(ctx context.Context, space *space, startShar
 		if err != nil {
 			return errors.Info(err, "alloc shard server nodes failed")
 		}
-		nodes := make([]uint32, len(nodeInfos))
+
+		protoShardNodes := make([]*proto.ShardNode, len(nodeInfos))
+		internalShardNodes := make([]shardNode, len(nodeInfos))
 		for i := range nodeInfos {
-			nodes[i] = nodeInfos[i].Id
+			protoShardNodes[i] = &proto.ShardNode{
+				Id:      nodeInfos[i].Id,
+				Learner: false,
+			}
+			internalShardNodes[i] = shardNode{
+				ID:      nodeInfos[i].Id,
+				Learner: false,
+			}
 		}
 
 		// TODO: shuffle the nodes for raft group leader election
 
 		// create shards
-		for i := range nodes {
+		for i := range protoShardNodes {
 			span.Info("start get client")
-			client, err := c.cluster.GetClient(ctx, nodes[i])
+			client, err := c.cluster.GetClient(ctx, protoShardNodes[i].Id)
 			if err != nil {
 				return errors.Info(err, "get client failed")
 			}
 			span.Info("get client success")
 
 			if _, err := client.AddShard(ctx, &proto.AddShardRequest{
-				Sid:        space.id,
-				SpaceName:  space.info.Name,
-				ShardId:    shardId,
-				InoLimit:   c.cfg.InoLimitPerShard,
-				Replicates: nodes,
+				Sid:       space.id,
+				SpaceName: space.info.Name,
+				ShardId:   shardId,
+				InoLimit:  c.cfg.InoLimitPerShard,
+				Nodes:     protoShardNodes,
 			}); err != nil {
-				return errors.Info(err, fmt.Sprintf("add shard to node[%d] failed", nodes[i]))
+				return errors.Info(err, fmt.Sprintf("add shard to node[%d] failed", protoShardNodes[i]))
 			}
 			span.Info("add shard success")
 		}
 
 		shardInfos = append(shardInfos, &shardInfo{
-			ShardId:    shardId,
-			InoLimit:   c.cfg.InoLimitPerShard,
-			Replicates: nodes,
+			ShardId:  shardId,
+			InoLimit: c.cfg.InoLimitPerShard,
+			Nodes:    internalShardNodes,
 		})
 	}
 
@@ -592,8 +597,8 @@ func (c *catalog) updateSpaceRoute(ctx context.Context, space *space) error {
 		shardInfo.Epoch = baseEpoch + 1 + uint64(i)
 
 		// update shard's epoch
-		for _, nodeId := range shardInfo.Replicates {
-			client, err := c.cluster.GetClient(ctx, nodeId)
+		for _, node := range shardInfo.Nodes {
+			client, err := c.cluster.GetClient(ctx, node.ID)
 			if err != nil {
 				return errors.Info(err, "get client failed")
 			}
@@ -603,7 +608,7 @@ func (c *catalog) updateSpaceRoute(ctx context.Context, space *space) error {
 				ShardId:   shardInfo.ShardId,
 				Epoch:     shardInfo.Epoch,
 			}); err != nil {
-				return errors.Info(err, fmt.Sprintf("update shard to node[%d] failed", nodeId))
+				return errors.Info(err, fmt.Sprintf("update shard to node[%d] failed", node.ID))
 			}
 		}
 
@@ -651,8 +656,8 @@ func (c *catalog) expandSpaceUpdateRoute(ctx context.Context, space *space) erro
 		shardInfo.Epoch = baseEpoch + uint64(i)
 
 		// update shard's epoch
-		for _, nodeId := range shardInfo.Replicates {
-			client, err := c.cluster.GetClient(ctx, nodeId)
+		for _, node := range shardInfo.Nodes {
+			client, err := c.cluster.GetClient(ctx, node.ID)
 			if err != nil {
 				return errors.Info(err, "get client failed")
 			}
@@ -662,7 +667,7 @@ func (c *catalog) expandSpaceUpdateRoute(ctx context.Context, space *space) erro
 				ShardId:   shardInfo.ShardId,
 				Epoch:     shardInfo.Epoch,
 			}); err != nil {
-				return errors.Info(err, fmt.Sprintf("update shard to node[%d] failed", nodeId))
+				return errors.Info(err, fmt.Sprintf("update shard to node[%d] failed", node.ID))
 			}
 		}
 

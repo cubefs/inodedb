@@ -196,7 +196,7 @@ func (c *catalog) applyShardReport(ctx context.Context, data []byte) (ret *shard
 
 		shard.lock.Lock()
 		info := shard.info
-		if reportInfo.Shard.Epoch < info.Epoch && !isReplicateMember(reportInfo.NodeId, info.Replicates) {
+		if reportInfo.Shard.Epoch < info.Epoch && !isReplicateMember(reportInfo.NodeId, info.Nodes) {
 			ret.tasks = append(ret.tasks, &proto.ShardTask{
 				Type:      proto.ShardTaskType_ClearShard,
 				SpaceName: space.GetInfo().Name,
@@ -307,9 +307,9 @@ func (c *catalog) genShardRouteItems(ctx context.Context, sid uint64, shardInfos
 	return routeItems
 }
 
-func isReplicateMember(target uint32, replicates []uint32) bool {
-	for _, replicate := range replicates {
-		if replicate == target {
+func isReplicateMember(target uint32, nodes []shardNode) bool {
+	for _, node := range nodes {
+		if node.ID == target {
 			return true
 		}
 	}

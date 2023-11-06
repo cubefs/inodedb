@@ -28,7 +28,7 @@ type ShardServerConfig struct {
 	MasterClient    *sc.MasterClient   `json:"-"`
 }
 
-type transporter struct {
+type transport struct {
 	info              *proto.Node
 	masterClient      *sc.MasterClient
 	shardServerClient *sc.ShardServerClient
@@ -37,7 +37,7 @@ type transporter struct {
 	lock sync.RWMutex
 }
 
-func NewTransporter(cfg *ShardServerConfig, info *proto.Node) (*transporter, error) {
+func NewTransport(cfg *ShardServerConfig, info *proto.Node) (*transport, error) {
 	serverClient, err := sc.NewShardServerClient(&sc.ShardServerConfig{
 		MasterClient:    cfg.MasterClient,
 		TransportConfig: cfg.TransportConfig,
@@ -45,7 +45,7 @@ func NewTransporter(cfg *ShardServerConfig, info *proto.Node) (*transporter, err
 	if err != nil {
 		return nil, err
 	}
-	return &transporter{
+	return &transport{
 		shardServerClient: serverClient,
 		info:              info,
 		done:              make(chan struct{}),
@@ -53,7 +53,7 @@ func NewTransporter(cfg *ShardServerConfig, info *proto.Node) (*transporter, err
 	}, nil
 }
 
-func (s *transporter) Register(ctx context.Context) error {
+func (s *transport) Register(ctx context.Context) error {
 	resp, err := s.masterClient.Cluster(ctx, &proto.ClusterRequest{
 		Operation: proto.ClusterOperation_Join,
 		NodeInfo: &proto.Node{
@@ -74,7 +74,7 @@ func (s *transporter) Register(ctx context.Context) error {
 	return nil
 }
 
-func (s *transporter) StartHeartbeat(ctx context.Context) {
+func (s *transport) StartHeartbeat(ctx context.Context) {
 	heartbeatTicker := time.NewTicker(1 * time.Second)
 	span := trace.SpanFromContext(ctx)
 
@@ -93,7 +93,7 @@ func (s *transporter) StartHeartbeat(ctx context.Context) {
 	}()
 }
 
-func (s *transporter) GetClient(ctx context.Context, nodeId uint32) (ShardServerClient, error) {
+func (s *transport) GetClient(ctx context.Context, nodeId uint32) (ShardServerClient, error) {
 	client, err := s.shardServerClient.GetClient(ctx, nodeId)
 	if err != nil {
 		return nil, err
@@ -101,7 +101,7 @@ func (s *transporter) GetClient(ctx context.Context, nodeId uint32) (ShardServer
 	return client, nil
 }
 
-func (s *transporter) Close() {
+func (s *transport) Close() {
 	close(s.done)
 	if s.shardServerClient != nil {
 		s.shardServerClient.Close()

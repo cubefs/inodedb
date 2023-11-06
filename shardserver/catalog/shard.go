@@ -3,16 +3,15 @@ package catalog
 import (
 	"context"
 	"hash/crc32"
+	"strconv"
 	"sync"
 	"sync/atomic"
-
-	"github.com/cubefs/inodedb/common/raft"
-
-	"github.com/cubefs/inodedb/shardserver/catalog/persistent"
 
 	"github.com/cubefs/cubefs/blobstore/util/errors"
 	apierrors "github.com/cubefs/inodedb/errors"
 	"github.com/cubefs/inodedb/proto"
+	"github.com/cubefs/inodedb/raft"
+	"github.com/cubefs/inodedb/shardserver/catalog/persistent"
 	"github.com/cubefs/inodedb/shardserver/scalar"
 	"github.com/cubefs/inodedb/shardserver/store"
 	"github.com/cubefs/inodedb/shardserver/vector"
@@ -22,51 +21,95 @@ import (
 
 const keyLocksNum = 1024
 
-type shardConfig struct {
-	*shardInfo
-	store *store.Store
-}
-
-func createShard(cfg *shardConfig) *shard {
-	keysGenerator := &shardKeysGenerator{
-		shardId: cfg.ShardId,
-		spaceId: cfg.Sid,
+type (
+	ShardBaseConfig struct {
+		RaftSnapTransmitConfig RaftSnapshotTransmitConfig `json:"raft_snap_transmit_config"`
+		TruncateWalLogInterval uint64                     `json:"truncate_wal_log_interval"`
 	}
 
-	shard := &shard{
-		shardInfo: cfg.shardInfo,
+	shardConfig struct {
+		*ShardBaseConfig
+		shardInfo   shardInfo
+		nodeInfo    *proto.Node
+		store       *store.Store
+		raftManager raft.Manager
+	}
+)
 
-		startIno:  calculateStartIno(cfg.ShardId),
-		store:     cfg.store,
-		shardKeys: keysGenerator,
-		raftGroup: raft.NewRaftGroup(&raft.Config{
-			SM:   nil,
-			Raft: &raft.NoopRaft{},
-		}),
+func newShard(ctx context.Context, cfg shardConfig) (s *shard, err error) {
+	s = &shard{
+		shardID:  cfg.shardInfo.ShardId,
+		startIno: calculateStartIno(cfg.shardInfo.ShardId),
+		store:    cfg.store,
+		shardKeys: &shardKeysGenerator{
+			shardId: cfg.shardInfo.ShardId,
+			spaceId: cfg.shardInfo.Sid,
+		},
+		cfg: cfg.ShardBaseConfig,
+	}
+	s.shardMu.shardInfo = cfg.shardInfo
+
+	learner := false
+	for _, node := range cfg.shardInfo.Nodes {
+		if node.Id == cfg.nodeInfo.Id {
+			learner = node.Learner
+			break
+		}
+	}
+	// initial members
+	members := make([]raft.Member, 0, len(cfg.shardInfo.Nodes))
+	for _, node := range cfg.shardInfo.Nodes {
+		members = append(members, raft.Member{
+			NodeID:  uint64(node.Id),
+			Host:    cfg.nodeInfo.Addr + strconv.Itoa(int(cfg.nodeInfo.RaftPort)),
+			Type:    raft.MemberChangeType_AddMember,
+			Learner: learner,
+		})
 	}
 
-	return shard
+	s.raftGroup, err = cfg.raftManager.CreateRaftGroup(context.Background(), &raft.GroupConfig{
+		ID:      uint64(s.shardID),
+		Applied: cfg.shardInfo.AppliedIndex,
+		Members: members,
+		SM:      (*shardSM)(s),
+	})
+	if err != nil {
+		return
+	}
+
+	if len(members) == 1 {
+		err = s.raftGroup.Campaign(ctx)
+	}
+
+	return
 }
 
 type shardStats struct {
+	leader       uint32
 	routeVersion uint64
 	inoUsed      uint64
 	inoCursor    uint64
 	inoLimit     uint64
-	nodes        []uint32
+	nodes        []*persistent.ShardNode
 }
 
 type shard struct {
-	*shardInfo
+	shardID      uint32
+	startIno     uint64
+	appliedIndex uint64
+	shardMu      struct {
+		sync.RWMutex
+		shardInfo
+		leader uint32
+	}
+	keyLocks [keyLocksNum]sync.Mutex
 
-	startIno    uint64
 	shardKeys   *shardKeysGenerator
 	vectorIndex *vector.Index
 	scalarIndex *scalar.Index
 	store       *store.Store
 	raftGroup   raft.Group
-	keyLocks    [keyLocksNum]sync.Mutex
-	lock        sync.RWMutex
+	cfg         *ShardBaseConfig
 }
 
 func (s *shard) InsertItem(ctx context.Context, i *proto.Item) (uint64, error) {
@@ -80,16 +123,16 @@ func (s *shard) InsertItem(ctx context.Context, i *proto.Item) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	if _, err := s.raftGroup.Propose(ctx, &raft.ProposeRequest{
+
+	proposalData := raft.ProposalData{
 		Op:   RaftOpInsertItem,
 		Data: data,
-	}); err != nil {
+	}
+	if _, err := s.raftGroup.Propose(ctx, &proposalData); err != nil {
 		return 0, err
 	}
 
-	// TODO: remove this function call after invoke multi raft
-	_, err = s.Apply(ctx, RaftOpInsertItem, data, 0)
-	return ino, err
+	return ino, nil
 }
 
 func (s *shard) UpdateItem(ctx context.Context, updateItem *proto.Item) error {
@@ -102,15 +145,12 @@ func (s *shard) UpdateItem(ctx context.Context, updateItem *proto.Item) error {
 		return err
 	}
 
-	if _, err := s.raftGroup.Propose(ctx, &raft.ProposeRequest{
+	proposalData := raft.ProposalData{
 		Op:   RaftOpUpdateItem,
 		Data: data,
-	}); err != nil {
-		return err
 	}
+	_, err = s.raftGroup.Propose(ctx, &proposalData)
 
-	// TODO: remove this function call after invoke multi raft
-	_, err = s.Apply(ctx, RaftOpUpdateItem, data, 0)
 	return err
 }
 
@@ -121,15 +161,11 @@ func (s *shard) DeleteItem(ctx context.Context, ino uint64) error {
 
 	data := make([]byte, 8)
 	encodeIno(ino, data)
-	if _, err := s.raftGroup.Propose(ctx, &raft.ProposeRequest{
+	proposalData := raft.ProposalData{
 		Op:   RaftOpDeleteItem,
 		Data: data,
-	}); err != nil {
-		return err
 	}
-
-	// TODO: remove this function call after invoke multi raft
-	_, err := s.Apply(ctx, RaftOpDeleteItem, data, 0)
+	_, err := s.raftGroup.Propose(ctx, &proposalData)
 	return err
 }
 
@@ -166,15 +202,11 @@ func (s *shard) Link(ctx context.Context, l *proto.Link) error {
 		return err
 	}
 
-	if _, err := s.raftGroup.Propose(ctx, &raft.ProposeRequest{
+	proposalData := raft.ProposalData{
 		Op:   RaftOpLinkItem,
 		Data: data,
-	}); err != nil {
-		return err
 	}
-
-	// TODO: remove this function call after invoke multi raft
-	_, err = s.Apply(ctx, RaftOpLinkItem, data, 0)
+	_, err = s.raftGroup.Propose(ctx, &proposalData)
 	return err
 }
 
@@ -188,15 +220,11 @@ func (s *shard) Unlink(ctx context.Context, unlink *proto.Unlink) error {
 		return err
 	}
 
-	if _, err := s.raftGroup.Propose(ctx, &raft.ProposeRequest{
+	proposalData := raft.ProposalData{
 		Op:   RaftOpUnlinkItem,
 		Data: data,
-	}); err != nil {
-		return err
 	}
-
-	// TODO: remove this function call after invoke multi raft
-	_, err = s.Apply(ctx, RaftOpUnlinkItem, data, 0)
+	_, err = s.raftGroup.Propose(ctx, &proposalData)
 	return err
 }
 
@@ -250,48 +278,49 @@ func (s *shard) List(ctx context.Context, ino uint64, start string, num uint32) 
 }
 
 func (s *shard) UpdateShard(ctx context.Context, shardInfo *persistent.ShardInfo) error {
-	s.lock.Lock()
-	oldEpoch := s.Epoch
-	s.Epoch = shardInfo.Epoch
-	if err := s.saveShardInfo(ctx, false); err != nil {
-		s.Epoch = oldEpoch
+	s.shardMu.Lock()
+	oldEpoch := s.shardMu.Epoch
+	s.shardMu.Epoch = shardInfo.Epoch
+	if err := s.SaveShardInfo(ctx, false); err != nil {
+		s.shardMu.Epoch = oldEpoch
 		return err
 	}
-	s.lock.Unlock()
+	s.shardMu.Unlock()
 
 	return nil
 }
 
 func (s *shard) GetEpoch() uint64 {
-	s.lock.RLock()
-	epoch := s.Epoch
-	s.lock.RUnlock()
+	s.shardMu.RLock()
+	epoch := s.shardMu.Epoch
+	s.shardMu.RUnlock()
 	return epoch
 }
 
 func (s *shard) Stats() *shardStats {
-	s.lock.RLock()
-	replicates := make([]uint32, len(s.Nodes))
-	copy(replicates, s.Nodes)
-	inoLimit := s.InoLimit
-	routeVersion := s.Epoch
-	s.lock.RUnlock()
+	s.shardMu.RLock()
+	replicates := make([]*persistent.ShardNode, len(s.shardMu.Nodes))
+	copy(replicates, s.shardMu.Nodes)
+	inoLimit := s.shardMu.InoLimit
+	routeVersion := s.shardMu.Epoch
+	leader := s.shardMu.leader
+	s.shardMu.RUnlock()
 
 	return &shardStats{
+		leader:       leader,
 		routeVersion: routeVersion,
-		inoUsed:      atomic.LoadUint64(&s.InoUsed),
-		inoCursor:    atomic.LoadUint64(&s.InoCursor),
+		inoUsed:      atomic.LoadUint64(&s.shardMu.InoUsed),
+		inoCursor:    atomic.LoadUint64(&s.shardMu.InoCursor),
 		inoLimit:     inoLimit,
 		nodes:        replicates,
 	}
 }
 
 func (s *shard) Start() {
-	s.raftGroup.Start()
 }
 
 func (s *shard) Stop() {
-	// TODO: stop and operation on this shard
+	// TODO: stop all operation on this shard
 }
 
 func (s *shard) Close() {
@@ -300,18 +329,53 @@ func (s *shard) Close() {
 	s.raftGroup.Close()
 }
 
+// Checkpoint do checkpoint job with raft group
+// we should do any memory flush job or dump worker here
+func (s *shard) Checkpoint(ctx context.Context) error {
+	// do flush job
+	if err := s.SaveShardInfo(ctx, true); err != nil {
+		return errors.Info(err, "save shard into failed")
+	}
+	// todo: add vector index dump job
+
+	// truncate raft log finally
+	appliedIndex := (*shardSM)(s).getAppliedIndex()
+	if appliedIndex > s.cfg.TruncateWalLogInterval {
+		return s.raftGroup.Truncate(ctx, appliedIndex-s.cfg.TruncateWalLogInterval)
+	}
+
+	return nil
+}
+
+func (s *shard) SaveShardInfo(ctx context.Context, withLock bool) error {
+	if withLock {
+		s.shardMu.Lock()
+		defer s.shardMu.Unlock()
+	}
+
+	kvStore := s.store.KVStore()
+	key := make([]byte, shardPrefixSize())
+	encodeShardPrefix(s.shardMu.Sid, s.shardID, key)
+	value, err := s.shardMu.shardInfo.Marshal()
+	if err != nil {
+		return err
+	}
+
+	return kvStore.SetRaw(ctx, dataCF, key, value, nil)
+}
+
 func (s *shard) nextIno() (uint64, error) {
-	if atomic.LoadUint64(&s.InoUsed) > s.InoLimit {
+	if atomic.LoadUint64(&s.shardMu.InoUsed) > s.shardMu.InoLimit {
 		return 0, apierrors.ErrInodeLimitExceed
 	}
 
 	for {
-		cur := atomic.LoadUint64(&s.InoCursor)
+		cur := atomic.LoadUint64(&s.shardMu.InoCursor)
 		if cur >= s.startIno+proto.ShardRangeStepSize {
 			return 0, apierrors.ErrInoOutOfRange
 		}
 		newId := cur + 1
-		if atomic.CompareAndSwapUint64(&s.InoCursor, cur, newId) {
+		if atomic.CompareAndSwapUint64(&s.shardMu.InoCursor, cur, newId) {
 			return newId, nil
 		}
 	}
@@ -326,37 +390,6 @@ func (s *shard) getKeyLock(key []byte) sync.Mutex {
 	crc32.Write(key)
 	idx := crc32.Sum32() % keyLocksNum
 	return s.keyLocks[idx]
-}
-
-func (s *shard) increaseInoUsed() {
-	atomic.AddUint64(&s.InoUsed, 1)
-}
-
-func (s *shard) decreaseInoUsed() {
-	for {
-		cur := atomic.LoadUint64(&s.InoUsed)
-		new := cur - 1
-		if atomic.CompareAndSwapUint64(&s.InoUsed, cur, new) {
-			return
-		}
-	}
-}
-
-func (s *shard) saveShardInfo(ctx context.Context, withLock bool) error {
-	if withLock {
-		s.lock.Lock()
-		defer s.lock.Unlock()
-	}
-
-	kvStore := s.store.KVStore()
-	key := make([]byte, shardPrefixSize())
-	encodeShardPrefix(s.Sid, s.ShardId, key)
-	value, err := s.shardInfo.Marshal()
-	if err != nil {
-		return err
-	}
-
-	return kvStore.SetRaw(ctx, dataCF, key, value, nil)
 }
 
 type shardKeysGenerator struct {

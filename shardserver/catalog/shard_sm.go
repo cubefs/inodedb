@@ -3,57 +3,164 @@ package catalog
 import (
 	"context"
 	"fmt"
-
-	"github.com/cubefs/inodedb/common/raft"
+	"io"
+	"sync/atomic"
 
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
 	"github.com/cubefs/inodedb/common/kvstore"
 	"github.com/cubefs/inodedb/proto"
+	"github.com/cubefs/inodedb/raft"
 	"github.com/cubefs/inodedb/shardserver/catalog/persistent"
 	pb "google.golang.org/protobuf/proto"
 )
 
-func (s *shard) Apply(ctx context.Context, op raft.Op, data []byte, index uint64) (result interface{}, err error) {
-	switch op {
-	case RaftOpInsertItem:
-		err := s.applyInsertItem(ctx, data)
-		return nil, err
-	case RaftOpUpdateItem:
-		err := s.applyUpdateItem(ctx, data)
-		return nil, err
-	case RaftOpDeleteItem:
-		err := s.applyDeleteItem(ctx, data)
-		return nil, err
-	case RaftOpLinkItem:
-		err := s.applyLink(ctx, data)
-		return nil, err
-	case RaftOpUnlinkItem:
-		err := s.applyUnlink(ctx, data)
-		return nil, err
-	default:
-		panic(fmt.Sprintf("unsupported operation type: %d", op))
+const (
+	RaftOpInsertItem uint32 = iota + 1
+	RaftOpUpdateItem
+	RaftOpDeleteItem
+	RaftOpLinkItem
+	RaftOpUnlinkItem
+)
+
+type shardSM shard
+
+func (s *shardSM) Apply(cxt context.Context, pd []raft.ProposalData, index uint64) (rets []interface{}, err error) {
+	rets = make([]interface{}, len(pd))
+
+	for i := range pd {
+		_, ctx := trace.StartSpanFromContextWithTraceID(context.Background(), "", string(pd[i].Context))
+		switch pd[i].Op {
+		case RaftOpInsertItem:
+			if err = s.applyInsertItem(ctx, pd[i].Data); err != nil {
+				return
+			}
+			rets[i] = nil
+		case RaftOpUpdateItem:
+			if err = s.applyUpdateItem(ctx, pd[i].Data); err != nil {
+				return
+			}
+			rets[i] = nil
+		case RaftOpDeleteItem:
+			if err = s.applyDeleteItem(ctx, pd[i].Data); err != nil {
+				return
+			}
+			rets[i] = nil
+		case RaftOpLinkItem:
+			if err = s.applyLink(ctx, pd[i].Data); err != nil {
+				return
+			}
+			rets[i] = nil
+		case RaftOpUnlinkItem:
+			if err = s.applyUnlink(ctx, pd[i].Data); err != nil {
+				return
+			}
+			rets[i] = nil
+		default:
+			panic(fmt.Sprintf("unsupported operation type: %d", pd[i].Op))
+		}
 	}
-	return nil, nil
+
+	s.setAppliedIndex(index)
+	return
 }
 
-func (s *shard) ApplyMemberChange(cc raft.ConfChange, index uint64) error {
+func (s *shardSM) LeaderChange(peerID uint64) error {
+	// todo: report leader change to master
+	s.shardMu.Lock()
+	s.shardMu.leader = uint32(peerID)
+	s.shardMu.Unlock()
+
 	return nil
 }
 
-func (s *shard) Snapshot() (raft.Snapshot, error) {
-	return nil, nil
+func (s *shardSM) ApplyMemberChange(cc *raft.Member, index uint64) error {
+	_, ctx := trace.StartSpanFromContext(context.Background(), "")
+
+	s.shardMu.Lock()
+	defer s.shardMu.Unlock()
+
+	switch cc.Type {
+	case raft.MemberChangeType_AddMember:
+		found := false
+		for _, node := range s.shardMu.Nodes {
+			if node.Id == uint32(cc.NodeID) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			s.shardMu.Nodes = append(s.shardMu.Nodes, &persistent.ShardNode{
+				Id:      uint32(cc.NodeID),
+				Learner: cc.Learner,
+			})
+		}
+	case raft.MemberChangeType_RemoveMember:
+		for i, node := range s.shardMu.Nodes {
+			if node.Id == uint32(cc.NodeID) {
+				s.shardMu.Nodes = append(s.shardMu.Nodes[:i], s.shardMu.Nodes[i+1:]...)
+				break
+			}
+		}
+	}
+
+	return (*shard)(s).SaveShardInfo(ctx, false)
 }
 
-func (s *shard) ApplySnapshot(st raft.Snapshot) error {
+func (s *shardSM) Snapshot() raft.Snapshot {
+	kvStore := s.store.KVStore()
+	appliedIndex := s.getAppliedIndex()
+	kvSnap := kvStore.NewSnapshot()
+	readOpt := kvStore.NewReadOption()
+	readOpt.SetSnapShot(kvSnap)
+
+	// create cf list reader
+	lrs := make([]kvstore.ListReader, 0)
+	for _, cf := range []kvstore.CF{dataCF, lockCF, writeCF} {
+		prefix := make([]byte, shardPrefixSize())
+		encodeShardPrefix(s.shardMu.Sid, s.shardID, prefix)
+		lrs = append(lrs, kvStore.List(context.Background(), cf, prefix, nil, readOpt))
+	}
+
+	return &raftSnapshot{
+		appliedIndex:               appliedIndex,
+		RaftSnapshotTransmitConfig: &s.cfg.RaftSnapTransmitConfig,
+		st:                         kvSnap,
+		ro:                         readOpt,
+		lrs:                        lrs,
+		kvStore:                    kvStore,
+	}
+}
+
+func (s *shardSM) ApplySnapshot(snap raft.Snapshot) error {
+	defer snap.Close()
+	kvStore := s.store.KVStore()
+	_, ctx := trace.StartSpanFromContext(context.Background(), "")
+
+	for {
+		batch, err := snap.ReadBatch()
+		if err != nil && err != io.EOF {
+			return err
+		}
+
+		if batch != nil {
+			if err := kvStore.Write(ctx, batch.(raftBatch).batch, nil); err != nil {
+				batch.Close()
+				return err
+			}
+			batch.Close()
+		}
+		if err == io.EOF {
+			break
+		}
+	}
+
+	s.setAppliedIndex(snap.Index())
+
 	return nil
 }
 
-func (s *shard) LeaderChange(leader uint64, addr string) error {
-	return nil
-}
-
-func (s *shard) applyInsertItem(ctx context.Context, data []byte) error {
+func (s *shardSM) applyInsertItem(ctx context.Context, data []byte) error {
 	protoItem := &proto.Item{}
 	if err := pb.Unmarshal(data, protoItem); err != nil {
 		return err
@@ -85,13 +192,13 @@ func (s *shard) applyInsertItem(ctx context.Context, data []byte) error {
 	if err := kvStore.SetRaw(ctx, dataCF, key, value, nil); err != nil {
 		return err
 	}
-	s.increaseInoUsed()
 
+	s.increaseInoUsed()
 	// TODO: move this into raft flush progress
-	return s.saveShardInfo(ctx, true)
+	return (*shard)(s).SaveShardInfo(ctx, true)
 }
 
-func (s *shard) applyUpdateItem(ctx context.Context, data []byte) error {
+func (s *shardSM) applyUpdateItem(ctx context.Context, data []byte) error {
 	span := trace.SpanFromContext(ctx)
 	protoItem := &proto.Item{}
 	if err := pb.Unmarshal(data, protoItem); err != nil {
@@ -134,19 +241,31 @@ func (s *shard) applyUpdateItem(ctx context.Context, data []byte) error {
 	return kvStore.SetRaw(ctx, dataCF, key, data, nil)
 }
 
-func (s *shard) applyDeleteItem(ctx context.Context, data []byte) error {
+func (s *shardSM) applyDeleteItem(ctx context.Context, data []byte) error {
 	ino := decodeIno(data)
 	kvStore := s.store.KVStore()
-	if err := kvStore.Delete(ctx, dataCF, s.shardKeys.encodeInoKey(ino), nil); err != nil {
+
+	// independent check, avoiding decrease ino used repeatedly at raft log replay progress
+	key := s.shardKeys.encodeInoKey(ino)
+	vg, err := kvStore.Get(ctx, dataCF, key, nil)
+	if err != nil {
+		if err != kvstore.ErrNotFound {
+			return err
+		}
+		return nil
+	}
+	vg.Close()
+
+	if err := kvStore.Delete(ctx, dataCF, key, nil); err != nil {
 		return err
 	}
 
 	s.decreaseInoUsed()
 	// TODO: move this into raft flush progress
-	return s.saveShardInfo(ctx, true)
+	return (*shard)(s).SaveShardInfo(ctx, true)
 }
 
-func (s *shard) applyLink(ctx context.Context, data []byte) error {
+func (s *shardSM) applyLink(ctx context.Context, data []byte) error {
 	protoLink := &proto.Link{}
 	if err := pb.Unmarshal(data, protoLink); err != nil {
 		return err
@@ -199,7 +318,7 @@ func (s *shard) applyLink(ctx context.Context, data []byte) error {
 	return kvStore.Write(ctx, batch, nil)
 }
 
-func (s *shard) applyUnlink(ctx context.Context, data []byte) error {
+func (s *shardSM) applyUnlink(ctx context.Context, data []byte) error {
 	protoUnlink := &proto.Unlink{}
 	if err := pb.Unmarshal(data, protoUnlink); err != nil {
 		return err
@@ -238,4 +357,28 @@ func (s *shard) applyUnlink(ctx context.Context, data []byte) error {
 	batch.Delete(dataCF, linkKey)
 	batch.Put(dataCF, pKey, pData)
 	return kvStore.Write(ctx, batch, nil)
+}
+
+// todo: how to optimized the lock arena of shardMu and InoUsed modification
+func (s *shardSM) increaseInoUsed() {
+	atomic.AddUint64(&s.shardMu.InoUsed, 1)
+}
+
+// todo: how to optimized the lock arena of shardMu and InoUsed modification
+func (s *shardSM) decreaseInoUsed() {
+	for {
+		cur := atomic.LoadUint64(&s.shardMu.InoUsed)
+		new := cur - 1
+		if atomic.CompareAndSwapUint64(&s.shardMu.InoUsed, cur, new) {
+			return
+		}
+	}
+}
+
+func (s *shardSM) setAppliedIndex(index uint64) {
+	atomic.StoreUint64(&s.shardMu.AppliedIndex, index)
+}
+
+func (s *shardSM) getAppliedIndex() uint64 {
+	return atomic.LoadUint64(&s.shardMu.AppliedIndex)
 }

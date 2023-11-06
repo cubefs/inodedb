@@ -189,7 +189,7 @@ func (r *RPCServer) GetRoleNodes(ctx context.Context, req *proto.GetRoleNodesReq
 
 func (r *RPCServer) AddShard(ctx context.Context, req *proto.AddShardRequest) (*proto.AddShardResponse, error) {
 	shardServer := r.shardServer
-	err := shardServer.AddShard(ctx, req.SpaceName, req.ShardId, req.Epoch, req.InoLimit, req.Replicates)
+	err := shardServer.AddShard(ctx, req.SpaceName, req.ShardId, req.Epoch, req.InoLimit, req.Nodes)
 	return &proto.AddShardResponse{}, err
 }
 

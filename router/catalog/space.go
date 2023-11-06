@@ -39,7 +39,7 @@ func newSpace(ctx context.Context, spaceName string, sid uint64, f getCatalogCha
 	}
 }
 
-func (s *Space) AddShard(info *ShardInfo, tr *transporter) {
+func (s *Space) AddShard(info *ShardInfo, tr *transport) {
 	if get := s.shards.Get(info.ShardId); get != nil {
 		return
 	}

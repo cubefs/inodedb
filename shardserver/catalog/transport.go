@@ -22,7 +22,7 @@ type masterClient interface {
 	GetCatalogChanges(context.Context, *proto.GetCatalogChangesRequest, ...grpc.CallOption) (*proto.GetCatalogChangesResponse, error)
 }
 
-type transporter struct {
+type transport struct {
 	myself       *proto.Node
 	allNodes     sync.Map
 	done         chan struct{}
@@ -30,8 +30,8 @@ type transporter struct {
 	singleRun    *singleflight.Group
 }
 
-func newTransporter(masterClient masterClient, myself *proto.Node) *transporter {
-	return &transporter{
+func newTransport(masterClient masterClient, myself *proto.Node) *transport {
+	return &transport{
 		myself:       myself,
 		done:         make(chan struct{}),
 		masterClient: masterClient,
@@ -39,7 +39,7 @@ func newTransporter(masterClient masterClient, myself *proto.Node) *transporter 
 	}
 }
 
-func (t *transporter) Register(ctx context.Context) error {
+func (t *transport) Register(ctx context.Context) error {
 	resp, err := t.masterClient.Cluster(ctx, &proto.ClusterRequest{
 		Operation: proto.ClusterOperation_Join,
 		NodeInfo: &proto.Node{
@@ -60,12 +60,12 @@ func (t *transporter) Register(ctx context.Context) error {
 	return nil
 }
 
-func (t *transporter) GetMyself() *proto.Node {
+func (t *transport) GetMyself() *proto.Node {
 	node := *t.myself
 	return &node
 }
 
-func (t *transporter) GetSpace(ctx context.Context, spaceName string) (*proto.SpaceMeta, error) {
+func (t *transport) GetSpace(ctx context.Context, spaceName string) (*proto.SpaceMeta, error) {
 	resp, err := t.masterClient.GetSpace(ctx, &proto.GetSpaceRequest{
 		Name: spaceName,
 	})
@@ -76,7 +76,7 @@ func (t *transporter) GetSpace(ctx context.Context, spaceName string) (*proto.Sp
 	return resp.Info, nil
 }
 
-func (t *transporter) GetRouteUpdate(ctx context.Context, routeVersion uint64) (uint64, []*proto.CatalogChangeItem, error) {
+func (t *transport) GetRouteUpdate(ctx context.Context, routeVersion uint64) (uint64, []*proto.CatalogChangeItem, error) {
 	resp, err := t.masterClient.GetCatalogChanges(ctx, &proto.GetCatalogChangesRequest{RouteVersion: routeVersion, NodeId: t.myself.Id})
 	if err != nil {
 		return 0, nil, err
@@ -85,7 +85,7 @@ func (t *transporter) GetRouteUpdate(ctx context.Context, routeVersion uint64) (
 	return resp.RouteVersion, resp.Items, nil
 }
 
-func (t *transporter) Report(ctx context.Context, infos []*proto.ShardReport) ([]*proto.ShardTask, error) {
+func (t *transport) Report(ctx context.Context, infos []*proto.ShardReport) ([]*proto.ShardTask, error) {
 	resp, err := t.masterClient.Report(ctx, &proto.ReportRequest{
 		Id:    t.myself.Id,
 		Infos: infos,
@@ -97,7 +97,7 @@ func (t *transporter) Report(ctx context.Context, infos []*proto.ShardReport) ([
 	return resp.Tasks, err
 }
 
-func (t *transporter) GetNode(ctx context.Context, nodeId uint32) (*proto.Node, error) {
+func (t *transport) GetNode(ctx context.Context, nodeId uint32) (*proto.Node, error) {
 	v, ok := t.allNodes.Load(nodeId)
 	if ok {
 		return v.(*proto.Node), nil
@@ -128,7 +128,7 @@ func (t *transporter) GetNode(ctx context.Context, nodeId uint32) (*proto.Node, 
 	return v.(*proto.Node), err
 }
 
-func (t *transporter) StartHeartbeat(ctx context.Context) {
+func (t *transport) StartHeartbeat(ctx context.Context) {
 	heartbeatTicker := time.NewTicker(1 * time.Second)
 	span := trace.SpanFromContext(ctx)
 
@@ -147,6 +147,6 @@ func (t *transporter) StartHeartbeat(ctx context.Context) {
 	}()
 }
 
-func (t *transporter) Close() {
+func (t *transport) Close() {
 	close(t.done)
 }

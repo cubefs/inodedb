@@ -23,7 +23,7 @@ type Config struct {
 type Catalog struct {
 	routeVersion uint64
 
-	transporter  *transporter
+	transporter  *transport
 	masterClient *sc.MasterClient
 	spaces       *concurrentSpaces
 	singleRun    *singleflight.Group
@@ -42,9 +42,9 @@ func NewCatalog(ctx context.Context, cfg *Config) *Catalog {
 		span.Fatalf("invalid node[%+v] config port", cfg.NodeConfig)
 	}
 
-	tr, err := NewTransporter(&cfg.ServerConfig, &cfg.NodeConfig)
+	tr, err := NewTransport(&cfg.ServerConfig, &cfg.NodeConfig)
 	if err != nil {
-		span.Fatalf("new transporter failed: %s", err)
+		span.Fatalf("new transport failed: %s", err)
 	}
 	if err = tr.Register(ctx); err != nil {
 		span.Fatalf("register router to master failed: %s", err)
@@ -133,7 +133,7 @@ func (c *Catalog) GetCatalogChanges(ctx context.Context) error {
 				space.AddShard(&ShardInfo{
 					ShardId:  shardItem.ShardId,
 					Epoch:    shardItem.Epoch,
-					Nodes:    shardItem.Replicates,
+					Nodes:    shardItem.Nodes,
 					LeaderId: shardItem.Leader,
 				}, c.transporter)
 			default:

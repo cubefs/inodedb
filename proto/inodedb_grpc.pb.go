@@ -733,12 +733,12 @@ type AddShardRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Sid        uint64   `protobuf:"varint,1,opt,name=sid,proto3" json:"sid,omitempty"`
-	SpaceName  string   `protobuf:"bytes,2,opt,name=space_name,json=spaceName,proto3" json:"space_name,omitempty"`
-	ShardId    uint32   `protobuf:"varint,3,opt,name=shard_id,json=shardId,proto3" json:"shard_id,omitempty"`
-	Epoch      uint64   `protobuf:"varint,4,opt,name=epoch,proto3" json:"epoch,omitempty"`
-	InoLimit   uint64   `protobuf:"varint,5,opt,name=ino_limit,json=inoLimit,proto3" json:"ino_limit,omitempty"`
-	Replicates []uint32 `protobuf:"varint,6,rep,packed,name=replicates,proto3" json:"replicates,omitempty"`
+	Sid       uint64       `protobuf:"varint,1,opt,name=sid,proto3" json:"sid,omitempty"`
+	SpaceName string       `protobuf:"bytes,2,opt,name=space_name,json=spaceName,proto3" json:"space_name,omitempty"`
+	ShardId   uint32       `protobuf:"varint,3,opt,name=shard_id,json=shardId,proto3" json:"shard_id,omitempty"`
+	Epoch     uint64       `protobuf:"varint,4,opt,name=epoch,proto3" json:"epoch,omitempty"`
+	InoLimit  uint64       `protobuf:"varint,5,opt,name=ino_limit,json=inoLimit,proto3" json:"ino_limit,omitempty"`
+	Nodes     []*ShardNode `protobuf:"bytes,6,rep,name=nodes,proto3" json:"nodes,omitempty"`
 }
 
 func (x *AddShardRequest) Reset() {
@@ -808,9 +808,9 @@ func (x *AddShardRequest) GetInoLimit() uint64 {
 	return 0
 }
 
-func (x *AddShardRequest) GetReplicates() []uint32 {
+func (x *AddShardRequest) GetNodes() []*ShardNode {
 	if x != nil {
-		return x.Replicates
+		return x.Nodes
 	}
 	return nil
 }
@@ -2248,7 +2248,7 @@ var file_inodedb_grpc_proto_rawDesc = []byte{
 	0x61, 0x63, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2c, 0x0a, 0x04, 0x69,
 	0x6e, 0x66, 0x6f, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x18, 0x2e, 0x69, 0x6e, 0x6f, 0x64,
 	0x65, 0x64, 0x62, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x53, 0x70, 0x61, 0x63, 0x65, 0x4d,
-	0x65, 0x74, 0x61, 0x52, 0x04, 0x69, 0x6e, 0x66, 0x6f, 0x22, 0xb0, 0x01, 0x0a, 0x0f, 0x41, 0x64,
+	0x65, 0x74, 0x61, 0x52, 0x04, 0x69, 0x6e, 0x66, 0x6f, 0x22, 0xc0, 0x01, 0x0a, 0x0f, 0x41, 0x64,
 	0x64, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x10, 0x0a,
 	0x03, 0x73, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x03, 0x73, 0x69, 0x64, 0x12,
 	0x1d, 0x0a, 0x0a, 0x73, 0x70, 0x61, 0x63, 0x65, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x02, 0x20,
@@ -2257,9 +2257,10 @@ var file_inodedb_grpc_proto_rawDesc = []byte{
 	0x52, 0x07, 0x73, 0x68, 0x61, 0x72, 0x64, 0x49, 0x64, 0x12, 0x14, 0x0a, 0x05, 0x65, 0x70, 0x6f,
 	0x63, 0x68, 0x18, 0x04, 0x20, 0x01, 0x28, 0x04, 0x52, 0x05, 0x65, 0x70, 0x6f, 0x63, 0x68, 0x12,
 	0x1b, 0x0a, 0x09, 0x69, 0x6e, 0x6f, 0x5f, 0x6c, 0x69, 0x6d, 0x69, 0x74, 0x18, 0x05, 0x20, 0x01,
-	0x28, 0x04, 0x52, 0x08, 0x69, 0x6e, 0x6f, 0x4c, 0x69, 0x6d, 0x69, 0x74, 0x12, 0x1e, 0x0a, 0x0a,
-	0x72, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x65, 0x73, 0x18, 0x06, 0x20, 0x03, 0x28, 0x0d,
-	0x52, 0x0a, 0x72, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x65, 0x73, 0x22, 0x12, 0x0a, 0x10,
+	0x28, 0x04, 0x52, 0x08, 0x69, 0x6e, 0x6f, 0x4c, 0x69, 0x6d, 0x69, 0x74, 0x12, 0x2e, 0x0a, 0x05,
+	0x6e, 0x6f, 0x64, 0x65, 0x73, 0x18, 0x06, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x18, 0x2e, 0x69, 0x6e,
+	0x6f, 0x64, 0x65, 0x64, 0x62, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x53, 0x68, 0x61, 0x72,
+	0x64, 0x4e, 0x6f, 0x64, 0x65, 0x52, 0x05, 0x6e, 0x6f, 0x64, 0x65, 0x73, 0x22, 0x12, 0x0a, 0x10,
 	0x41, 0x64, 0x64, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
 	0x22, 0x64, 0x0a, 0x12, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52,
 	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1d, 0x0a, 0x0a, 0x73, 0x70, 0x61, 0x63, 0x65, 0x5f,
@@ -2586,12 +2587,13 @@ var file_inodedb_grpc_proto_goTypes = []interface{}{
 	(*ShardReport)(nil),               // 46: inodedb.proto.ShardReport
 	(*ShardTask)(nil),                 // 47: inodedb.proto.ShardTask
 	(*SpaceMeta)(nil),                 // 48: inodedb.proto.SpaceMeta
-	(*Shard)(nil),                     // 49: inodedb.proto.Shard
-	(*Item)(nil),                      // 50: inodedb.proto.Item
-	(*Link)(nil),                      // 51: inodedb.proto.Link
-	(*Unlink)(nil),                    // 52: inodedb.proto.Unlink
-	(*CatalogChangeItem)(nil),         // 53: inodedb.proto.CatalogChangeItem
-	(NodeRole)(0),                     // 54: inodedb.proto.NodeRole
+	(*ShardNode)(nil),                 // 49: inodedb.proto.ShardNode
+	(*Shard)(nil),                     // 50: inodedb.proto.Shard
+	(*Item)(nil),                      // 51: inodedb.proto.Item
+	(*Link)(nil),                      // 52: inodedb.proto.Link
+	(*Unlink)(nil),                    // 53: inodedb.proto.Unlink
+	(*CatalogChangeItem)(nil),         // 54: inodedb.proto.CatalogChangeItem
+	(NodeRole)(0),                     // 55: inodedb.proto.NodeRole
 }
 var file_inodedb_grpc_proto_depIdxs = []int32{
 	42, // 0: inodedb.proto.ClusterRequest.operation:type_name -> inodedb.proto.ClusterOperation
@@ -2603,79 +2605,80 @@ var file_inodedb_grpc_proto_depIdxs = []int32{
 	43, // 6: inodedb.proto.GetNodeResponse.node_info:type_name -> inodedb.proto.Node
 	48, // 7: inodedb.proto.CreateSpaceResponse.info:type_name -> inodedb.proto.SpaceMeta
 	48, // 8: inodedb.proto.GetSpaceResponse.info:type_name -> inodedb.proto.SpaceMeta
-	49, // 9: inodedb.proto.GetShardResponse.shard:type_name -> inodedb.proto.Shard
-	50, // 10: inodedb.proto.InsertItemRequest.item:type_name -> inodedb.proto.Item
-	50, // 11: inodedb.proto.UpdateItemRequest.item:type_name -> inodedb.proto.Item
-	50, // 12: inodedb.proto.GetItemResponse.item:type_name -> inodedb.proto.Item
-	51, // 13: inodedb.proto.LinkRequest.link:type_name -> inodedb.proto.Link
-	52, // 14: inodedb.proto.UnlinkRequest.unlink:type_name -> inodedb.proto.Unlink
-	51, // 15: inodedb.proto.ListResponse.links:type_name -> inodedb.proto.Link
-	34, // 16: inodedb.proto.SearchRequest.query:type_name -> inodedb.proto.Query
-	50, // 17: inodedb.proto.SearchResponse.items:type_name -> inodedb.proto.Item
-	53, // 18: inodedb.proto.GetCatalogChangesResponse.items:type_name -> inodedb.proto.CatalogChangeItem
-	54, // 19: inodedb.proto.GetRoleNodesRequest.role:type_name -> inodedb.proto.NodeRole
-	43, // 20: inodedb.proto.GetRoleNodesResponse.nodes:type_name -> inodedb.proto.Node
-	0,  // 21: inodedb.proto.InodeDBMaster.Cluster:input_type -> inodedb.proto.ClusterRequest
-	3,  // 22: inodedb.proto.InodeDBMaster.Heartbeat:input_type -> inodedb.proto.HeartbeatRequest
-	5,  // 23: inodedb.proto.InodeDBMaster.Report:input_type -> inodedb.proto.ReportRequest
-	7,  // 24: inodedb.proto.InodeDBMaster.GetNode:input_type -> inodedb.proto.GetNodeRequest
-	2,  // 25: inodedb.proto.InodeDBMaster.CreateSpace:input_type -> inodedb.proto.CreateSpaceRequest
-	10, // 26: inodedb.proto.InodeDBMaster.DeleteSpace:input_type -> inodedb.proto.DeleteSpaceRequest
-	12, // 27: inodedb.proto.InodeDBMaster.GetSpace:input_type -> inodedb.proto.GetSpaceRequest
-	38, // 28: inodedb.proto.InodeDBMaster.GetCatalogChanges:input_type -> inodedb.proto.GetCatalogChangesRequest
-	40, // 29: inodedb.proto.InodeDBMaster.GetRoleNodes:input_type -> inodedb.proto.GetRoleNodesRequest
-	20, // 30: inodedb.proto.InodeDBRouter.InsertItem:input_type -> inodedb.proto.InsertItemRequest
-	22, // 31: inodedb.proto.InodeDBRouter.UpdateItem:input_type -> inodedb.proto.UpdateItemRequest
-	24, // 32: inodedb.proto.InodeDBRouter.DeleteItem:input_type -> inodedb.proto.DeleteItemRequest
-	26, // 33: inodedb.proto.InodeDBRouter.GetItem:input_type -> inodedb.proto.GetItemRequest
-	28, // 34: inodedb.proto.InodeDBRouter.Link:input_type -> inodedb.proto.LinkRequest
-	30, // 35: inodedb.proto.InodeDBRouter.Unlink:input_type -> inodedb.proto.UnlinkRequest
-	32, // 36: inodedb.proto.InodeDBRouter.List:input_type -> inodedb.proto.ListRequest
-	36, // 37: inodedb.proto.InodeDBRouter.Search:input_type -> inodedb.proto.SearchRequest
-	14, // 38: inodedb.proto.InodeDBShardServer.AddShard:input_type -> inodedb.proto.AddShardRequest
-	16, // 39: inodedb.proto.InodeDBShardServer.UpdateShard:input_type -> inodedb.proto.UpdateShardRequest
-	18, // 40: inodedb.proto.InodeDBShardServer.GetShard:input_type -> inodedb.proto.GetShardRequest
-	20, // 41: inodedb.proto.InodeDBShardServer.ShardInsertItem:input_type -> inodedb.proto.InsertItemRequest
-	22, // 42: inodedb.proto.InodeDBShardServer.ShardUpdateItem:input_type -> inodedb.proto.UpdateItemRequest
-	24, // 43: inodedb.proto.InodeDBShardServer.ShardDeleteItem:input_type -> inodedb.proto.DeleteItemRequest
-	26, // 44: inodedb.proto.InodeDBShardServer.ShardGetItem:input_type -> inodedb.proto.GetItemRequest
-	28, // 45: inodedb.proto.InodeDBShardServer.ShardLink:input_type -> inodedb.proto.LinkRequest
-	30, // 46: inodedb.proto.InodeDBShardServer.ShardUnlink:input_type -> inodedb.proto.UnlinkRequest
-	32, // 47: inodedb.proto.InodeDBShardServer.ShardList:input_type -> inodedb.proto.ListRequest
-	36, // 48: inodedb.proto.InodeDBShardServer.ShardSearch:input_type -> inodedb.proto.SearchRequest
-	1,  // 49: inodedb.proto.InodeDBMaster.Cluster:output_type -> inodedb.proto.ClusterResponse
-	4,  // 50: inodedb.proto.InodeDBMaster.Heartbeat:output_type -> inodedb.proto.HeartbeatResponse
-	6,  // 51: inodedb.proto.InodeDBMaster.Report:output_type -> inodedb.proto.ReportResponse
-	8,  // 52: inodedb.proto.InodeDBMaster.GetNode:output_type -> inodedb.proto.GetNodeResponse
-	9,  // 53: inodedb.proto.InodeDBMaster.CreateSpace:output_type -> inodedb.proto.CreateSpaceResponse
-	11, // 54: inodedb.proto.InodeDBMaster.DeleteSpace:output_type -> inodedb.proto.DeleteSpaceResponse
-	13, // 55: inodedb.proto.InodeDBMaster.GetSpace:output_type -> inodedb.proto.GetSpaceResponse
-	39, // 56: inodedb.proto.InodeDBMaster.GetCatalogChanges:output_type -> inodedb.proto.GetCatalogChangesResponse
-	41, // 57: inodedb.proto.InodeDBMaster.GetRoleNodes:output_type -> inodedb.proto.GetRoleNodesResponse
-	21, // 58: inodedb.proto.InodeDBRouter.InsertItem:output_type -> inodedb.proto.InsertItemResponse
-	23, // 59: inodedb.proto.InodeDBRouter.UpdateItem:output_type -> inodedb.proto.UpdateItemResponse
-	25, // 60: inodedb.proto.InodeDBRouter.DeleteItem:output_type -> inodedb.proto.DeleteItemResponse
-	27, // 61: inodedb.proto.InodeDBRouter.GetItem:output_type -> inodedb.proto.GetItemResponse
-	29, // 62: inodedb.proto.InodeDBRouter.Link:output_type -> inodedb.proto.LinkResponse
-	31, // 63: inodedb.proto.InodeDBRouter.Unlink:output_type -> inodedb.proto.UnlinkResponse
-	33, // 64: inodedb.proto.InodeDBRouter.List:output_type -> inodedb.proto.ListResponse
-	37, // 65: inodedb.proto.InodeDBRouter.Search:output_type -> inodedb.proto.SearchResponse
-	15, // 66: inodedb.proto.InodeDBShardServer.AddShard:output_type -> inodedb.proto.AddShardResponse
-	17, // 67: inodedb.proto.InodeDBShardServer.UpdateShard:output_type -> inodedb.proto.UpdateShardResponse
-	19, // 68: inodedb.proto.InodeDBShardServer.GetShard:output_type -> inodedb.proto.GetShardResponse
-	21, // 69: inodedb.proto.InodeDBShardServer.ShardInsertItem:output_type -> inodedb.proto.InsertItemResponse
-	23, // 70: inodedb.proto.InodeDBShardServer.ShardUpdateItem:output_type -> inodedb.proto.UpdateItemResponse
-	25, // 71: inodedb.proto.InodeDBShardServer.ShardDeleteItem:output_type -> inodedb.proto.DeleteItemResponse
-	27, // 72: inodedb.proto.InodeDBShardServer.ShardGetItem:output_type -> inodedb.proto.GetItemResponse
-	29, // 73: inodedb.proto.InodeDBShardServer.ShardLink:output_type -> inodedb.proto.LinkResponse
-	31, // 74: inodedb.proto.InodeDBShardServer.ShardUnlink:output_type -> inodedb.proto.UnlinkResponse
-	33, // 75: inodedb.proto.InodeDBShardServer.ShardList:output_type -> inodedb.proto.ListResponse
-	37, // 76: inodedb.proto.InodeDBShardServer.ShardSearch:output_type -> inodedb.proto.SearchResponse
-	49, // [49:77] is the sub-list for method output_type
-	21, // [21:49] is the sub-list for method input_type
-	21, // [21:21] is the sub-list for extension type_name
-	21, // [21:21] is the sub-list for extension extendee
-	0,  // [0:21] is the sub-list for field type_name
+	49, // 9: inodedb.proto.AddShardRequest.nodes:type_name -> inodedb.proto.ShardNode
+	50, // 10: inodedb.proto.GetShardResponse.shard:type_name -> inodedb.proto.Shard
+	51, // 11: inodedb.proto.InsertItemRequest.item:type_name -> inodedb.proto.Item
+	51, // 12: inodedb.proto.UpdateItemRequest.item:type_name -> inodedb.proto.Item
+	51, // 13: inodedb.proto.GetItemResponse.item:type_name -> inodedb.proto.Item
+	52, // 14: inodedb.proto.LinkRequest.link:type_name -> inodedb.proto.Link
+	53, // 15: inodedb.proto.UnlinkRequest.unlink:type_name -> inodedb.proto.Unlink
+	52, // 16: inodedb.proto.ListResponse.links:type_name -> inodedb.proto.Link
+	34, // 17: inodedb.proto.SearchRequest.query:type_name -> inodedb.proto.Query
+	51, // 18: inodedb.proto.SearchResponse.items:type_name -> inodedb.proto.Item
+	54, // 19: inodedb.proto.GetCatalogChangesResponse.items:type_name -> inodedb.proto.CatalogChangeItem
+	55, // 20: inodedb.proto.GetRoleNodesRequest.role:type_name -> inodedb.proto.NodeRole
+	43, // 21: inodedb.proto.GetRoleNodesResponse.nodes:type_name -> inodedb.proto.Node
+	0,  // 22: inodedb.proto.InodeDBMaster.Cluster:input_type -> inodedb.proto.ClusterRequest
+	3,  // 23: inodedb.proto.InodeDBMaster.Heartbeat:input_type -> inodedb.proto.HeartbeatRequest
+	5,  // 24: inodedb.proto.InodeDBMaster.Report:input_type -> inodedb.proto.ReportRequest
+	7,  // 25: inodedb.proto.InodeDBMaster.GetNode:input_type -> inodedb.proto.GetNodeRequest
+	2,  // 26: inodedb.proto.InodeDBMaster.CreateSpace:input_type -> inodedb.proto.CreateSpaceRequest
+	10, // 27: inodedb.proto.InodeDBMaster.DeleteSpace:input_type -> inodedb.proto.DeleteSpaceRequest
+	12, // 28: inodedb.proto.InodeDBMaster.GetSpace:input_type -> inodedb.proto.GetSpaceRequest
+	38, // 29: inodedb.proto.InodeDBMaster.GetCatalogChanges:input_type -> inodedb.proto.GetCatalogChangesRequest
+	40, // 30: inodedb.proto.InodeDBMaster.GetRoleNodes:input_type -> inodedb.proto.GetRoleNodesRequest
+	20, // 31: inodedb.proto.InodeDBRouter.InsertItem:input_type -> inodedb.proto.InsertItemRequest
+	22, // 32: inodedb.proto.InodeDBRouter.UpdateItem:input_type -> inodedb.proto.UpdateItemRequest
+	24, // 33: inodedb.proto.InodeDBRouter.DeleteItem:input_type -> inodedb.proto.DeleteItemRequest
+	26, // 34: inodedb.proto.InodeDBRouter.GetItem:input_type -> inodedb.proto.GetItemRequest
+	28, // 35: inodedb.proto.InodeDBRouter.Link:input_type -> inodedb.proto.LinkRequest
+	30, // 36: inodedb.proto.InodeDBRouter.Unlink:input_type -> inodedb.proto.UnlinkRequest
+	32, // 37: inodedb.proto.InodeDBRouter.List:input_type -> inodedb.proto.ListRequest
+	36, // 38: inodedb.proto.InodeDBRouter.Search:input_type -> inodedb.proto.SearchRequest
+	14, // 39: inodedb.proto.InodeDBShardServer.AddShard:input_type -> inodedb.proto.AddShardRequest
+	16, // 40: inodedb.proto.InodeDBShardServer.UpdateShard:input_type -> inodedb.proto.UpdateShardRequest
+	18, // 41: inodedb.proto.InodeDBShardServer.GetShard:input_type -> inodedb.proto.GetShardRequest
+	20, // 42: inodedb.proto.InodeDBShardServer.ShardInsertItem:input_type -> inodedb.proto.InsertItemRequest
+	22, // 43: inodedb.proto.InodeDBShardServer.ShardUpdateItem:input_type -> inodedb.proto.UpdateItemRequest
+	24, // 44: inodedb.proto.InodeDBShardServer.ShardDeleteItem:input_type -> inodedb.proto.DeleteItemRequest
+	26, // 45: inodedb.proto.InodeDBShardServer.ShardGetItem:input_type -> inodedb.proto.GetItemRequest
+	28, // 46: inodedb.proto.InodeDBShardServer.ShardLink:input_type -> inodedb.proto.LinkRequest
+	30, // 47: inodedb.proto.InodeDBShardServer.ShardUnlink:input_type -> inodedb.proto.UnlinkRequest
+	32, // 48: inodedb.proto.InodeDBShardServer.ShardList:input_type -> inodedb.proto.ListRequest
+	36, // 49: inodedb.proto.InodeDBShardServer.ShardSearch:input_type -> inodedb.proto.SearchRequest
+	1,  // 50: inodedb.proto.InodeDBMaster.Cluster:output_type -> inodedb.proto.ClusterResponse
+	4,  // 51: inodedb.proto.InodeDBMaster.Heartbeat:output_type -> inodedb.proto.HeartbeatResponse
+	6,  // 52: inodedb.proto.InodeDBMaster.Report:output_type -> inodedb.proto.ReportResponse
+	8,  // 53: inodedb.proto.InodeDBMaster.GetNode:output_type -> inodedb.proto.GetNodeResponse
+	9,  // 54: inodedb.proto.InodeDBMaster.CreateSpace:output_type -> inodedb.proto.CreateSpaceResponse
+	11, // 55: inodedb.proto.InodeDBMaster.DeleteSpace:output_type -> inodedb.proto.DeleteSpaceResponse
+	13, // 56: inodedb.proto.InodeDBMaster.GetSpace:output_type -> inodedb.proto.GetSpaceResponse
+	39, // 57: inodedb.proto.InodeDBMaster.GetCatalogChanges:output_type -> inodedb.proto.GetCatalogChangesResponse
+	41, // 58: inodedb.proto.InodeDBMaster.GetRoleNodes:output_type -> inodedb.proto.GetRoleNodesResponse
+	21, // 59: inodedb.proto.InodeDBRouter.InsertItem:output_type -> inodedb.proto.InsertItemResponse
+	23, // 60: inodedb.proto.InodeDBRouter.UpdateItem:output_type -> inodedb.proto.UpdateItemResponse
+	25, // 61: inodedb.proto.InodeDBRouter.DeleteItem:output_type -> inodedb.proto.DeleteItemResponse
+	27, // 62: inodedb.proto.InodeDBRouter.GetItem:output_type -> inodedb.proto.GetItemResponse
+	29, // 63: inodedb.proto.InodeDBRouter.Link:output_type -> inodedb.proto.LinkResponse
+	31, // 64: inodedb.proto.InodeDBRouter.Unlink:output_type -> inodedb.proto.UnlinkResponse
+	33, // 65: inodedb.proto.InodeDBRouter.List:output_type -> inodedb.proto.ListResponse
+	37, // 66: inodedb.proto.InodeDBRouter.Search:output_type -> inodedb.proto.SearchResponse
+	15, // 67: inodedb.proto.InodeDBShardServer.AddShard:output_type -> inodedb.proto.AddShardResponse
+	17, // 68: inodedb.proto.InodeDBShardServer.UpdateShard:output_type -> inodedb.proto.UpdateShardResponse
+	19, // 69: inodedb.proto.InodeDBShardServer.GetShard:output_type -> inodedb.proto.GetShardResponse
+	21, // 70: inodedb.proto.InodeDBShardServer.ShardInsertItem:output_type -> inodedb.proto.InsertItemResponse
+	23, // 71: inodedb.proto.InodeDBShardServer.ShardUpdateItem:output_type -> inodedb.proto.UpdateItemResponse
+	25, // 72: inodedb.proto.InodeDBShardServer.ShardDeleteItem:output_type -> inodedb.proto.DeleteItemResponse
+	27, // 73: inodedb.proto.InodeDBShardServer.ShardGetItem:output_type -> inodedb.proto.GetItemResponse
+	29, // 74: inodedb.proto.InodeDBShardServer.ShardLink:output_type -> inodedb.proto.LinkResponse
+	31, // 75: inodedb.proto.InodeDBShardServer.ShardUnlink:output_type -> inodedb.proto.UnlinkResponse
+	33, // 76: inodedb.proto.InodeDBShardServer.ShardList:output_type -> inodedb.proto.ListResponse
+	37, // 77: inodedb.proto.InodeDBShardServer.ShardSearch:output_type -> inodedb.proto.SearchResponse
+	50, // [50:78] is the sub-list for method output_type
+	22, // [22:50] is the sub-list for method input_type
+	22, // [22:22] is the sub-list for extension type_name
+	22, // [22:22] is the sub-list for extension extendee
+	0,  // [0:22] is the sub-list for field type_name
 }
 
 func init() { file_inodedb_grpc_proto_init() }

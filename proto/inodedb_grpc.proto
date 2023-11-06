@@ -110,7 +110,7 @@ message AddShardRequest {
 	uint32 shard_id = 3;
 	uint64 epoch = 4;
 	uint64 ino_limit = 5;
-	repeated uint32 replicates = 6;
+	repeated ShardNode nodes = 6;
 }
 
 message AddShardResponse {

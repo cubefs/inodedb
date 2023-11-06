@@ -18,7 +18,7 @@ type ShardServerClient interface {
 	UpdateShard(ctx context.Context, in *proto.UpdateShardRequest, opts ...grpc.CallOption) (*proto.UpdateShardResponse, error)
 }
 
-type Transporter interface {
+type Transport interface {
 	GetShardServerClient(ctx context.Context, nodeId uint32) (ShardServerClient, error)
 	Close()
 }
@@ -28,11 +28,11 @@ type Config struct {
 	TransportConfig sc.TransportConfig `json:"transport_config"`
 }
 
-type transporter struct {
+type transport struct {
 	shardServerClient *sc.ShardServerClient
 }
 
-func NewTransporter(ctx context.Context, cfg *Config) (Transporter, error) {
+func NewTransport(ctx context.Context, cfg *Config) (Transport, error) {
 	localIP, err := util.GetLocalIP()
 	if err != nil {
 		return nil, err
@@ -44,16 +44,16 @@ func NewTransporter(ctx context.Context, cfg *Config) (Transporter, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &transporter{
+	return &transport{
 		shardServerClient: serverClient,
 	}, nil
 }
 
-func (c *transporter) GetShardServerClient(ctx context.Context, nodeId uint32) (ShardServerClient, error) {
+func (c *transport) GetShardServerClient(ctx context.Context, nodeId uint32) (ShardServerClient, error) {
 	return c.shardServerClient.GetClient(ctx, nodeId)
 }
 
-func (c *transporter) Close() {
+func (c *transport) Close() {
 	if c.shardServerClient != nil {
 		c.shardServerClient.Close()
 	}

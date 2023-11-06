@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync"
 
+	"github.com/cubefs/inodedb/raft"
+
 	"github.com/cubefs/cubefs/blobstore/util/errors"
 
 	apierrors "github.com/cubefs/inodedb/errors"
@@ -11,6 +13,12 @@ import (
 	"github.com/cubefs/inodedb/shardserver/catalog/persistent"
 	"github.com/cubefs/inodedb/shardserver/store"
 )
+
+type shardHandler interface {
+	GetNodeInfo() *proto.Node
+	GetRaftManager() raft.Manager
+	GetShardBaseConfig() *ShardBaseConfig
+}
 
 type Space struct {
 	// read only
@@ -20,8 +28,10 @@ type Space struct {
 	fixedFields map[string]proto.FieldMeta
 
 	shards sync.Map
-	store  *store.Store
 	lock   sync.RWMutex
+
+	store        *store.Store
+	shardHandler shardHandler
 }
 
 func (s *Space) Load(ctx context.Context) error {
@@ -46,10 +56,16 @@ func (s *Space) Load(ctx context.Context) error {
 			return errors.Info(err, "unmarshal shard info failed")
 		}
 
-		shard := createShard(&shardConfig{
-			shardInfo: shardInfo,
-			store:     s.store,
+		shard, err := newShard(ctx, shardConfig{
+			ShardBaseConfig: s.shardHandler.GetShardBaseConfig(),
+			shardInfo:       *shardInfo,
+			nodeInfo:        s.shardHandler.GetNodeInfo(),
+			store:           s.store,
+			raftManager:     s.shardHandler.GetRaftManager(),
 		})
+		if err != nil {
+			return errors.Info(err, "new shard failed")
+		}
 		s.shards.Store(shardInfo.ShardId, shard)
 		shard.Start()
 	}
@@ -57,7 +73,7 @@ func (s *Space) Load(ctx context.Context) error {
 	return nil
 }
 
-func (s *Space) AddShard(ctx context.Context, shardId uint32, epoch uint64, inoLimit uint64, replicates []uint32) error {
+func (s *Space) AddShard(ctx context.Context, shardId uint32, epoch uint64, inoLimit uint64, nodes []*proto.ShardNode) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -66,16 +82,24 @@ func (s *Space) AddShard(ctx context.Context, shardId uint32, epoch uint64, inoL
 		return nil
 	}
 
+	shardNodes := make([]*persistent.ShardNode, len(nodes))
+	for i := range nodes {
+		shardNodes[i] = &persistent.ShardNode{
+			Id:      nodes[i].Id,
+			Learner: nodes[i].Learner,
+		}
+	}
+
 	shardInfo := &shardInfo{
 		ShardId:   shardId,
 		Sid:       s.sid,
 		InoCursor: calculateStartIno(shardId),
 		InoLimit:  inoLimit,
 		Epoch:     epoch,
-		Nodes:     replicates,
+		Nodes:     shardNodes,
 	}
 
-	kvStore := s.store.KVStore()
+	/*kvStore := s.store.KVStore()
 	key := make([]byte, shardPrefixSize())
 	encodeShardPrefix(s.sid, shardId, key)
 	value, err := shardInfo.Marshal()
@@ -85,15 +109,25 @@ func (s *Space) AddShard(ctx context.Context, shardId uint32, epoch uint64, inoL
 
 	if err := kvStore.SetRaw(ctx, dataCF, key, value, nil); err != nil {
 		return err
+	}*/
+
+	shard, err := newShard(ctx, shardConfig{
+		ShardBaseConfig: s.shardHandler.GetShardBaseConfig(),
+		shardInfo:       *shardInfo,
+		nodeInfo:        s.shardHandler.GetNodeInfo(),
+		store:           s.store,
+		raftManager:     s.shardHandler.GetRaftManager(),
+	})
+	if err != nil {
+		return err
 	}
 
-	shard := createShard(&shardConfig{
-		shardInfo: shardInfo,
-		store:     s.store,
-	})
+	if err := shard.SaveShardInfo(ctx, false); err != nil {
+		return err
+	}
+
 	s.shards.Store(shardId, shard)
 	shard.Start()
-
 	return nil
 }
 
@@ -109,13 +143,15 @@ func (s *Space) UpdateShard(ctx context.Context, shardId uint32, epoch uint64) e
 }
 
 func (s *Space) DeleteShard(ctx context.Context, shardId uint32) error {
-	shard, err := s.GetShard(ctx, shardId)
-	if err != nil {
-		return err
+	v, loaded := s.shards.LoadAndDelete(shardId)
+	if !loaded {
+		return nil
 	}
+
+	shard := v.(*shard)
 	shard.Stop()
 	shard.Close()
-	s.shards.Delete(shardId)
+	// todo: clear shard's data
 
 	return nil
 }
