@@ -126,6 +126,7 @@ func newRocksdb(ctx context.Context, path string, option *Option) (Store, error)
 	}
 
 	wo := rdb.NewDefaultWriteOptions()
+	wo.DisableWAL(option.DisableWal)
 	if option.Sync {
 		wo.SetSync(option.Sync)
 	}
@@ -578,6 +579,27 @@ func (s *rocksdb) GetRaw(ctx context.Context, col CF, key []byte, readOpt ReadOp
 	copy(value, v.Data())
 	v.Free()
 	return value, nil
+}
+
+func (s *rocksdb) MultiGet(ctx context.Context, col CF, keys [][]byte, readOpt ReadOption) (values []ValueGetter, err error) {
+	ro := s.readOpt
+	if readOpt != nil {
+		ro = readOpt.(*readOption).opt
+	}
+	cfh := s.getColumnFamily(col)
+	_values, err := s.db.MultiGetCF(ro, cfh, keys...)
+	if err != nil {
+		return nil, err
+	}
+	values = make([]ValueGetter, len(_values))
+	for i := range _values {
+		if _values[i].Data() == nil {
+			values[i] = nil
+			continue
+		}
+		values[i] = &valueGetter{value: _values[i]}
+	}
+	return
 }
 
 func (s *rocksdb) SetRaw(ctx context.Context, col CF, key []byte, value []byte, writeOpt WriteOption) error {

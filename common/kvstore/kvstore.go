@@ -46,6 +46,7 @@ type (
 		CheckColumns(col CF) bool
 		Get(ctx context.Context, col CF, key []byte, readOpt ReadOption) (value ValueGetter, err error)
 		GetRaw(ctx context.Context, col CF, key []byte, readOpt ReadOption) (value []byte, err error)
+		MultiGet(ctx context.Context, col CF, keys [][]byte, readOpt ReadOption) (values []ValueGetter, err error)
 		SetRaw(ctx context.Context, col CF, key []byte, value []byte, writeOpt WriteOption) error
 		Delete(ctx context.Context, col CF, key []byte, writeOpt WriteOption) error
 		List(ctx context.Context, col CF, prefix []byte, marker []byte, readOpt ReadOption) ListReader
@@ -156,6 +157,7 @@ type (
 	}
 	Option struct {
 		Sync                             bool
+		DisableWal                       bool
 		ColumnFamily                     []CF `json:"column_family"`
 		CreateIfMissing                  bool
 		Cache                            LruCache
