@@ -37,3 +37,8 @@ message Field {
     string name = 1;
     bytes value = 2;
 }
+
+message Embedding {
+    repeated float elements = 1;
+    string source = 2;
+}

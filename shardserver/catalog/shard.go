@@ -336,10 +336,13 @@ func (s *shard) Checkpoint(ctx context.Context) error {
 	if err := s.SaveShardInfo(ctx, true); err != nil {
 		return errors.Info(err, "save shard into failed")
 	}
+
+	appliedIndex := (*shardSM)(s).getAppliedIndex()
+
 	// todo: add vector index dump job
 
 	// truncate raft log finally
-	appliedIndex := (*shardSM)(s).getAppliedIndex()
+
 	if appliedIndex > s.cfg.TruncateWalLogInterval {
 		return s.raftGroup.Truncate(ctx, appliedIndex-s.cfg.TruncateWalLogInterval)
 	}
@@ -362,6 +365,53 @@ func (s *shard) SaveShardInfo(ctx context.Context, withLock bool) error {
 	}
 
 	return kvStore.SetRaw(ctx, dataCF, key, value, nil)
+}
+
+func (s *shard) GetVector(ctx context.Context, id uint64) ([]float32, error) {
+	kvStore := s.store.KVStore()
+	vg, err := kvStore.Get(ctx, dataCF, s.shardKeys.encodeVectorKey(id), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	defer vg.Close()
+	embedding := &embedding{}
+	if err := embedding.Unmarshal(vg.Value()); err != nil {
+		return nil, err
+	}
+
+	return embedding.Elements, nil
+}
+
+func (s *shard) GetVectors(ctx context.Context, ids []uint64) ([][]float32, error) {
+	kvStore := s.store.KVStore()
+	keys := make([][]byte, len(ids))
+	for i := range ids {
+		keys[i] = s.shardKeys.encodeVectorKey(ids[i])
+	}
+	vgs, err := kvStore.MultiGet(ctx, dataCF, keys, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		for _, vg := range vgs {
+			vg.Close()
+		}
+	}()
+
+	ret := make([][]float32, len(vgs))
+	for i := range ret {
+		if vgs[i] == nil {
+			continue
+		}
+		embedding := &embedding{}
+		if err := embedding.Unmarshal(vgs[i].Value()); err != nil {
+			return nil, err
+		}
+		ret[i] = embedding.Elements
+	}
+	return ret, nil
 }
 
 func (s *shard) nextIno() (uint64, error) {
@@ -430,6 +480,13 @@ func (s *shardKeysGenerator) encodeLinkKeyPrefix(ino uint64) []byte {
 	encodeIno(ino, keyPrefix[shardDataPrefixSize:])
 	copy(keyPrefix[shardDataPrefixSize+8:], infix)
 	return keyPrefix
+}
+
+func (s *shardKeysGenerator) encodeVectorKey(vid uint64) []byte {
+	key := make([]byte, shardVectorPrefixSize()+8)
+	encodeShardVectorPrefix(s.spaceId, s.shardId, key)
+	encodeIno(vid, key[len(key)-8:])
+	return key
 }
 
 func protoFieldsToInternalFields(external []*proto.Field) []*persistent.Field {

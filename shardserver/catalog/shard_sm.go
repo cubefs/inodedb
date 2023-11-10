@@ -188,14 +188,14 @@ func (s *shardSM) applyInsertItem(ctx context.Context, data []byte) error {
 	if err != nil {
 		return err
 	}
+	// todo: add embedding type store with write batch
 
 	if err := kvStore.SetRaw(ctx, dataCF, key, value, nil); err != nil {
 		return err
 	}
 
 	s.increaseInoUsed()
-	// TODO: move this into raft flush progress
-	return (*shard)(s).SaveShardInfo(ctx, true)
+	return nil
 }
 
 func (s *shardSM) applyUpdateItem(ctx context.Context, data []byte) error {
@@ -233,6 +233,7 @@ func (s *shardSM) applyUpdateItem(ctx context.Context, data []byte) error {
 		}
 		item.Fields = append(item.Fields, &persistent.Field{Name: updateField.Name, Value: updateField.Value})
 	}
+	// todo: add embedding type store with write batch
 
 	data, err = item.Marshal()
 	if err != nil {
@@ -261,8 +262,7 @@ func (s *shardSM) applyDeleteItem(ctx context.Context, data []byte) error {
 	}
 
 	s.decreaseInoUsed()
-	// TODO: move this into raft flush progress
-	return (*shard)(s).SaveShardInfo(ctx, true)
+	return nil
 }
 
 func (s *shardSM) applyLink(ctx context.Context, data []byte) error {
@@ -295,6 +295,8 @@ func (s *shardSM) applyLink(ctx context.Context, data []byte) error {
 	if err != nil {
 		return errors.Info(err, "marshal link data failed")
 	}
+
+	// todo: add embedding type store with write batch
 
 	pKey := s.shardKeys.encodeInoKey(protoLink.Parent)
 	raw, err := kvStore.GetRaw(ctx, dataCF, pKey, nil)

@@ -14,10 +14,10 @@ const (
 )
 
 var (
-	infix       = []byte{'/'}
-	inodeSuffix = []byte{'i'}
-	linkSuffix  = []byte{'l'}
-	raftSuffix  = []byte{'r'}
+	infix        = []byte{'/'}
+	inodeSuffix  = []byte{'i'}
+	linkSuffix   = []byte{'l'}
+	vectorSuffix = []byte{'v'}
 )
 
 type Timestamp struct{}
@@ -57,6 +57,16 @@ func (l *link) Unmarshal(raw []byte) error {
 	return pb.Unmarshal(raw, (*persistent.Link)(l))
 }
 
+type embedding persistent.Embedding
+
+func (e *embedding) Marshal() ([]byte, error) {
+	return pb.Marshal((*persistent.Embedding)(e))
+}
+
+func (e *embedding) Unmarshal(raw []byte) error {
+	return pb.Unmarshal(raw, (*persistent.Embedding)(e))
+}
+
 func spacePrefixSize() int {
 	return 8 + len(infix)
 }
@@ -73,8 +83,8 @@ func shardLinkPrefixSize() int {
 	return shardPrefixSize() + len(linkSuffix)
 }
 
-func shardRaftPrefixSize(sid uint64, shardId uint32) int {
-	return shardPrefixSize() + len(raftSuffix)
+func shardVectorPrefixSize() int {
+	return shardPrefixSize() + len(vectorSuffix)
 }
 
 func encodeSpacePrefix(sid uint64, raw []byte) {
@@ -117,15 +127,10 @@ func encodeShardLinkPrefix(sid uint64, shardId uint32, raw []byte) {
 	copy(raw[8+infixSize+4:], linkSuffix)
 }
 
-func encodeShardRaftPrefix(sid uint64, shardId uint32, raw []byte) {
-	if raw == nil || cap(raw) == 0 {
-		panic("invalid raw input")
-	}
-	infixSize := len(infix)
-	binary.BigEndian.PutUint64(raw[:8], sid)
-	copy(raw[8:], infix)
-	binary.BigEndian.PutUint32(raw[8+infixSize:], shardId)
-	copy(raw[8+infixSize+4:], raftSuffix)
+func encodeShardVectorPrefix(sid uint64, shardId uint32, raw []byte) {
+	shardPrefixSize := shardPrefixSize()
+	encodeShardPrefix(sid, shardId, raw[:shardPrefixSize])
+	copy(raw[shardPrefixSize:], inodeSuffix)
 }
 
 func encodeIno(ino uint64, raw []byte) {
