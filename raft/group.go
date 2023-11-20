@@ -32,6 +32,7 @@ type groupConfig struct {
 
 type group struct {
 	id            uint64
+	robinCount    int
 	appliedIndex  uint64
 	unreachableMu struct {
 		sync.Mutex
@@ -246,8 +247,18 @@ func (g *internalGroupProcessor) WithRaftRawNodeLocked(f func(rn *raft.RawNode) 
 
 func (g *internalGroupProcessor) ProcessSendRaftMessage(ctx context.Context, messages []raftpb.Message) {
 	span := trace.SpanFromContext(ctx)
+	sentAppResp := false
 	for i := range messages {
 		msg := &messages[i]
+
+		// filter repeated MsgAppResp to leader
+		if msg.Type == raftpb.MsgAppResp {
+			if sentAppResp {
+				msg.To = 0
+			} else {
+				sentAppResp = true
+			}
+		}
 
 		// add into async queue to process snapshot
 		if msg.Type == raftpb.MsgSnap {
@@ -280,7 +291,12 @@ func (g *internalGroupProcessor) ProcessSendRaftMessage(ctx context.Context, mes
 			From:    msg.From,
 			Message: *msg,
 		}
-		if err := g.handler.HandleSendRaftMessageRequest(ctx, req, defaultConnectionClass); err != nil {
+
+		// idx := atomic.AddUint64(&defaultConnectionClassRobinCount, 1) % uint64(len(defaultConnectionClassList))
+		g.robinCount++
+		idx := g.robinCount % len(defaultConnectionClassList)
+		if err := g.handler.HandleSendRaftMessageRequest(ctx, req, defaultConnectionClassList[idx]); err != nil {
+			// if err := g.handler.HandleSendRaftMessageRequest(ctx, req, defaultConnectionClass); err != nil {
 			g.WithRaftRawNodeLocked(func(rn *raft.RawNode) error {
 				rn.ReportUnreachable(msg.To)
 				return nil

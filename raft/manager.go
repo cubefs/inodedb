@@ -22,26 +22,31 @@ const (
 )
 
 const (
-	defaultGroupStateMuShardCount = 32
+	defaultGroupStateMuShardCount = 256
 	defaultTickIntervalMS         = 200
 	defaultHeartbeatTickInterval  = 10
 	defaultElectionTickInterval   = 5 * defaultHeartbeatTickInterval
 	defaultWorkerNum              = 96
+	defaultWorkerBufferSize       = 32
 	defaultSnapshotWorkerNum      = 16
 	defaultSnapshotTimeoutS       = 3600
 	defaultSizePerMsg             = uint64(1 << 20)
 	defaultInflightMsg            = 128
 	defaultProposeMsgNum          = 256
 	defaultSnapshotNum            = 3
+	defaultConnectionClassNum     = 3
 	defaultProposeTimeoutMS       = 5000
 	defaultReadIndexTimeoutMS     = defaultProposeTimeoutMS
 )
+
+var defaultConnectionClassList []connectionClass
 
 type (
 	Manager interface {
 		CreateRaftGroup(ctx context.Context, cfg *GroupConfig) (Group, error)
 		GetRaftGroup(id uint64) (Group, error)
 		RemoveRaftGroup(ctx context.Context, id uint64)
+		RestartTickLoop(intervalMS int)
 		Close()
 	}
 
@@ -89,9 +94,9 @@ type (
 		// We suggest to use ElectionTick = 10 * HeartbeatTick to avoid unnecessary leader switching.
 		// The default value is 10x of HeartbeatTick.
 		ElectionTick int
-		// CoalescedHeartbeatsInterval specifies the coalesced heartbeat intervals
+		// CoalescedHeartbeatsIntervalMS specifies the coalesced heartbeat intervals
 		// The default value is the half of TickInterval.
-		CoalescedHeartbeatsInterval int
+		CoalescedHeartbeatsIntervalMS int
 		// MaxSizePerMsg limits the max size of each append message.
 		// The default value is 1M.
 		MaxSizePerMsg uint64
@@ -118,12 +123,18 @@ type (
 		// MaxWorkerNum specifies the max worker num of raft group processing
 		// The default value is 96.
 		MaxWorkerNum int
+		// MaxWorkerNum specifies the max queue buffer size for one one worker
+		// The default value is 32.
+		MaxWorkerBufferSize int
 		// MaxSnapshotWorkerNum specifies the max snapshot worker num of sending raft snapshot
 		// The default value is 16.
 		MaxSnapshotWorkerNum int
 		// MaxSnapshotNum limits the max number of snapshot num per raft group.
 		// The default value is 3.
 		MaxSnapshotNum int
+		// MaxConnectionClassNum limits the default client connection class num
+		// The default value is 3 and the max value can't exceed 3 or the through output may decline.
+		MaxConnectionClassNum int
 		// SnapshotTimeoutS limits the max expire time of snapshot
 		// The default value is 1 hour.
 		SnapshotTimeoutS int
@@ -168,6 +179,7 @@ func NewManager(cfg *Config) (Manager, error) {
 		idGenerator:   newIDGenerator(cfg.NodeID, time.Now()),
 		snapshotQueue: make(chan snapshotMessage, 1024),
 		cfg:           cfg,
+		stop:          make(chan struct{}),
 		done:          make(chan struct{}),
 	}
 	manager.coalescedMu.heartbeats = make(map[uint64][]RaftHeartbeat)
@@ -185,10 +197,15 @@ func NewManager(cfg *Config) (Manager, error) {
 	manager.transport = newTransport(&cfg.TransportConfig)
 
 	for i := 0; i < cfg.MaxWorkerNum; i++ {
-		workerCh := make(chan groupState)
+		workerCh := make(chan groupState, 20)
 		manager.workerChs = append(manager.workerChs, workerCh)
-		go (*internalGroupHandler)(manager).worker(i, workerCh)
 	}
+	for i, ch := range manager.workerChs {
+		idx := i
+		workerCh := ch
+		go (*internalGroupHandler)(manager).worker(idx, workerCh)
+	}
+
 	for i := 0; i < cfg.MaxSnapshotWorkerNum; i++ {
 		go (*internalGroupHandler)(manager).snapshotWorker()
 	}
@@ -216,6 +233,7 @@ type manager struct {
 	}
 	workerRoundRobinCount uint32
 	done                  chan struct{}
+	stop                  chan struct{}
 
 	idGenerator *idGenerator
 	transport   *transport
@@ -223,6 +241,8 @@ type manager struct {
 }
 
 func (m *manager) CreateRaftGroup(ctx context.Context, cfg *GroupConfig) (Group, error) {
+	span := trace.SpanFromContextSafe(ctx)
+
 	storage, err := newStorage(storageConfig{
 		id:              cfg.ID,
 		maxSnapshotNum:  m.cfg.MaxSnapshotNum,
@@ -234,6 +254,17 @@ func (m *manager) CreateRaftGroup(ctx context.Context, cfg *GroupConfig) (Group,
 	if err != nil {
 		return nil, errors.Info(err, "mew raft storage failed")
 	}
+
+	hs, cs, _ := storage.InitialState()
+	firstIndex, err := storage.FirstIndex()
+	if err != nil {
+		return nil, err
+	}
+	lastIndex, err := storage.LastIndex()
+	if err != nil {
+		return nil, err
+	}
+	span.Debugf("hard state: %+v, conf state: %+v, first index: %d, last index: %d", hs, cs, firstIndex, lastIndex)
 
 	rawNode, err := raft.NewRawNode(&raft.Config{
 		ID:              m.cfg.NodeID,
@@ -273,6 +304,7 @@ func (m *manager) CreateRaftGroup(ctx context.Context, cfg *GroupConfig) (Group,
 
 	queue := newProposalQueue(m.cfg.MaxProposeMsgNum)
 	m.proposalQueues.Store(cfg.ID, queue)
+	m.raftMessageQueues.Store(cfg.ID, &raftMessageQueue{})
 	return g, nil
 }
 
@@ -425,6 +457,7 @@ func (h *internalGroupHandler) processProposal(ctx context.Context, g groupProce
 	}
 	queue := v.(proposalQueue)
 
+	// todo: get entry slice by queue's length
 	entries := proposalEntriesPool.Get().([]raftpb.Entry)
 	defer func() {
 		entries = entries[:0]
@@ -469,15 +502,25 @@ func (m *manager) raftTickLoop() {
 			for _, id := range groupIDs {
 				(*internalGroupHandler)(m).signalToWorker(id, stateProcessTick)
 			}
+		case <-m.stop:
+			return
 		case <-m.done:
 			return
 		}
 	}
 }
 
+func (m *manager) RestartTickLoop(intervalMS int) {
+	close(m.stop)
+	m.cfg.TickIntervalMS = intervalMS
+	time.Sleep(1 * time.Second)
+	m.stop = make(chan struct{})
+	go m.raftTickLoop()
+}
+
 func (m *manager) coalescedHeartbeatsLoop() {
 	_, ctx := trace.StartSpanFromContext(context.Background(), "coalescedHeartbeatsLoop")
-	ticker := time.NewTicker(time.Duration(m.cfg.CoalescedHeartbeatsInterval) * time.Millisecond)
+	ticker := time.NewTicker(time.Duration(m.cfg.CoalescedHeartbeatsIntervalMS) * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
@@ -593,7 +636,7 @@ func (h *internalGroupHandler) HandleSnapshot(ctx context.Context, id uint64, me
 	}
 }
 
-func (h *internalGroupHandler) HandleMaybeCoalesceHeartbeat(ctx context.Context, groupId uint64, msg *raftpb.Message) bool {
+func (h *internalGroupHandler) HandleMaybeCoalesceHeartbeat(ctx context.Context, groupID uint64, msg *raftpb.Message) bool {
 	// Note: ReadIndex with safe option on leader will broadcast heartbeat request to other nodes
 	// We can not coalesce these request and should return false
 	if len(msg.Context) > 0 {
@@ -613,13 +656,16 @@ func (h *internalGroupHandler) HandleMaybeCoalesceHeartbeat(ctx context.Context,
 		return false
 	}
 	hb := RaftHeartbeat{
-		GroupID: groupId,
+		GroupID: groupID,
 		To:      msg.To,
 		From:    msg.From,
 		Term:    msg.Term,
 		Commit:  msg.Commit,
 	}
 
+	if hbMap[msg.To] == nil {
+		hbMap[msg.To] = raftHeartbeatPool.Get().([]RaftHeartbeat)
+	}
 	hbMap[msg.To] = append(hbMap[msg.To], hb)
 	h.coalescedMu.Unlock()
 	return true
@@ -670,7 +716,7 @@ func (h *internalGroupHandler) worker(wid int, ch chan groupState) {
 			span, ctx := trace.StartSpanFromContextWithTraceID(context.Background(), "", "worker-"+strconv.Itoa(wid)+"/"+strconv.FormatUint(in.id, 10))
 			v, ok := h.groups.Load(in.id)
 			if !ok {
-				span.Warnf("group[%d] has been removed", in.id)
+				span.Warnf("group[%d] has been removed or not created yet", in.id)
 				// remove the group state as group has been removed
 				h.removeGroupStateForce(in.id)
 				continue
@@ -678,7 +724,7 @@ func (h *internalGroupHandler) worker(wid int, ch chan groupState) {
 			group := (*internalGroupProcessor)(v.(*group))
 
 		AGAIN:
-			span.Debugf("start raft state processing, group state: %+v", in)
+			// span.Debugf("start raft state processing, group state: %+v", in)
 
 			// reset group state into queued, avoid raft group processing currently in worker pool
 			// group state may be updated after we get it from input channel, so we need to get the latest state before
@@ -707,7 +753,7 @@ func (h *internalGroupHandler) worker(wid int, ch chan groupState) {
 			}
 
 			state = h.findAndRemoveGroupState(group.ID(), stateQueued)
-			span.Debugf("worker done, find and remove group state, new state: %d", state)
+			// span.Debugf("worker done, find and remove group state, new state: %d", state)
 			if state == stateQueued {
 				continue
 			}
@@ -817,16 +863,14 @@ func (t *internalTransportHandler) HandleRaftRequest(
 	ctx context.Context, req *RaftMessageRequest, respStream MessageResponseStream,
 ) error {
 	span := trace.SpanFromContext(ctx)
+	span.Debugf("node[%d] receive request: %+v", t.cfg.NodeID, req)
 
-	if len(req.Heartbeats)+len(req.HeartbeatResponses) > 0 {
-		if req.GroupID != 0 {
-			span.Fatalf("coalesced heartbeat's group id must be 0")
-		}
+	if req.IsCoalescedHeartbeat() {
 		t.uncoalesceBeats(ctx, req.Heartbeats, raftpb.MsgHeartbeat, respStream)
 		t.uncoalesceBeats(ctx, req.HeartbeatResponses, raftpb.MsgHeartbeatResp, respStream)
 		return nil
 	}
-	span.Debugf("node[%d] receive request: %+v", t.cfg.NodeID, req)
+
 	enqueue := t.handleRaftUncoalescedRequest(ctx, req, respStream)
 	if enqueue {
 		(*internalGroupHandler)(t).signalToWorker(req.GroupID, stateProcessRaftRequestMsg)
@@ -895,22 +939,26 @@ func (t *internalTransportHandler) uncoalesceBeats(
 	if len(beats) == 0 {
 		return
 	}
+	span := trace.SpanFromContext(ctx)
+	start := time.Now()
 
 	beatReqs := make([]RaftMessageRequest, len(beats))
+	makeReqsCost := time.Since(start)
+	start = time.Now()
+
 	var groupIDs []uint64
 	for i, beat := range beats {
-		msg := raftpb.Message{
-			Type:   msgT,
-			From:   beat.From,
-			To:     beat.To,
-			Term:   beat.Term,
-			Commit: beat.Commit,
-		}
 		beatReqs[i] = RaftMessageRequest{
 			GroupID: beat.GroupID,
 			From:    beat.From,
 			To:      beat.To,
-			Message: msg,
+			Message: raftpb.Message{
+				Type:   msgT,
+				From:   beat.From,
+				To:     beat.To,
+				Term:   beat.Term,
+				Commit: beat.Commit,
+			},
 		}
 
 		enqueue := t.handleRaftUncoalescedRequest(ctx, &beatReqs[i], respStream)
@@ -918,10 +966,16 @@ func (t *internalTransportHandler) uncoalesceBeats(
 			groupIDs = append(groupIDs, beat.GroupID)
 		}
 	}
+	queueCost := time.Since(start)
+	start = time.Now()
 
 	for _, id := range groupIDs {
 		(*internalGroupHandler)(t).signalToWorker(id, stateProcessRaftRequestMsg)
 	}
+	signalCost := time.Since(start)
+
+	span.Infof("uncoalesce heartbeats, make request slice cost: %dus, queue cost: %dus, signal cost: %dus",
+		makeReqsCost/time.Microsecond, queueCost/time.Microsecond, signalCost/time.Microsecond)
 }
 
 func (t *internalTransportHandler) handleRaftUncoalescedRequest(
@@ -934,7 +988,8 @@ func (t *internalTransportHandler) handleRaftUncoalescedRequest(
 
 	value, ok := t.raftMessageQueues.Load(req.GroupID)
 	if !ok {
-		value, _ = t.raftMessageQueues.LoadOrStore(req.GroupID, &raftMessageQueue{})
+		span.Warnf("group[%d] has been removed or not created yet", req.GroupID)
+		return false
 	}
 
 	q := value.(*raftMessageQueue)
@@ -977,9 +1032,9 @@ func (q *raftMessageQueue) drain() ([]raftMessageInfo, bool) {
 }
 
 func (q *raftMessageQueue) recycle(processed []raftMessageInfo) {
-	if cap(processed) > 32 {
+	/*if cap(processed) > 32 {
 		return
-	}
+	}*/
 	q.Lock()
 	defer q.Unlock()
 
@@ -1001,25 +1056,40 @@ func newRaftMessageRequest() *RaftMessageRequest {
 	return raftMessageRequestPool.Get().(*RaftMessageRequest)
 }
 
-func (m *RaftMessageRequest) release() {
+func (m *RaftMessageRequest) Release() {
 	*m = RaftMessageRequest{}
 	raftMessageRequestPool.Put(m)
+}
+
+func (m *RaftMessageRequest) IsCoalescedHeartbeat() bool {
+	return m.GroupID == 0 && (len(m.Heartbeats) > 0 || len(m.HeartbeatResponses) > 0)
 }
 
 func initConfig(cfg *Config) {
 	initialDefaultConfig(&cfg.TickIntervalMS, defaultTickIntervalMS)
 	initialDefaultConfig(&cfg.HeartbeatTick, defaultHeartbeatTickInterval)
 	initialDefaultConfig(&cfg.ElectionTick, defaultElectionTickInterval)
-	initialDefaultConfig(&cfg.CoalescedHeartbeatsInterval, cfg.TickIntervalMS/2)
+	initialDefaultConfig(&cfg.CoalescedHeartbeatsIntervalMS, cfg.TickIntervalMS/2)
 	initialDefaultConfig(&cfg.MaxWorkerNum, defaultWorkerNum)
+	initialDefaultConfig(&cfg.MaxWorkerBufferSize, defaultWorkerBufferSize)
 	initialDefaultConfig(&cfg.MaxSnapshotWorkerNum, defaultSnapshotWorkerNum)
 	initialDefaultConfig(&cfg.SnapshotTimeoutS, defaultSnapshotTimeoutS)
 	initialDefaultConfig(&cfg.MaxInflightMsg, defaultInflightMsg)
 	initialDefaultConfig(&cfg.MaxSnapshotNum, defaultSnapshotNum)
+	initialDefaultConfig(&cfg.MaxConnectionClassNum, defaultConnectionClassNum)
 	initialDefaultConfig(&cfg.MaxSizePerMsg, defaultSizePerMsg)
 	initialDefaultConfig(&cfg.ProposeTimeoutMS, defaultProposeTimeoutMS)
 	initialDefaultConfig(&cfg.ReadIndexTimeoutMS, defaultReadIndexTimeoutMS)
 	initialDefaultConfig(&cfg.MaxProposeMsgNum, defaultProposeMsgNum)
+
+	num := 0
+	for i := defaultConnectionClass1; i < systemConnectionClass; i++ {
+		num++
+		defaultConnectionClassList = append(defaultConnectionClassList, i)
+		if num >= cfg.MaxConnectionClassNum {
+			break
+		}
+	}
 }
 
 func initialDefaultConfig(t interface{}, defaultValue interface{}) {
@@ -1044,5 +1114,11 @@ func initialDefaultConfig(t interface{}, defaultValue interface{}) {
 var proposalEntriesPool = sync.Pool{
 	New: func() interface{} {
 		return make([]raftpb.Entry, 0, 32)
+	},
+}
+
+var raftHeartbeatPool = sync.Pool{
+	New: func() interface{} {
+		return make([]RaftHeartbeat, 0)
 	},
 }

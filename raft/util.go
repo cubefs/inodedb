@@ -69,7 +69,7 @@ func (n notify) Wait(ctx context.Context) (ret proposalResult, err error) {
 }
 
 // Release put notify back into pool
-// Note that don't release Wait error notify into pool
+// Note that don't Release Wait error notify into pool
 func (n notify) Release() {
 	notifyPool.Put(n)
 }

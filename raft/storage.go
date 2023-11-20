@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -13,6 +14,10 @@ import (
 	"github.com/google/uuid"
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
+)
+
+const (
+	uninitializedIndex = math.MaxUint64
 )
 
 var (
@@ -34,6 +39,7 @@ type storageConfig struct {
 func newStorage(cfg storageConfig) (*storage, error) {
 	storage := &storage{
 		id:               cfg.id,
+		firstIndex:       uninitializedIndex,
 		rawStg:           cfg.raw,
 		stateMachine:     cfg.sm,
 		snapshotRecorder: newSnapshotRecorder(cfg.maxSnapshotNum, cfg.snapshotTimeout),
@@ -168,21 +174,28 @@ func (s *storage) LastIndex() (uint64, error) {
 	if err := iterator.SeekForPrev(encodeIndexLogKey(s.id, math.MaxUint64)); err != nil {
 		return 0, err
 	}
-	_, valGetter, err := iterator.ReadPrev()
+	keyGetter, valGetter, err := iterator.ReadPrev()
 	if err != nil {
 		return 0, err
 	}
 	if valGetter == nil {
 		return 0, nil
 	}
-	defer valGetter.Close()
+	defer func() {
+		keyGetter.Close()
+		valGetter.Close()
+	}()
+
+	if !validForPrefix(keyGetter.Key(), encodeIndexLogKeyPrefix(s.id)) {
+		return 0, nil
+	}
 
 	entry := &raftpb.Entry{}
 	if err := entry.Unmarshal(valGetter.Value()); err != nil {
 		return 0, err
 	}
 
-	atomic.StoreUint64(&s.lastIndex, entry.Index)
+	atomic.CompareAndSwapUint64(&s.lastIndex, 0, entry.Index)
 	return entry.Index, nil
 }
 
@@ -191,8 +204,8 @@ func (s *storage) LastIndex() (uint64, error) {
 // into the latest Snapshot; if storage only contains the dummy entry the
 // first log entry is not available).
 func (s *storage) FirstIndex() (uint64, error) {
-	if s.firstIndex > 0 {
-		return s.firstIndex, nil
+	if firstIndex := atomic.LoadUint64(&s.firstIndex); firstIndex != uninitializedIndex {
+		return firstIndex, nil
 	}
 
 	iterator := s.rawStg.Iter(encodeIndexLogKey(s.id, 0))
@@ -204,6 +217,9 @@ func (s *storage) FirstIndex() (uint64, error) {
 	}
 	// initial index log should return at least 1
 	if valGetter == nil {
+		// store the initialized value for first index when not found
+		// avoiding cgo call frequently
+		atomic.CompareAndSwapUint64(&s.firstIndex, uninitializedIndex, 1)
 		return 1, nil
 	}
 
@@ -213,8 +229,8 @@ func (s *storage) FirstIndex() (uint64, error) {
 		return 0, err
 	}
 
-	s.firstIndex = entry.Index
-	return s.firstIndex, nil
+	atomic.CompareAndSwapUint64(&s.firstIndex, uninitializedIndex, entry.Index)
+	return entry.Index, nil
 }
 
 // Snapshot returns the most recent outgoingSnapshot.
@@ -307,7 +323,9 @@ func (s *storage) SaveHardStateAndEntries(hs raftpb.HardState, entries []raftpb.
 			return err
 		}
 		batch.Put(key, value)
-		lastIndex = entries[i].Index
+		if lastIndex < entries[i].Index {
+			lastIndex = entries[i].Index
+		}
 	}
 	if err := s.rawStg.Write(batch); err != nil {
 		return err
@@ -421,6 +439,15 @@ func decodeIndexLogKey(b []byte) (id uint64, index uint64) {
 	return
 }
 
+func encodeIndexLogKeyPrefix(id uint64) []byte {
+	b := make([]byte, 8+len(groupPrefix)+len(logIndexInfix))
+	copy(b, groupPrefix)
+	binary.BigEndian.PutUint64(b[len(groupPrefix):], id)
+	copy(b[8+len(groupPrefix):], logIndexInfix)
+
+	return b
+}
+
 func encodeHardStateKey(id uint64) []byte {
 	b := make([]byte, 8+len(groupPrefix)+len(hardStateInfix))
 	copy(b, groupPrefix)
@@ -428,4 +455,8 @@ func encodeHardStateKey(id uint64) []byte {
 	copy(b[8+len(groupPrefix):], hardStateInfix)
 
 	return b
+}
+
+func validForPrefix(key []byte, prefix []byte) bool {
+	return bytes.HasPrefix(key, prefix)
 }

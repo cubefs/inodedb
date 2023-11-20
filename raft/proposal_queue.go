@@ -31,3 +31,7 @@ func (q proposalQueue) Iter(f func(m proposalRequest) bool) {
 		}
 	}
 }
+
+func (q proposalQueue) Len() int {
+	return len(q)
+}

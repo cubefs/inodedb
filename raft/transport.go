@@ -25,19 +25,21 @@ import (
 type connectionClass int8
 
 const (
-	// DefaultClass is the default ConnectionClass and should be used for most
+	// defaultConnectionClass is the default ConnectionClass and should be used for most
 	// client traffic.
-	defaultConnectionClass connectionClass = iota
-	// SystemClass is the ConnectionClass used for system traffic like heartbeat and so on.
+	defaultConnectionClass1 connectionClass = iota + 1
+	defaultConnectionClass2
+	defaultConnectionClass3
+	// systemConnectionClass is the ConnectionClass used for system traffic like heartbeat.
 	systemConnectionClass
-	// NumConnectionClasses is the number of valid connectionClass values.
+	// numConnectionClasses is the number of valid connectionClass values.
 	numConnectionClasses
 )
 
 const (
-	raftSendBufferSize = 1024
+	raftSendBufferSize = 10000
 
-	defaultInflightMsgSize         = 64
+	defaultInflightMsgSize         = 4 << 10
 	defaultConnectionTimeoutMs     = uint32(100)
 	defaultMaxTimeoutMs            = uint32(5000)
 	defaultBackoffMaxDelayMs       = uint32(5000)
@@ -127,10 +129,14 @@ func (t *transport) RaftMessageBatch(stream RaftService_RaftMessageBatchServer) 
 		errCh <- func() error {
 			stream := &lockedMessageResponseStream{wrapped: stream}
 			for {
+				start := time.Now()
 				batch, err := stream.Recv()
 				if err != nil {
 					return err
 				}
+				recvCost := time.Since(start)
+				start = time.Now()
+
 				if len(batch.Requests) == 0 {
 					continue
 				}
@@ -142,6 +148,12 @@ func (t *transport) RaftMessageBatch(stream RaftService_RaftMessageBatchServer) 
 						if err := stream.Send(newRaftMessageResponse(req, ErrGroupHandleRaftMessage)); err != nil {
 							return err
 						}
+					}
+
+					if req.IsCoalescedHeartbeat() {
+						handleCost := time.Since(start)
+						span.Infof("handle raft batch request[%d], heartbeat num: %d, heartbeat resp num: %d, receive cost: %dus, handle cost: %dus",
+							len(batch.Requests), len(req.Heartbeats), len(req.HeartbeatResponses), recvCost/time.Microsecond, handleCost/time.Microsecond)
 					}
 				}
 			}
@@ -319,7 +331,7 @@ func (t *transport) getSnapshotStream(ctx context.Context, to uint64) (RaftServi
 		return nil, fmt.Errorf("can't resolve to node id[%d]", to)
 	}
 
-	conn, err := t.getConnection(ctx, addr.String(), defaultConnectionClass)
+	conn, err := t.getConnection(ctx, addr.String(), defaultConnectionClass1)
 	if err != nil {
 		return nil, err
 	}
@@ -440,28 +452,60 @@ func (t *transport) processQueue(
 			span.Errorf("transport.processQueue failed: %s", err)
 			return err
 		case req := <-ch:
+			isHeartbeatReq := false
+			heartbeatReqIndex := 0
 			budget := t.cfg.MaxInflightMsgSize
+			if req.IsCoalescedHeartbeat() {
+				isHeartbeatReq = true
+			}
+			start := time.Now()
+
 			batch.Requests = append(batch.Requests, *req)
-			req.release()
+			req.Release()
 			// pull off as many queued requests as possible
 			for budget > 0 {
 				select {
 				case req = <-ch:
+					if req.IsCoalescedHeartbeat() {
+						isHeartbeatReq = true
+						heartbeatReqIndex = len(batch.Requests)
+					}
+
 					budget -= req.Size()
 					batch.Requests = append(batch.Requests, *req)
+					req.Release()
 				default:
 					budget = -1
 				}
 			}
+			budgetCost := time.Since(start)
+			start = time.Now()
 
 			err := stream.Send(batch)
 			if err != nil {
 				return err
 			}
+			sendCost := time.Since(start)
+
+			if isHeartbeatReq {
+				span.Infof("send raft batch request[%d], heartbeat num: %d, heartbeat resp num: %d, budget cost: %dus, send cost: %dus",
+					len(batch.Requests), len(batch.Requests[heartbeatReqIndex].Heartbeats), len(batch.Requests[heartbeatReqIndex].HeartbeatResponses),
+					budgetCost/time.Microsecond, sendCost/time.Microsecond)
+			}
 
 			// reuse the Requests slice, zero out the contents to avoid delaying
 			// GC of memory referenced from within.
 			for i := range batch.Requests {
+				// recycle heartbeat slice
+				if batch.Requests[i].IsCoalescedHeartbeat() {
+					var s []RaftHeartbeat
+					if len(batch.Requests[i].Heartbeats) > 0 {
+						s = batch.Requests[i].Heartbeats[:0]
+					} else {
+						s = batch.Requests[i].HeartbeatResponses[:0]
+					}
+					raftHeartbeatPool.Put(s)
+				}
 				batch.Requests[i] = RaftMessageRequest{}
 			}
 			batch.Requests = batch.Requests[:0]
