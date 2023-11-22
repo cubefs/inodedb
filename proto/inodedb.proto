@@ -29,6 +29,20 @@ enum NodeState {
 	Quited = 3;
 }
 
+enum DiskStatus {
+	DiskStatusUnknown = 0;
+	DiskStatusNormal = 1;
+	DiskStatusBroken = 2;
+	DiskStatusRepairing = 3;
+	DiskStatusRepaired = 4;
+}
+
+enum DropStatus {
+	DropUnknown = 0;
+	Dropping = 1;
+	Dropped = 2;
+}
+
 enum FieldType {
 	Bool = 0;
 	Int = 1;
@@ -55,16 +69,47 @@ enum ShardTaskType {
 	Checkpoint = 1;
 }
 
+enum ShardUpdateType {
+	AddMember = 0;
+	RemoveMember = 1;
+	SetNormal = 2;
+}
+
+enum RaftStatus {
+	RaftUnknown = 0;
+	RaftNormal = 1;
+}
+
 message Node {
-	uint32 id = 1;
+	uint32 set_id = 1;
 	string addr = 2;
-	uint32 grpc_port = 3;
+	uint32 grpc_port = 3; // addr + grpc_port should be unique
 	uint32 http_port = 4;
 	uint32 raft_port = 5;
 	string az = 6;
 	string rack = 7;
 	repeated NodeRole roles = 8;
 	NodeState state = 9;
+}
+
+message Disk {
+	uint32 id = 1;
+	Node node = 2;
+	uint32 port = 3;
+	string path = 4;
+	DiskStatus status = 5;
+	bool readonly = 6;
+	uint64 create_at = 7;
+	uint64 last_update = 8;
+	DropStatus drop_status = 9;
+	DiskReport info = 10;
+}
+
+message DiskReport {
+	uint32 id = 1;
+	uint64 used = 2;
+	uint64 total = 3;
+	uint64 shardCnt = 4;
 }
 
 message SpaceMeta {
@@ -76,17 +121,20 @@ message SpaceMeta {
 }
 
 message Shard {
-	uint32 id = 2;
-	uint64 epoch = 1;
+	uint32 id = 1;
+	uint64 epoch = 2;
 	uint64 ino_limit = 3;
 	uint64 ino_used = 4;
-	uint32 leader_id = 5;
+	uint32 leader_id = 5; // 0 means no leader
 	repeated ShardNode nodes = 6; // nodes related to replicate nodes or stripe nodes
+	uint64 ino_cursor = 7;
+	uint64 link_count = 8;
 }
 
 message ShardNode {
-	uint32 id = 1;
+	uint32 id = 1; // disk id
 	bool learner = 2;
+	RaftStatus status = 3;
 }
 
 message Item {
@@ -125,7 +173,7 @@ message Unlink {
 
 message ShardReport {
 	uint64 sid = 1;
-	uint32 node_id = 2;
+	uint32 disk_id = 2;
 	Shard  shard = 3;
 }
 

@@ -14,8 +14,13 @@ service InodeDBMaster {
 	rpc CreateSpace (CreateSpaceRequest) returns (CreateSpaceResponse) {}
 	rpc DeleteSpace (DeleteSpaceRequest) returns (DeleteSpaceResponse) {}
 	rpc GetSpace (GetSpaceRequest) returns (GetSpaceResponse) {}
-	rpc GetCatalogChanges(GetCatalogChangesRequest) returns (GetCatalogChangesResponse) {}
+	rpc GetCatalogChanges (GetCatalogChangesRequest) returns (GetCatalogChangesResponse) {}
 	rpc GetRoleNodes (GetRoleNodesRequest) returns (GetRoleNodesResponse) {}
+	
+	rpc AllocDiskId (AllocDiskIdRequest) returns (AllocDiskIdResponse) {}
+	rpc AddDisk (AddDiskRequest) returns (AddDiskResponse) {}
+	rpc ListDisks (ListDiskRequest) returns (ListDiskResponse) {}
+	rpc GetDisk (GetDiskRequest) returns (GetDiskResponse) {}
 }
 
 service InodeDBRouter {
@@ -52,6 +57,42 @@ message ClusterResponse {
 	uint32 id = 1;
 }
 
+message AllocDiskIdRequest {
+}
+
+message AllocDiskIdResponse {
+	uint32 id = 1;
+}
+
+message AddDiskRequest {
+	Disk disk = 1;
+}
+
+message AddDiskResponse {
+}
+
+message ListDiskRequest {
+	string az = 1;
+	string rack = 2;
+	string host = 3; // should be host:port format
+	DiskStatus status = 4;
+	uint32 marker = 5;
+	uint32 count = 6;
+}
+
+message ListDiskResponse {
+	repeated Disk disks = 1;
+	uint32 marker = 2;
+}
+
+message GetDiskRequest {
+	uint32 id = 1;
+}
+
+message GetDiskResponse {
+	Disk disk = 1;
+}
+
 message CreateSpaceRequest {
 	string name = 1;
 	SpaceType type = 2;
@@ -60,8 +101,7 @@ message CreateSpaceRequest {
 }
 
 message HeartbeatRequest {
-	uint32 id = 1;
-	uint32 shard_count = 2;
+	repeated DiskReport disks = 1;
 }
 
 message HeartbeatResponse {
@@ -119,7 +159,8 @@ message AddShardResponse {
 message UpdateShardRequest {
 	string space_name = 1;
 	uint32 shard_id = 2;
-	uint64 epoch = 3;
+	ShardUpdateType op = 4;
+	ShardNode node = 5;
 }
 
 message UpdateShardResponse {
