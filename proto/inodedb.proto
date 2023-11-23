@@ -1,10 +1,14 @@
 syntax = "proto3";
 
-import "google/protobuf/any.proto";
-
 package inodedb.proto;
-
 option go_package = "./;proto";
+
+//option (gogoproto.sizer_all) = true;
+//option (gogoproto.marshaler_all) = true;
+//option (gogoproto.unmarshaler_all) = true;
+
+import "gogoproto/gogo.proto";
+import "google/protobuf/any.proto";
 
 enum ClusterOperation {
 	Join = 0;
@@ -38,35 +42,9 @@ enum DiskStatus {
 }
 
 enum DropStatus {
-	DropUnknown = 0;
+	NoDrop = 0;
 	Dropping = 1;
 	Dropped = 2;
-}
-
-enum FieldType {
-	Bool = 0;
-	Int = 1;
-	Float = 2;
-	String = 3;
-	Embedding = 4;
-}
-
-enum IndexOption {
-	Null = 0;
-	Indexed = 1;
-	Fulltext = 2;
-	Unique = 3;
-}
-
-enum CatalogChangeType {
-	AddSpace = 0;
-	DeleteSpace = 1;
-	AddShard = 2;
-}
-
-enum ShardTaskType {
-	ClearShard = 0;
-	Checkpoint = 1;
 }
 
 enum ShardUpdateType {
@@ -75,26 +53,22 @@ enum ShardUpdateType {
 	SetNormal = 2;
 }
 
-enum RaftStatus {
-	RaftUnknown = 0;
-	RaftNormal = 1;
-}
-
 message Node {
-	uint32 set_id = 1;
-	string addr = 2;
-	uint32 grpc_port = 3; // addr + grpc_port should be unique
-	uint32 http_port = 4;
-	uint32 raft_port = 5;
-	string az = 6;
-	string rack = 7;
-	repeated NodeRole roles = 8;
-	NodeState state = 9;
+	uint32 id = 1 [(gogoproto.customname) = "ID"];
+	uint32 set_id = 2 [(gogoproto.customname) = "SetID"];
+	NodeState state = 3;
+	string addr = 4;
+	uint32 grpc_port = 6; // addr + grpc_port should be unique
+	uint32 http_port = 7;
+	uint32 raft_port = 8;
+	string az = 9;
+	string rack = 10;
+	repeated NodeRole roles = 11;
 }
 
 message Disk {
-	uint32 id = 1;
-	Node node = 2;
+	uint32 disk_id = 1 [(gogoproto.customname) = "DiskID"];
+	uint32 node_id = 2  [(gogoproto.customname) = "NodeID"];
 	uint32 port = 3;
 	string path = 4;
 	DiskStatus status = 5;
@@ -106,7 +80,7 @@ message Disk {
 }
 
 message DiskReport {
-	uint32 id = 1;
+	uint32 disk_id = 1 [(gogoproto.customname) = "DiskID"];
 	uint64 used = 2;
 	uint64 total = 3;
 	uint64 shardCnt = 4;
@@ -121,18 +95,23 @@ message SpaceMeta {
 }
 
 message Shard {
-	uint32 id = 1;
+	uint32 shard_id = 1 [(gogoproto.customname) = "ShardID"];
 	uint64 epoch = 2;
 	uint64 ino_limit = 3;
 	uint64 ino_used = 4;
-	uint32 leader_id = 5; // 0 means no leader
+	uint32 leader_id = 5 [(gogoproto.customname) = "LeaderID"]; // 0 means no leader
 	repeated ShardNode nodes = 6; // nodes related to replicate nodes or stripe nodes
 	uint64 ino_cursor = 7;
 	uint64 link_count = 8;
 }
 
 message ShardNode {
-	uint32 id = 1; // disk id
+	enum RaftStatus {
+		RaftUnknown = 0;
+		RaftNormal = 1;
+	}
+
+	uint32 disk_id = 1 [(gogoproto.customname) = "DiskID"];
 	bool learner = 2;
 	RaftStatus status = 3;
 }
@@ -149,12 +128,26 @@ message Field {
 }
 
 message FieldMeta {
+	enum Type {
+		Bool = 0;
+		Int = 1;
+		Float = 2;
+		String = 3;
+		Embedding = 4;
+	}
+	enum IndexOption {
+		Null = 0;
+		Indexed = 1;
+		Fulltext = 2;
+		Unique = 3;
+	}
+
 	string name = 1;
-	FieldType type = 2;
+	Type type = 2;
 	IndexOption indexed = 3;
 }
 
-message EmbeddingField {
+message Embedding {
 	repeated float elements = 1;
 	string source = 2;
 }
@@ -173,13 +166,19 @@ message Unlink {
 
 message ShardReport {
 	uint64 sid = 1;
-	uint32 disk_id = 2;
+	uint32 disk_id = 2 [(gogoproto.customname) = "DiskID"];
 	Shard  shard = 3;
 }
 
 message CatalogChangeItem {
+	enum Type {
+		AddSpace = 0;
+		DeleteSpace = 1;
+		AddShard = 2;
+	}
+
 	uint64 route_version = 1;
-	CatalogChangeType type = 2;
+	Type type = 2;
 	google.protobuf.Any item =3;
 }
 
@@ -198,7 +197,7 @@ message CatalogChangeSpaceDelete {
 message CatalogChangeShardAdd {
 	uint64 sid = 1;
 	string name = 2;
-	uint32 shard_id = 3;
+	uint32 shard_id = 3 [(gogoproto.customname) = "ShardID"];
 	uint64 epoch = 4;
 	uint64 ino_limit = 5;
 	uint32 leader = 6;
@@ -206,9 +205,14 @@ message CatalogChangeShardAdd {
 }
 
 message ShardTask {
-	ShardTaskType type = 1;
+	enum Type {
+		ClearShard = 0;
+		Checkpoint = 1;
+	}
+
+	Type type = 1;
 	string space_name = 2;
-	uint32 shard_id = 3;
+	uint32 shard_id = 3 [(gogoproto.customname) = "ShardID"];
 	uint64 epoch = 4;
-	google.protobuf.Any reserved = 5;
+	google.protobuf.Any reserved = 5; // todo: replace any with custom type
 }
