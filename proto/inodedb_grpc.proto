@@ -3,9 +3,9 @@ syntax = "proto3";
 package inodedb.proto;
 option go_package = "./;proto";
 
-//option (gogoproto.sizer_all) = true;
-//option (gogoproto.marshaler_all) = true;
-//option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.unmarshaler_all) = true;
 
 import "gogoproto/gogo.proto";
 import "inodedb.proto";
@@ -42,14 +42,14 @@ service InodeDBShardServer {
 	rpc AddShard (AddShardRequest) returns (AddShardResponse) {}
 	rpc UpdateShard (UpdateShardRequest) returns (UpdateShardResponse) {}
 	rpc GetShard (GetShardRequest) returns (GetShardResponse) {}
-	rpc ShardInsertItem (InsertItemRequest) returns (InsertItemResponse) {}
-	rpc ShardUpdateItem (UpdateItemRequest) returns (UpdateItemResponse) {}
-	rpc ShardDeleteItem (DeleteItemRequest) returns (DeleteItemResponse) {}
-	rpc ShardGetItem (GetItemRequest) returns (GetItemResponse) {}
-	rpc ShardLink (LinkRequest) returns (LinkResponse) {}
-	rpc ShardUnlink (UnlinkRequest) returns (UnlinkResponse) {}
-	rpc ShardList (ListRequest) returns (ListResponse) {}
-	rpc ShardSearch (SearchRequest) returns (SearchResponse) {}
+	rpc ShardInsertItem (ShardInsertItemRequest) returns (ShardInsertItemResponse) {}
+	rpc ShardUpdateItem (ShardUpdateItemRequest) returns (ShardUpdateItemResponse) {}
+	rpc ShardDeleteItem (ShardDeleteItemRequest) returns (ShardDeleteItemResponse) {}
+	rpc ShardGetItem (ShardGetItemRequest) returns (ShardGetItemResponse) {}
+	rpc ShardLink (ShardLinkRequest) returns (ShardLinkResponse) {}
+	rpc ShardUnlink (ShardUnlinkRequest) returns (ShardUnlinkResponse) {}
+	rpc ShardList (ShardListRequest) returns (ShardListResponse) {}
+	rpc ShardSearch (ShardSearchRequest) returns (ShardSearchResponse) {}
 }
 
 message ClusterRequest {
@@ -58,14 +58,14 @@ message ClusterRequest {
 }
 
 message ClusterResponse {
-	uint32 id = 1 [(gogoproto.customname) = "ID"];
+	uint32 id = 1 [(gogoproto.customname) = "ID", (gogoproto.casttype) = "NodeID"];
 }
 
 message AllocDiskIDRequest {
 }
 
 message AllocDiskIDResponse {
-	uint32 disk_id = 1 [(gogoproto.customname) = "DiskID"];
+	uint32 disk_id = 1 [(gogoproto.customname) = "DiskID", (gogoproto.casttype) = "DiskID"];
 }
 
 message AddDiskRequest {
@@ -90,7 +90,7 @@ message ListDiskResponse {
 }
 
 message GetDiskRequest {
-	uint32 disk_id = 1 [(gogoproto.customname) = "DiskID"];
+	uint32 disk_id = 1 [(gogoproto.customname) = "DiskID", (gogoproto.casttype) = "DiskID"];
 }
 
 message GetDiskResponse {
@@ -105,7 +105,7 @@ message CreateSpaceRequest {
 }
 
 message HeartbeatRequest {
-	uint32 node_id = 1 [(gogoproto.customname) = "NodeID"];
+	uint32 node_id = 1 [(gogoproto.customname) = "NodeID", (gogoproto.casttype) = "NodeID"];
 	repeated DiskReport disks = 2;
 }
 
@@ -113,7 +113,7 @@ message HeartbeatResponse {
 }
 
 message ReportRequest {
-	uint32 disk_id = 1 [(gogoproto.customname) = "DiskID"];
+	uint32 node_id = 1 [(gogoproto.customname) = "NodeID", (gogoproto.casttype) = "NodeID"];
 	repeated ShardReport infos = 2;
 }
 
@@ -122,7 +122,7 @@ message ReportResponse {
 }
 
 message GetNodeRequest {
-	uint32 id = 1 [(gogoproto.customname) = "ID"];
+	uint32 id = 1 [(gogoproto.customname) = "ID", (gogoproto.casttype) = "NodeID"];
 }
 
 message GetNodeResponse {
@@ -135,14 +135,14 @@ message CreateSpaceResponse {
 
 message DeleteSpaceRequest {
 	string name = 1;
-	uint64 sid = 2;
+	uint64 sid = 2 [(gogoproto.casttype) = "Sid"];
 }
 
 message DeleteSpaceResponse { }
 
 message GetSpaceRequest {
 	string name = 1;
-	uint64 sid = 2;
+	uint64 sid = 2 [(gogoproto.casttype) = "Sid"];
 }
 
 message GetSpaceResponse {
@@ -150,9 +150,9 @@ message GetSpaceResponse {
 }
 
 message AddShardRequest {
-	uint64 sid  = 1;
-	string space_name = 2;
-	uint32 shard_id = 3 [(gogoproto.customname) = "ShardID"];
+	uint32 disk_id = 1 [(gogoproto.customname) = "DiskID", (gogoproto.casttype) = "DiskID"];
+	uint64 sid  = 2 [(gogoproto.casttype) = "Sid"];
+	uint32 shard_id = 3 [(gogoproto.customname) = "ShardID", (gogoproto.casttype) = "ShardID"];
 	uint64 epoch = 4;
 	uint64 ino_limit = 5;
 	repeated ShardNode nodes = 6;
@@ -162,8 +162,9 @@ message AddShardResponse {
 }
 
 message UpdateShardRequest {
-	string space_name = 1;
-	uint32 shard_id = 2 [(gogoproto.customname) = "ShardID"];
+	uint32 disk_id = 1 [(gogoproto.customname) = "DiskID", (gogoproto.casttype) = "DiskID"];
+	uint64 sid = 2 [(gogoproto.casttype) = "Sid"];
+	uint32 shard_id = 3 [(gogoproto.customname) = "ShardID", (gogoproto.casttype) = "ShardID"];
 	ShardUpdateType op = 4;
 	ShardNode node = 5;
 }
@@ -172,8 +173,9 @@ message UpdateShardResponse {
 }
 
 message GetShardRequest {
-	string space_name = 1;
-	uint32 shard_id = 2 [(gogoproto.customname) = "ShardID"];
+	uint32 disk_id = 1 [(gogoproto.customname) = "DiskID", (gogoproto.casttype) = "DiskID"];
+	uint64 sid = 2 [(gogoproto.casttype) = "Sid"];
+	uint32 shard_id = 3 [(gogoproto.customname) = "ShardID", (gogoproto.casttype) = "ShardID"];
 }
 
 message GetShardResponse {
@@ -258,13 +260,93 @@ message SearchResponse {
 	repeated Item items = 2;
 }
 
+message ShardOpHeader {
+	uint32 disk_id = 1  [(gogoproto.customname) = "DiskID", (gogoproto.casttype) = "DiskID"];
+	uint32 shard_id = 2  [(gogoproto.customname) = "ShardID", (gogoproto.casttype) = "ShardID"];
+	uint64 sid = 3 [(gogoproto.casttype) = "Sid"];
+	uint64 route_version = 4 [(gogoproto.casttype) = "RouteVersion"];
+}
+
+message ShardInsertItemRequest {
+	ShardOpHeader header = 1;
+	Item item = 2;	//item.ino = 0
+}
+
+message ShardInsertItemResponse {
+	uint64 ino = 1;
+}
+
+message ShardUpdateItemRequest {
+	ShardOpHeader header = 1;
+	Item item = 2;
+}
+
+message ShardUpdateItemResponse {
+}
+
+message ShardDeleteItemRequest {
+	ShardOpHeader header = 1;
+	uint64 ino = 2;
+}
+
+message ShardDeleteItemResponse {
+}
+
+message ShardGetItemRequest {
+	ShardOpHeader header = 1;
+	uint64 ino = 2;
+}
+
+message ShardGetItemResponse {
+	Item item = 1;
+}
+
+message ShardLinkRequest {
+	ShardOpHeader header = 1;
+	Link link = 2;
+}
+
+message ShardLinkResponse { }
+
+message ShardUnlinkRequest {
+	ShardOpHeader header = 1;
+	Unlink unlink = 2;
+}
+
+message ShardUnlinkResponse { }
+
+message ShardListRequest {
+	ShardOpHeader header = 1;
+	uint64 ino = 2;
+	string start = 3;
+	uint32 num = 4;
+}
+
+message ShardListResponse {
+	uint32 num_links = 1;
+	repeated Link links = 2;
+}
+
+message ShardSearchRequest {
+	ShardOpHeader header = 1;
+	Query query = 2;
+	int32 count = 3;
+	string sorted_by = 4;
+	repeated string fields = 5;
+}
+
+message ShardSearchResponse {
+	uint64 hits = 1;
+	repeated Item items = 2;
+}
+
 message GetCatalogChangesRequest {
-	uint64 route_version = 1;
-	uint32 node_id = 2 [(gogoproto.customname) = "NodeID"];
+	uint64 route_version = 1 [(gogoproto.casttype) = "RouteVersion"];
+	uint32 node_id = 2 [(gogoproto.customname) = "NodeID", (gogoproto.casttype) = "NodeID"];
 }
 
 message GetCatalogChangesResponse {
-	uint64 route_version = 1;
+	uint64 route_version = 1 [(gogoproto.casttype) = "RouteVersion"];
 	repeated CatalogChangeItem items = 2;
 }
 

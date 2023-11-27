@@ -5,4 +5,11 @@ const (
 	ReqIdKey           = "req-id"
 )
 
-type InodeDB interface{}
+type (
+	NodeID       = uint32
+	Sid          = uint64
+	DiskID       = uint32
+	ShardID      = uint32
+	RouteVersion = uint64
+	SetID        = uint32
+)
