@@ -29,7 +29,7 @@ const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 
 type ClusterRequest struct {
 	Operation            ClusterOperation `protobuf:"varint,1,opt,name=operation,proto3,enum=inodedb.proto.ClusterOperation" json:"operation,omitempty"`
-	NodeInfo             *Node            `protobuf:"bytes,2,opt,name=node_info,json=nodeInfo,proto3" json:"node_info,omitempty"`
+	NodeInfo             Node             `protobuf:"bytes,2,opt,name=node_info,json=nodeInfo,proto3" json:"node_info"`
 	XXX_NoUnkeyedLiteral struct{}         `json:"-"`
 	XXX_unrecognized     []byte           `json:"-"`
 	XXX_sizecache        int32            `json:"-"`
@@ -75,11 +75,11 @@ func (m *ClusterRequest) GetOperation() ClusterOperation {
 	return ClusterOperation_Join
 }
 
-func (m *ClusterRequest) GetNodeInfo() *Node {
+func (m *ClusterRequest) GetNodeInfo() Node {
 	if m != nil {
 		return m.NodeInfo
 	}
-	return nil
+	return Node{}
 }
 
 type ClusterResponse struct {
@@ -216,7 +216,7 @@ func (m *AllocDiskIDResponse) GetDiskID() DiskID {
 }
 
 type AddDiskRequest struct {
-	Disk                 *Disk    `protobuf:"bytes,1,opt,name=disk,proto3" json:"disk,omitempty"`
+	Disk                 Disk     `protobuf:"bytes,1,opt,name=disk,proto3" json:"disk"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -255,11 +255,11 @@ func (m *AddDiskRequest) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_AddDiskRequest proto.InternalMessageInfo
 
-func (m *AddDiskRequest) GetDisk() *Disk {
+func (m *AddDiskRequest) GetDisk() Disk {
 	if m != nil {
 		return m.Disk
 	}
-	return nil
+	return Disk{}
 }
 
 type AddDiskResponse struct {
@@ -389,7 +389,7 @@ func (m *ListDiskRequest) GetCount() uint32 {
 }
 
 type ListDiskResponse struct {
-	Disks                []*Disk  `protobuf:"bytes,1,rep,name=disks,proto3" json:"disks,omitempty"`
+	Disks                []Disk   `protobuf:"bytes,1,rep,name=disks,proto3" json:"disks"`
 	Marker               uint32   `protobuf:"varint,2,opt,name=marker,proto3" json:"marker,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -429,7 +429,7 @@ func (m *ListDiskResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ListDiskResponse proto.InternalMessageInfo
 
-func (m *ListDiskResponse) GetDisks() []*Disk {
+func (m *ListDiskResponse) GetDisks() []Disk {
 	if m != nil {
 		return m.Disks
 	}
@@ -491,7 +491,7 @@ func (m *GetDiskRequest) GetDiskID() DiskID {
 }
 
 type GetDiskResponse struct {
-	Disk                 *Disk    `protobuf:"bytes,1,opt,name=disk,proto3" json:"disk,omitempty"`
+	Disk                 Disk     `protobuf:"bytes,1,opt,name=disk,proto3" json:"disk"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -530,21 +530,21 @@ func (m *GetDiskResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_GetDiskResponse proto.InternalMessageInfo
 
-func (m *GetDiskResponse) GetDisk() *Disk {
+func (m *GetDiskResponse) GetDisk() Disk {
 	if m != nil {
 		return m.Disk
 	}
-	return nil
+	return Disk{}
 }
 
 type CreateSpaceRequest struct {
-	Name                 string       `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Type                 SpaceType    `protobuf:"varint,2,opt,name=type,proto3,enum=inodedb.proto.SpaceType" json:"type,omitempty"`
-	DesiredShards        uint32       `protobuf:"varint,3,opt,name=desired_shards,json=desiredShards,proto3" json:"desired_shards,omitempty"`
-	FixedFields          []*FieldMeta `protobuf:"bytes,4,rep,name=fixed_fields,json=fixedFields,proto3" json:"fixed_fields,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
-	XXX_unrecognized     []byte       `json:"-"`
-	XXX_sizecache        int32        `json:"-"`
+	Name                 string      `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Type                 SpaceType   `protobuf:"varint,2,opt,name=type,proto3,enum=inodedb.proto.SpaceType" json:"type,omitempty"`
+	DesiredShards        uint32      `protobuf:"varint,3,opt,name=desired_shards,json=desiredShards,proto3" json:"desired_shards,omitempty"`
+	FixedFields          []FieldMeta `protobuf:"bytes,4,rep,name=fixed_fields,json=fixedFields,proto3" json:"fixed_fields"`
+	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
+	XXX_unrecognized     []byte      `json:"-"`
+	XXX_sizecache        int32       `json:"-"`
 }
 
 func (m *CreateSpaceRequest) Reset()         { *m = CreateSpaceRequest{} }
@@ -601,7 +601,7 @@ func (m *CreateSpaceRequest) GetDesiredShards() uint32 {
 	return 0
 }
 
-func (m *CreateSpaceRequest) GetFixedFields() []*FieldMeta {
+func (m *CreateSpaceRequest) GetFixedFields() []FieldMeta {
 	if m != nil {
 		return m.FixedFields
 	}
@@ -609,11 +609,11 @@ func (m *CreateSpaceRequest) GetFixedFields() []*FieldMeta {
 }
 
 type HeartbeatRequest struct {
-	NodeID               NodeID        `protobuf:"varint,1,opt,name=node_id,json=nodeId,proto3,casttype=NodeID" json:"node_id,omitempty"`
-	Disks                []*DiskReport `protobuf:"bytes,2,rep,name=disks,proto3" json:"disks,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}      `json:"-"`
-	XXX_unrecognized     []byte        `json:"-"`
-	XXX_sizecache        int32         `json:"-"`
+	NodeID               NodeID       `protobuf:"varint,1,opt,name=node_id,json=nodeId,proto3,casttype=NodeID" json:"node_id,omitempty"`
+	Disks                []DiskReport `protobuf:"bytes,2,rep,name=disks,proto3" json:"disks"`
+	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
+	XXX_unrecognized     []byte       `json:"-"`
+	XXX_sizecache        int32        `json:"-"`
 }
 
 func (m *HeartbeatRequest) Reset()         { *m = HeartbeatRequest{} }
@@ -656,7 +656,7 @@ func (m *HeartbeatRequest) GetNodeID() NodeID {
 	return 0
 }
 
-func (m *HeartbeatRequest) GetDisks() []*DiskReport {
+func (m *HeartbeatRequest) GetDisks() []DiskReport {
 	if m != nil {
 		return m.Disks
 	}
@@ -703,11 +703,11 @@ func (m *HeartbeatResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_HeartbeatResponse proto.InternalMessageInfo
 
 type ReportRequest struct {
-	NodeID               NodeID         `protobuf:"varint,1,opt,name=node_id,json=nodeId,proto3,casttype=NodeID" json:"node_id,omitempty"`
-	Infos                []*ShardReport `protobuf:"bytes,2,rep,name=infos,proto3" json:"infos,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-	XXX_unrecognized     []byte         `json:"-"`
-	XXX_sizecache        int32          `json:"-"`
+	NodeID               NodeID        `protobuf:"varint,1,opt,name=node_id,json=nodeId,proto3,casttype=NodeID" json:"node_id,omitempty"`
+	Infos                []ShardReport `protobuf:"bytes,2,rep,name=infos,proto3" json:"infos"`
+	XXX_NoUnkeyedLiteral struct{}      `json:"-"`
+	XXX_unrecognized     []byte        `json:"-"`
+	XXX_sizecache        int32         `json:"-"`
 }
 
 func (m *ReportRequest) Reset()         { *m = ReportRequest{} }
@@ -750,7 +750,7 @@ func (m *ReportRequest) GetNodeID() NodeID {
 	return 0
 }
 
-func (m *ReportRequest) GetInfos() []*ShardReport {
+func (m *ReportRequest) GetInfos() []ShardReport {
 	if m != nil {
 		return m.Infos
 	}
@@ -758,10 +758,10 @@ func (m *ReportRequest) GetInfos() []*ShardReport {
 }
 
 type ReportResponse struct {
-	Tasks                []*ShardTask `protobuf:"bytes,1,rep,name=tasks,proto3" json:"tasks,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
-	XXX_unrecognized     []byte       `json:"-"`
-	XXX_sizecache        int32        `json:"-"`
+	Tasks                []ShardTask `protobuf:"bytes,1,rep,name=tasks,proto3" json:"tasks"`
+	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
+	XXX_unrecognized     []byte      `json:"-"`
+	XXX_sizecache        int32       `json:"-"`
 }
 
 func (m *ReportResponse) Reset()         { *m = ReportResponse{} }
@@ -797,7 +797,7 @@ func (m *ReportResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ReportResponse proto.InternalMessageInfo
 
-func (m *ReportResponse) GetTasks() []*ShardTask {
+func (m *ReportResponse) GetTasks() []ShardTask {
 	if m != nil {
 		return m.Tasks
 	}
@@ -852,7 +852,7 @@ func (m *GetNodeRequest) GetID() NodeID {
 }
 
 type GetNodeResponse struct {
-	NodeInfo             *Node    `protobuf:"bytes,1,opt,name=node_info,json=nodeInfo,proto3" json:"node_info,omitempty"`
+	NodeInfo             Node     `protobuf:"bytes,1,opt,name=node_info,json=nodeInfo,proto3" json:"node_info"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -891,18 +891,18 @@ func (m *GetNodeResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_GetNodeResponse proto.InternalMessageInfo
 
-func (m *GetNodeResponse) GetNodeInfo() *Node {
+func (m *GetNodeResponse) GetNodeInfo() Node {
 	if m != nil {
 		return m.NodeInfo
 	}
-	return nil
+	return Node{}
 }
 
 type CreateSpaceResponse struct {
-	Info                 *SpaceMeta `protobuf:"bytes,2,opt,name=info,proto3" json:"info,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
-	XXX_unrecognized     []byte     `json:"-"`
-	XXX_sizecache        int32      `json:"-"`
+	Info                 SpaceMeta `protobuf:"bytes,2,opt,name=info,proto3" json:"info"`
+	XXX_NoUnkeyedLiteral struct{}  `json:"-"`
+	XXX_unrecognized     []byte    `json:"-"`
+	XXX_sizecache        int32     `json:"-"`
 }
 
 func (m *CreateSpaceResponse) Reset()         { *m = CreateSpaceResponse{} }
@@ -938,11 +938,11 @@ func (m *CreateSpaceResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_CreateSpaceResponse proto.InternalMessageInfo
 
-func (m *CreateSpaceResponse) GetInfo() *SpaceMeta {
+func (m *CreateSpaceResponse) GetInfo() SpaceMeta {
 	if m != nil {
 		return m.Info
 	}
-	return nil
+	return SpaceMeta{}
 }
 
 type DeleteSpaceRequest struct {
@@ -1095,10 +1095,10 @@ func (m *GetSpaceRequest) GetSid() Sid {
 }
 
 type GetSpaceResponse struct {
-	Info                 *SpaceMeta `protobuf:"bytes,1,opt,name=info,proto3" json:"info,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
-	XXX_unrecognized     []byte     `json:"-"`
-	XXX_sizecache        int32      `json:"-"`
+	Info                 SpaceMeta `protobuf:"bytes,1,opt,name=info,proto3" json:"info"`
+	XXX_NoUnkeyedLiteral struct{}  `json:"-"`
+	XXX_unrecognized     []byte    `json:"-"`
+	XXX_sizecache        int32     `json:"-"`
 }
 
 func (m *GetSpaceResponse) Reset()         { *m = GetSpaceResponse{} }
@@ -1134,23 +1134,23 @@ func (m *GetSpaceResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_GetSpaceResponse proto.InternalMessageInfo
 
-func (m *GetSpaceResponse) GetInfo() *SpaceMeta {
+func (m *GetSpaceResponse) GetInfo() SpaceMeta {
 	if m != nil {
 		return m.Info
 	}
-	return nil
+	return SpaceMeta{}
 }
 
 type AddShardRequest struct {
-	DiskID               DiskID       `protobuf:"varint,1,opt,name=disk_id,json=diskId,proto3,casttype=DiskID" json:"disk_id,omitempty"`
-	Sid                  Sid          `protobuf:"varint,2,opt,name=sid,proto3,casttype=Sid" json:"sid,omitempty"`
-	ShardID              ShardID      `protobuf:"varint,3,opt,name=shard_id,json=shardId,proto3,casttype=ShardID" json:"shard_id,omitempty"`
-	Epoch                uint64       `protobuf:"varint,4,opt,name=epoch,proto3" json:"epoch,omitempty"`
-	InoLimit             uint64       `protobuf:"varint,5,opt,name=ino_limit,json=inoLimit,proto3" json:"ino_limit,omitempty"`
-	Nodes                []*ShardNode `protobuf:"bytes,6,rep,name=nodes,proto3" json:"nodes,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
-	XXX_unrecognized     []byte       `json:"-"`
-	XXX_sizecache        int32        `json:"-"`
+	DiskID               DiskID      `protobuf:"varint,1,opt,name=disk_id,json=diskId,proto3,casttype=DiskID" json:"disk_id,omitempty"`
+	Sid                  Sid         `protobuf:"varint,2,opt,name=sid,proto3,casttype=Sid" json:"sid,omitempty"`
+	ShardID              ShardID     `protobuf:"varint,3,opt,name=shard_id,json=shardId,proto3,casttype=ShardID" json:"shard_id,omitempty"`
+	Epoch                uint64      `protobuf:"varint,4,opt,name=epoch,proto3" json:"epoch,omitempty"`
+	InoLimit             uint64      `protobuf:"varint,5,opt,name=ino_limit,json=inoLimit,proto3" json:"ino_limit,omitempty"`
+	Nodes                []ShardNode `protobuf:"bytes,6,rep,name=nodes,proto3" json:"nodes"`
+	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
+	XXX_unrecognized     []byte      `json:"-"`
+	XXX_sizecache        int32       `json:"-"`
 }
 
 func (m *AddShardRequest) Reset()         { *m = AddShardRequest{} }
@@ -1221,7 +1221,7 @@ func (m *AddShardRequest) GetInoLimit() uint64 {
 	return 0
 }
 
-func (m *AddShardRequest) GetNodes() []*ShardNode {
+func (m *AddShardRequest) GetNodes() []ShardNode {
 	if m != nil {
 		return m.Nodes
 	}
@@ -1272,7 +1272,7 @@ type UpdateShardRequest struct {
 	Sid                  Sid             `protobuf:"varint,2,opt,name=sid,proto3,casttype=Sid" json:"sid,omitempty"`
 	ShardID              ShardID         `protobuf:"varint,3,opt,name=shard_id,json=shardId,proto3,casttype=ShardID" json:"shard_id,omitempty"`
 	Op                   ShardUpdateType `protobuf:"varint,4,opt,name=op,proto3,enum=inodedb.proto.ShardUpdateType" json:"op,omitempty"`
-	Node                 *ShardNode      `protobuf:"bytes,5,opt,name=node,proto3" json:"node,omitempty"`
+	Node                 ShardNode       `protobuf:"bytes,5,opt,name=node,proto3" json:"node"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
@@ -1339,11 +1339,11 @@ func (m *UpdateShardRequest) GetOp() ShardUpdateType {
 	return ShardUpdateType_AddMember
 }
 
-func (m *UpdateShardRequest) GetNode() *ShardNode {
+func (m *UpdateShardRequest) GetNode() ShardNode {
 	if m != nil {
 		return m.Node
 	}
-	return nil
+	return ShardNode{}
 }
 
 type UpdateShardResponse struct {
@@ -1449,7 +1449,7 @@ func (m *GetShardRequest) GetShardID() ShardID {
 }
 
 type GetShardResponse struct {
-	Shard                *Shard   `protobuf:"bytes,1,opt,name=shard,proto3" json:"shard,omitempty"`
+	Shard                Shard    `protobuf:"bytes,1,opt,name=shard,proto3" json:"shard"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1488,17 +1488,17 @@ func (m *GetShardResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_GetShardResponse proto.InternalMessageInfo
 
-func (m *GetShardResponse) GetShard() *Shard {
+func (m *GetShardResponse) GetShard() Shard {
 	if m != nil {
 		return m.Shard
 	}
-	return nil
+	return Shard{}
 }
 
 type InsertItemRequest struct {
 	SpaceName            string   `protobuf:"bytes,1,opt,name=space_name,json=spaceName,proto3" json:"space_name,omitempty"`
 	PreferredShard       uint32   `protobuf:"varint,2,opt,name=preferred_shard,json=preferredShard,proto3" json:"preferred_shard,omitempty"`
-	Item                 *Item    `protobuf:"bytes,3,opt,name=item,proto3" json:"item,omitempty"`
+	Item                 Item     `protobuf:"bytes,3,opt,name=item,proto3" json:"item"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1551,11 +1551,11 @@ func (m *InsertItemRequest) GetPreferredShard() uint32 {
 	return 0
 }
 
-func (m *InsertItemRequest) GetItem() *Item {
+func (m *InsertItemRequest) GetItem() Item {
 	if m != nil {
 		return m.Item
 	}
-	return nil
+	return Item{}
 }
 
 type InsertItemResponse struct {
@@ -1607,7 +1607,7 @@ func (m *InsertItemResponse) GetIno() uint64 {
 
 type UpdateItemRequest struct {
 	SpaceName            string   `protobuf:"bytes,1,opt,name=space_name,json=spaceName,proto3" json:"space_name,omitempty"`
-	Item                 *Item    `protobuf:"bytes,2,opt,name=item,proto3" json:"item,omitempty"`
+	Item                 Item     `protobuf:"bytes,2,opt,name=item,proto3" json:"item"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1653,11 +1653,11 @@ func (m *UpdateItemRequest) GetSpaceName() string {
 	return ""
 }
 
-func (m *UpdateItemRequest) GetItem() *Item {
+func (m *UpdateItemRequest) GetItem() Item {
 	if m != nil {
 		return m.Item
 	}
-	return nil
+	return Item{}
 }
 
 type UpdateItemResponse struct {
@@ -1849,7 +1849,7 @@ func (m *GetItemRequest) GetIno() uint64 {
 }
 
 type GetItemResponse struct {
-	Item                 *Item    `protobuf:"bytes,1,opt,name=item,proto3" json:"item,omitempty"`
+	Item                 Item     `protobuf:"bytes,1,opt,name=item,proto3" json:"item"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1888,16 +1888,16 @@ func (m *GetItemResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_GetItemResponse proto.InternalMessageInfo
 
-func (m *GetItemResponse) GetItem() *Item {
+func (m *GetItemResponse) GetItem() Item {
 	if m != nil {
 		return m.Item
 	}
-	return nil
+	return Item{}
 }
 
 type LinkRequest struct {
 	SpaceName            string   `protobuf:"bytes,1,opt,name=space_name,json=spaceName,proto3" json:"space_name,omitempty"`
-	Link                 *Link    `protobuf:"bytes,2,opt,name=link,proto3" json:"link,omitempty"`
+	Link                 Link     `protobuf:"bytes,2,opt,name=link,proto3" json:"link"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1943,11 +1943,11 @@ func (m *LinkRequest) GetSpaceName() string {
 	return ""
 }
 
-func (m *LinkRequest) GetLink() *Link {
+func (m *LinkRequest) GetLink() Link {
 	if m != nil {
 		return m.Link
 	}
-	return nil
+	return Link{}
 }
 
 type LinkResponse struct {
@@ -1991,7 +1991,7 @@ var xxx_messageInfo_LinkResponse proto.InternalMessageInfo
 
 type UnlinkRequest struct {
 	SpaceName            string   `protobuf:"bytes,1,opt,name=space_name,json=spaceName,proto3" json:"space_name,omitempty"`
-	Unlink               *Unlink  `protobuf:"bytes,2,opt,name=unlink,proto3" json:"unlink,omitempty"`
+	Unlink               Unlink   `protobuf:"bytes,2,opt,name=unlink,proto3" json:"unlink"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2037,11 +2037,11 @@ func (m *UnlinkRequest) GetSpaceName() string {
 	return ""
 }
 
-func (m *UnlinkRequest) GetUnlink() *Unlink {
+func (m *UnlinkRequest) GetUnlink() Unlink {
 	if m != nil {
 		return m.Unlink
 	}
-	return nil
+	return Unlink{}
 }
 
 type UnlinkResponse struct {
@@ -2156,7 +2156,7 @@ func (m *ListRequest) GetNum() uint32 {
 
 type ListResponse struct {
 	NumLinks             uint32   `protobuf:"varint,1,opt,name=num_links,json=numLinks,proto3" json:"num_links,omitempty"`
-	Links                []*Link  `protobuf:"bytes,2,rep,name=links,proto3" json:"links,omitempty"`
+	Links                []Link   `protobuf:"bytes,2,rep,name=links,proto3" json:"links"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2202,7 +2202,7 @@ func (m *ListResponse) GetNumLinks() uint32 {
 	return 0
 }
 
-func (m *ListResponse) GetLinks() []*Link {
+func (m *ListResponse) GetLinks() []Link {
 	if m != nil {
 		return m.Links
 	}
@@ -2289,7 +2289,7 @@ var xxx_messageInfo_HighlightRequest proto.InternalMessageInfo
 
 type SearchRequest struct {
 	SpaceName            string   `protobuf:"bytes,1,opt,name=space_name,json=spaceName,proto3" json:"space_name,omitempty"`
-	Query                *Query   `protobuf:"bytes,2,opt,name=query,proto3" json:"query,omitempty"`
+	Query                Query    `protobuf:"bytes,2,opt,name=query,proto3" json:"query"`
 	Count                int32    `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"`
 	SortedBy             string   `protobuf:"bytes,4,opt,name=sorted_by,json=sortedBy,proto3" json:"sorted_by,omitempty"`
 	Fields               []string `protobuf:"bytes,5,rep,name=fields,proto3" json:"fields,omitempty"`
@@ -2338,11 +2338,11 @@ func (m *SearchRequest) GetSpaceName() string {
 	return ""
 }
 
-func (m *SearchRequest) GetQuery() *Query {
+func (m *SearchRequest) GetQuery() Query {
 	if m != nil {
 		return m.Query
 	}
-	return nil
+	return Query{}
 }
 
 func (m *SearchRequest) GetCount() int32 {
@@ -2368,7 +2368,7 @@ func (m *SearchRequest) GetFields() []string {
 
 type SearchResponse struct {
 	Hits                 uint64   `protobuf:"varint,1,opt,name=hits,proto3" json:"hits,omitempty"`
-	Items                []*Item  `protobuf:"bytes,2,rep,name=items,proto3" json:"items,omitempty"`
+	Items                []Item   `protobuf:"bytes,2,rep,name=items,proto3" json:"items"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2414,7 +2414,7 @@ func (m *SearchResponse) GetHits() uint64 {
 	return 0
 }
 
-func (m *SearchResponse) GetItems() []*Item {
+func (m *SearchResponse) GetItems() []Item {
 	if m != nil {
 		return m.Items
 	}
@@ -2493,11 +2493,11 @@ func (m *ShardOpHeader) GetRouteVersion() RouteVersion {
 }
 
 type ShardInsertItemRequest struct {
-	Header               *ShardOpHeader `protobuf:"bytes,1,opt,name=header,proto3" json:"header,omitempty"`
-	Item                 *Item          `protobuf:"bytes,2,opt,name=item,proto3" json:"item,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-	XXX_unrecognized     []byte         `json:"-"`
-	XXX_sizecache        int32          `json:"-"`
+	Header               ShardOpHeader `protobuf:"bytes,1,opt,name=header,proto3" json:"header"`
+	Item                 Item          `protobuf:"bytes,2,opt,name=item,proto3" json:"item"`
+	XXX_NoUnkeyedLiteral struct{}      `json:"-"`
+	XXX_unrecognized     []byte        `json:"-"`
+	XXX_sizecache        int32         `json:"-"`
 }
 
 func (m *ShardInsertItemRequest) Reset()         { *m = ShardInsertItemRequest{} }
@@ -2533,18 +2533,18 @@ func (m *ShardInsertItemRequest) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ShardInsertItemRequest proto.InternalMessageInfo
 
-func (m *ShardInsertItemRequest) GetHeader() *ShardOpHeader {
+func (m *ShardInsertItemRequest) GetHeader() ShardOpHeader {
 	if m != nil {
 		return m.Header
 	}
-	return nil
+	return ShardOpHeader{}
 }
 
-func (m *ShardInsertItemRequest) GetItem() *Item {
+func (m *ShardInsertItemRequest) GetItem() Item {
 	if m != nil {
 		return m.Item
 	}
-	return nil
+	return Item{}
 }
 
 type ShardInsertItemResponse struct {
@@ -2595,11 +2595,11 @@ func (m *ShardInsertItemResponse) GetIno() uint64 {
 }
 
 type ShardUpdateItemRequest struct {
-	Header               *ShardOpHeader `protobuf:"bytes,1,opt,name=header,proto3" json:"header,omitempty"`
-	Item                 *Item          `protobuf:"bytes,2,opt,name=item,proto3" json:"item,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-	XXX_unrecognized     []byte         `json:"-"`
-	XXX_sizecache        int32          `json:"-"`
+	Header               ShardOpHeader `protobuf:"bytes,1,opt,name=header,proto3" json:"header"`
+	Item                 Item          `protobuf:"bytes,2,opt,name=item,proto3" json:"item"`
+	XXX_NoUnkeyedLiteral struct{}      `json:"-"`
+	XXX_unrecognized     []byte        `json:"-"`
+	XXX_sizecache        int32         `json:"-"`
 }
 
 func (m *ShardUpdateItemRequest) Reset()         { *m = ShardUpdateItemRequest{} }
@@ -2635,18 +2635,18 @@ func (m *ShardUpdateItemRequest) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ShardUpdateItemRequest proto.InternalMessageInfo
 
-func (m *ShardUpdateItemRequest) GetHeader() *ShardOpHeader {
+func (m *ShardUpdateItemRequest) GetHeader() ShardOpHeader {
 	if m != nil {
 		return m.Header
 	}
-	return nil
+	return ShardOpHeader{}
 }
 
-func (m *ShardUpdateItemRequest) GetItem() *Item {
+func (m *ShardUpdateItemRequest) GetItem() Item {
 	if m != nil {
 		return m.Item
 	}
-	return nil
+	return Item{}
 }
 
 type ShardUpdateItemResponse struct {
@@ -2689,11 +2689,11 @@ func (m *ShardUpdateItemResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_ShardUpdateItemResponse proto.InternalMessageInfo
 
 type ShardDeleteItemRequest struct {
-	Header               *ShardOpHeader `protobuf:"bytes,1,opt,name=header,proto3" json:"header,omitempty"`
-	Ino                  uint64         `protobuf:"varint,2,opt,name=ino,proto3" json:"ino,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-	XXX_unrecognized     []byte         `json:"-"`
-	XXX_sizecache        int32          `json:"-"`
+	Header               ShardOpHeader `protobuf:"bytes,1,opt,name=header,proto3" json:"header"`
+	Ino                  uint64        `protobuf:"varint,2,opt,name=ino,proto3" json:"ino,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}      `json:"-"`
+	XXX_unrecognized     []byte        `json:"-"`
+	XXX_sizecache        int32         `json:"-"`
 }
 
 func (m *ShardDeleteItemRequest) Reset()         { *m = ShardDeleteItemRequest{} }
@@ -2729,11 +2729,11 @@ func (m *ShardDeleteItemRequest) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ShardDeleteItemRequest proto.InternalMessageInfo
 
-func (m *ShardDeleteItemRequest) GetHeader() *ShardOpHeader {
+func (m *ShardDeleteItemRequest) GetHeader() ShardOpHeader {
 	if m != nil {
 		return m.Header
 	}
-	return nil
+	return ShardOpHeader{}
 }
 
 func (m *ShardDeleteItemRequest) GetIno() uint64 {
@@ -2783,11 +2783,11 @@ func (m *ShardDeleteItemResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_ShardDeleteItemResponse proto.InternalMessageInfo
 
 type ShardGetItemRequest struct {
-	Header               *ShardOpHeader `protobuf:"bytes,1,opt,name=header,proto3" json:"header,omitempty"`
-	Ino                  uint64         `protobuf:"varint,2,opt,name=ino,proto3" json:"ino,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-	XXX_unrecognized     []byte         `json:"-"`
-	XXX_sizecache        int32          `json:"-"`
+	Header               ShardOpHeader `protobuf:"bytes,1,opt,name=header,proto3" json:"header"`
+	Ino                  uint64        `protobuf:"varint,2,opt,name=ino,proto3" json:"ino,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}      `json:"-"`
+	XXX_unrecognized     []byte        `json:"-"`
+	XXX_sizecache        int32         `json:"-"`
 }
 
 func (m *ShardGetItemRequest) Reset()         { *m = ShardGetItemRequest{} }
@@ -2823,11 +2823,11 @@ func (m *ShardGetItemRequest) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ShardGetItemRequest proto.InternalMessageInfo
 
-func (m *ShardGetItemRequest) GetHeader() *ShardOpHeader {
+func (m *ShardGetItemRequest) GetHeader() ShardOpHeader {
 	if m != nil {
 		return m.Header
 	}
-	return nil
+	return ShardOpHeader{}
 }
 
 func (m *ShardGetItemRequest) GetIno() uint64 {
@@ -2838,7 +2838,7 @@ func (m *ShardGetItemRequest) GetIno() uint64 {
 }
 
 type ShardGetItemResponse struct {
-	Item                 *Item    `protobuf:"bytes,1,opt,name=item,proto3" json:"item,omitempty"`
+	Item                 Item     `protobuf:"bytes,1,opt,name=item,proto3" json:"item"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2877,19 +2877,19 @@ func (m *ShardGetItemResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ShardGetItemResponse proto.InternalMessageInfo
 
-func (m *ShardGetItemResponse) GetItem() *Item {
+func (m *ShardGetItemResponse) GetItem() Item {
 	if m != nil {
 		return m.Item
 	}
-	return nil
+	return Item{}
 }
 
 type ShardLinkRequest struct {
-	Header               *ShardOpHeader `protobuf:"bytes,1,opt,name=header,proto3" json:"header,omitempty"`
-	Link                 *Link          `protobuf:"bytes,2,opt,name=link,proto3" json:"link,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-	XXX_unrecognized     []byte         `json:"-"`
-	XXX_sizecache        int32          `json:"-"`
+	Header               ShardOpHeader `protobuf:"bytes,1,opt,name=header,proto3" json:"header"`
+	Link                 Link          `protobuf:"bytes,2,opt,name=link,proto3" json:"link"`
+	XXX_NoUnkeyedLiteral struct{}      `json:"-"`
+	XXX_unrecognized     []byte        `json:"-"`
+	XXX_sizecache        int32         `json:"-"`
 }
 
 func (m *ShardLinkRequest) Reset()         { *m = ShardLinkRequest{} }
@@ -2925,18 +2925,18 @@ func (m *ShardLinkRequest) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ShardLinkRequest proto.InternalMessageInfo
 
-func (m *ShardLinkRequest) GetHeader() *ShardOpHeader {
+func (m *ShardLinkRequest) GetHeader() ShardOpHeader {
 	if m != nil {
 		return m.Header
 	}
-	return nil
+	return ShardOpHeader{}
 }
 
-func (m *ShardLinkRequest) GetLink() *Link {
+func (m *ShardLinkRequest) GetLink() Link {
 	if m != nil {
 		return m.Link
 	}
-	return nil
+	return Link{}
 }
 
 type ShardLinkResponse struct {
@@ -2979,11 +2979,11 @@ func (m *ShardLinkResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_ShardLinkResponse proto.InternalMessageInfo
 
 type ShardUnlinkRequest struct {
-	Header               *ShardOpHeader `protobuf:"bytes,1,opt,name=header,proto3" json:"header,omitempty"`
-	Unlink               *Unlink        `protobuf:"bytes,2,opt,name=unlink,proto3" json:"unlink,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-	XXX_unrecognized     []byte         `json:"-"`
-	XXX_sizecache        int32          `json:"-"`
+	Header               ShardOpHeader `protobuf:"bytes,1,opt,name=header,proto3" json:"header"`
+	Unlink               Unlink        `protobuf:"bytes,2,opt,name=unlink,proto3" json:"unlink"`
+	XXX_NoUnkeyedLiteral struct{}      `json:"-"`
+	XXX_unrecognized     []byte        `json:"-"`
+	XXX_sizecache        int32         `json:"-"`
 }
 
 func (m *ShardUnlinkRequest) Reset()         { *m = ShardUnlinkRequest{} }
@@ -3019,18 +3019,18 @@ func (m *ShardUnlinkRequest) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ShardUnlinkRequest proto.InternalMessageInfo
 
-func (m *ShardUnlinkRequest) GetHeader() *ShardOpHeader {
+func (m *ShardUnlinkRequest) GetHeader() ShardOpHeader {
 	if m != nil {
 		return m.Header
 	}
-	return nil
+	return ShardOpHeader{}
 }
 
-func (m *ShardUnlinkRequest) GetUnlink() *Unlink {
+func (m *ShardUnlinkRequest) GetUnlink() Unlink {
 	if m != nil {
 		return m.Unlink
 	}
-	return nil
+	return Unlink{}
 }
 
 type ShardUnlinkResponse struct {
@@ -3073,13 +3073,13 @@ func (m *ShardUnlinkResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_ShardUnlinkResponse proto.InternalMessageInfo
 
 type ShardListRequest struct {
-	Header               *ShardOpHeader `protobuf:"bytes,1,opt,name=header,proto3" json:"header,omitempty"`
-	Ino                  uint64         `protobuf:"varint,2,opt,name=ino,proto3" json:"ino,omitempty"`
-	Start                string         `protobuf:"bytes,3,opt,name=start,proto3" json:"start,omitempty"`
-	Num                  uint32         `protobuf:"varint,4,opt,name=num,proto3" json:"num,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-	XXX_unrecognized     []byte         `json:"-"`
-	XXX_sizecache        int32          `json:"-"`
+	Header               ShardOpHeader `protobuf:"bytes,1,opt,name=header,proto3" json:"header"`
+	Ino                  uint64        `protobuf:"varint,2,opt,name=ino,proto3" json:"ino,omitempty"`
+	Start                string        `protobuf:"bytes,3,opt,name=start,proto3" json:"start,omitempty"`
+	Num                  uint32        `protobuf:"varint,4,opt,name=num,proto3" json:"num,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}      `json:"-"`
+	XXX_unrecognized     []byte        `json:"-"`
+	XXX_sizecache        int32         `json:"-"`
 }
 
 func (m *ShardListRequest) Reset()         { *m = ShardListRequest{} }
@@ -3115,11 +3115,11 @@ func (m *ShardListRequest) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ShardListRequest proto.InternalMessageInfo
 
-func (m *ShardListRequest) GetHeader() *ShardOpHeader {
+func (m *ShardListRequest) GetHeader() ShardOpHeader {
 	if m != nil {
 		return m.Header
 	}
-	return nil
+	return ShardOpHeader{}
 }
 
 func (m *ShardListRequest) GetIno() uint64 {
@@ -3145,7 +3145,7 @@ func (m *ShardListRequest) GetNum() uint32 {
 
 type ShardListResponse struct {
 	NumLinks             uint32   `protobuf:"varint,1,opt,name=num_links,json=numLinks,proto3" json:"num_links,omitempty"`
-	Links                []*Link  `protobuf:"bytes,2,rep,name=links,proto3" json:"links,omitempty"`
+	Links                []Link   `protobuf:"bytes,2,rep,name=links,proto3" json:"links"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -3191,7 +3191,7 @@ func (m *ShardListResponse) GetNumLinks() uint32 {
 	return 0
 }
 
-func (m *ShardListResponse) GetLinks() []*Link {
+func (m *ShardListResponse) GetLinks() []Link {
 	if m != nil {
 		return m.Links
 	}
@@ -3199,14 +3199,14 @@ func (m *ShardListResponse) GetLinks() []*Link {
 }
 
 type ShardSearchRequest struct {
-	Header               *ShardOpHeader `protobuf:"bytes,1,opt,name=header,proto3" json:"header,omitempty"`
-	Query                *Query         `protobuf:"bytes,2,opt,name=query,proto3" json:"query,omitempty"`
-	Count                int32          `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"`
-	SortedBy             string         `protobuf:"bytes,4,opt,name=sorted_by,json=sortedBy,proto3" json:"sorted_by,omitempty"`
-	Fields               []string       `protobuf:"bytes,5,rep,name=fields,proto3" json:"fields,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-	XXX_unrecognized     []byte         `json:"-"`
-	XXX_sizecache        int32          `json:"-"`
+	Header               ShardOpHeader `protobuf:"bytes,1,opt,name=header,proto3" json:"header"`
+	Query                Query         `protobuf:"bytes,2,opt,name=query,proto3" json:"query"`
+	Count                int32         `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"`
+	SortedBy             string        `protobuf:"bytes,4,opt,name=sorted_by,json=sortedBy,proto3" json:"sorted_by,omitempty"`
+	Fields               []string      `protobuf:"bytes,5,rep,name=fields,proto3" json:"fields,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}      `json:"-"`
+	XXX_unrecognized     []byte        `json:"-"`
+	XXX_sizecache        int32         `json:"-"`
 }
 
 func (m *ShardSearchRequest) Reset()         { *m = ShardSearchRequest{} }
@@ -3242,18 +3242,18 @@ func (m *ShardSearchRequest) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ShardSearchRequest proto.InternalMessageInfo
 
-func (m *ShardSearchRequest) GetHeader() *ShardOpHeader {
+func (m *ShardSearchRequest) GetHeader() ShardOpHeader {
 	if m != nil {
 		return m.Header
 	}
-	return nil
+	return ShardOpHeader{}
 }
 
-func (m *ShardSearchRequest) GetQuery() *Query {
+func (m *ShardSearchRequest) GetQuery() Query {
 	if m != nil {
 		return m.Query
 	}
-	return nil
+	return Query{}
 }
 
 func (m *ShardSearchRequest) GetCount() int32 {
@@ -3279,7 +3279,7 @@ func (m *ShardSearchRequest) GetFields() []string {
 
 type ShardSearchResponse struct {
 	Hits                 uint64   `protobuf:"varint,1,opt,name=hits,proto3" json:"hits,omitempty"`
-	Items                []*Item  `protobuf:"bytes,2,rep,name=items,proto3" json:"items,omitempty"`
+	Items                []Item   `protobuf:"bytes,2,rep,name=items,proto3" json:"items"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -3325,7 +3325,7 @@ func (m *ShardSearchResponse) GetHits() uint64 {
 	return 0
 }
 
-func (m *ShardSearchResponse) GetItems() []*Item {
+func (m *ShardSearchResponse) GetItems() []Item {
 	if m != nil {
 		return m.Items
 	}
@@ -3388,11 +3388,11 @@ func (m *GetCatalogChangesRequest) GetNodeID() NodeID {
 }
 
 type GetCatalogChangesResponse struct {
-	RouteVersion         RouteVersion         `protobuf:"varint,1,opt,name=route_version,json=routeVersion,proto3,casttype=RouteVersion" json:"route_version,omitempty"`
-	Items                []*CatalogChangeItem `protobuf:"bytes,2,rep,name=items,proto3" json:"items,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
-	XXX_unrecognized     []byte               `json:"-"`
-	XXX_sizecache        int32                `json:"-"`
+	RouteVersion         RouteVersion        `protobuf:"varint,1,opt,name=route_version,json=routeVersion,proto3,casttype=RouteVersion" json:"route_version,omitempty"`
+	Items                []CatalogChangeItem `protobuf:"bytes,2,rep,name=items,proto3" json:"items"`
+	XXX_NoUnkeyedLiteral struct{}            `json:"-"`
+	XXX_unrecognized     []byte              `json:"-"`
+	XXX_sizecache        int32               `json:"-"`
 }
 
 func (m *GetCatalogChangesResponse) Reset()         { *m = GetCatalogChangesResponse{} }
@@ -3435,7 +3435,7 @@ func (m *GetCatalogChangesResponse) GetRouteVersion() RouteVersion {
 	return 0
 }
 
-func (m *GetCatalogChangesResponse) GetItems() []*CatalogChangeItem {
+func (m *GetCatalogChangesResponse) GetItems() []CatalogChangeItem {
 	if m != nil {
 		return m.Items
 	}
@@ -3490,7 +3490,7 @@ func (m *GetRoleNodesRequest) GetRole() NodeRole {
 }
 
 type GetRoleNodesResponse struct {
-	Nodes                []*Node  `protobuf:"bytes,1,rep,name=nodes,proto3" json:"nodes,omitempty"`
+	Nodes                []Node   `protobuf:"bytes,1,rep,name=nodes,proto3" json:"nodes"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -3529,7 +3529,7 @@ func (m *GetRoleNodesResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_GetRoleNodesResponse proto.InternalMessageInfo
 
-func (m *GetRoleNodesResponse) GetNodes() []*Node {
+func (m *GetRoleNodesResponse) GetNodes() []Node {
 	if m != nil {
 		return m.Nodes
 	}
@@ -3609,138 +3609,140 @@ func init() {
 func init() { proto.RegisterFile("inodedb_grpc.proto", fileDescriptor_ad498ca7553c71b0) }
 
 var fileDescriptor_ad498ca7553c71b0 = []byte{
-	// 2087 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xcc, 0x59, 0x4b, 0x6f, 0x1b, 0xc9,
-	0x11, 0xd6, 0x50, 0x24, 0x25, 0x96, 0x45, 0x8a, 0x6a, 0xd1, 0x5e, 0x9a, 0x8e, 0x25, 0xb9, 0x03,
-	0x3f, 0xb2, 0x0f, 0x79, 0x57, 0x9b, 0x04, 0x48, 0x16, 0xc9, 0x5a, 0x0f, 0xc4, 0xe6, 0xc2, 0x8f,
-	0x64, 0x64, 0x1b, 0x48, 0x16, 0x0b, 0x66, 0xa4, 0x69, 0x89, 0x03, 0x51, 0x33, 0xf4, 0xcc, 0x70,
-	0x13, 0xed, 0x29, 0x09, 0x72, 0xca, 0x21, 0xff, 0x22, 0x97, 0xfc, 0x84, 0xdc, 0x82, 0x00, 0x41,
-	0x8e, 0xf9, 0x05, 0x42, 0x20, 0x20, 0xe7, 0x20, 0x39, 0xfa, 0x14, 0x74, 0x75, 0xcf, 0xb0, 0x67,
-	0xba, 0xf9, 0x10, 0xd7, 0x8b, 0xdd, 0x13, 0x67, 0x7a, 0x6a, 0xaa, 0xbe, 0xaa, 0xae, 0xfa, 0xba,
-	0xa6, 0x08, 0xc4, 0xf3, 0x03, 0x97, 0xb9, 0x07, 0x9d, 0xe3, 0xb0, 0x7f, 0xb8, 0xd9, 0x0f, 0x83,
-	0x38, 0x20, 0x55, 0xb9, 0x26, 0x6e, 0x5b, 0x8d, 0xe3, 0xe0, 0x38, 0xc0, 0xcb, 0xfb, 0xfc, 0x4a,
-	0xae, 0x66, 0x85, 0xe8, 0x6f, 0x2d, 0xa8, 0xed, 0xf6, 0x06, 0x51, 0xcc, 0x42, 0x9b, 0xbd, 0x1a,
-	0xb0, 0x28, 0x26, 0x3f, 0x82, 0x4a, 0xd0, 0x67, 0xa1, 0x13, 0x7b, 0x81, 0xdf, 0xb4, 0x36, 0xac,
-	0x7b, 0xb5, 0xad, 0xf5, 0xcd, 0xcc, 0x5b, 0x9b, 0xf2, 0x8d, 0x67, 0x89, 0x98, 0x3d, 0x7c, 0x83,
-	0xbc, 0x0f, 0x15, 0x2e, 0xdb, 0xf1, 0xfc, 0xa3, 0xa0, 0x59, 0xd8, 0xb0, 0xee, 0x5d, 0xd9, 0x5a,
-	0xcd, 0xbd, 0xfe, 0x34, 0x70, 0x99, 0xbd, 0xc8, 0x97, 0xda, 0xfe, 0x51, 0x40, 0x3f, 0x84, 0xe5,
-	0x14, 0x42, 0xd4, 0x0f, 0xfc, 0x88, 0x91, 0x0d, 0x28, 0x78, 0x2e, 0x1a, 0xaf, 0xee, 0xd4, 0x2f,
-	0xce, 0xd7, 0x0b, 0xed, 0xbd, 0xd7, 0xe7, 0xeb, 0x65, 0xfe, 0x62, 0x7b, 0xcf, 0x2e, 0x78, 0x2e,
-	0x6d, 0x00, 0xd9, 0xee, 0xf5, 0x82, 0xc3, 0x3d, 0x2f, 0x3a, 0x69, 0xef, 0x49, 0xec, 0x74, 0x0f,
-	0x56, 0x33, 0xab, 0x52, 0xdd, 0x7b, 0xb0, 0xe0, 0x7a, 0xd1, 0x49, 0x27, 0xd5, 0xd9, 0xb8, 0x38,
-	0x5f, 0x2f, 0x0b, 0xa1, 0xd7, 0xe9, 0x95, 0x5d, 0xe6, 0x42, 0x6d, 0x97, 0xfe, 0x00, 0x6a, 0xdb,
-	0xae, 0xcb, 0x17, 0x93, 0x98, 0xdc, 0x85, 0x22, 0x7f, 0x86, 0x6f, 0xeb, 0xfe, 0xa0, 0x24, 0x0a,
-	0xd0, 0x15, 0x58, 0x4e, 0x5f, 0x15, 0xc6, 0xe9, 0x9f, 0x2d, 0x58, 0x7e, 0xec, 0x45, 0xb1, 0xaa,
-	0xaf, 0x06, 0x05, 0xe7, 0x0b, 0xd4, 0x56, 0xb1, 0x0b, 0xce, 0x17, 0x84, 0x40, 0x31, 0x74, 0x0e,
-	0x4f, 0x30, 0x5e, 0x15, 0x1b, 0xaf, 0xf9, 0x5a, 0x37, 0x88, 0xe2, 0xe6, 0xbc, 0x58, 0xe3, 0xd7,
-	0xe4, 0x03, 0x28, 0x47, 0xb1, 0x13, 0x0f, 0xa2, 0x66, 0x11, 0x37, 0xe6, 0xba, 0x01, 0xc9, 0x3e,
-	0x0a, 0xd8, 0x52, 0x90, 0x5c, 0x83, 0xf2, 0xa9, 0x13, 0x9e, 0xb0, 0xb0, 0x59, 0xe2, 0xae, 0xdb,
-	0xf2, 0x8e, 0x34, 0xa0, 0x74, 0x18, 0x0c, 0xfc, 0xb8, 0x59, 0xc6, 0x65, 0x71, 0x43, 0x5f, 0x40,
-	0x7d, 0x88, 0x55, 0x46, 0xef, 0x3b, 0x50, 0xe2, 0xbe, 0x45, 0x4d, 0x6b, 0x63, 0x7e, 0x94, 0xf7,
-	0x42, 0x42, 0x31, 0x56, 0x50, 0x8d, 0xd1, 0x8f, 0xa1, 0xf6, 0x90, 0x65, 0x22, 0x70, 0xc9, 0x2d,
-	0xf9, 0x21, 0x2c, 0xa7, 0x0a, 0x24, 0xac, 0xa9, 0xf7, 0xe4, 0x2f, 0x16, 0x90, 0xdd, 0x90, 0x39,
-	0x31, 0xdb, 0xef, 0x3b, 0x87, 0x2c, 0x41, 0x40, 0xa0, 0xe8, 0x3b, 0xa7, 0x4c, 0xee, 0x02, 0x5e,
-	0x93, 0x77, 0xa1, 0x18, 0x9f, 0xf5, 0x19, 0xa2, 0xaf, 0x6d, 0x35, 0x73, 0x3a, 0xf1, 0xf5, 0xe7,
-	0x67, 0x7d, 0x66, 0xa3, 0x14, 0xb9, 0x0d, 0x35, 0x97, 0x45, 0x5e, 0xc8, 0xdc, 0x4e, 0xd4, 0x75,
-	0x42, 0x37, 0xc2, 0xbd, 0xaa, 0xda, 0x55, 0xb9, 0xba, 0x8f, 0x8b, 0xe4, 0x23, 0x58, 0x3a, 0xf2,
-	0x7e, 0xcd, 0xdc, 0xce, 0x91, 0xc7, 0x7a, 0x2e, 0xdf, 0x3a, 0x1e, 0xc6, 0xbc, 0xf2, 0x9f, 0xf0,
-	0x87, 0x4f, 0x58, 0xec, 0xd8, 0x57, 0x50, 0x1a, 0xef, 0x23, 0x1a, 0x42, 0xfd, 0x11, 0x73, 0xc2,
-	0xf8, 0x80, 0x39, 0xb1, 0x12, 0x3b, 0x51, 0x62, 0x99, 0xd8, 0x89, 0xe2, 0x50, 0xca, 0xa4, 0x8c,
-	0x15, 0xe6, 0x92, 0xfb, 0xc9, 0xfe, 0x15, 0xd0, 0xb0, 0x29, 0x67, 0x6c, 0xd6, 0x0f, 0xc2, 0x58,
-	0xee, 0x22, 0x5d, 0x85, 0x15, 0xc5, 0xa6, 0x4c, 0xe3, 0x3e, 0x54, 0xa5, 0xd4, 0x6c, 0x28, 0xde,
-	0x87, 0x12, 0xa7, 0x84, 0x04, 0x45, 0x2b, 0x1f, 0x5b, 0x1e, 0xab, 0x04, 0x06, 0x0a, 0xd2, 0x07,
-	0x50, 0x4b, 0x2c, 0xca, 0x2d, 0xdf, 0x84, 0x52, 0xec, 0x0c, 0x33, 0xb1, 0x69, 0xd2, 0xf1, 0xdc,
-	0xe1, 0xe9, 0x88, 0x62, 0x74, 0x0b, 0xd3, 0x0e, 0xe9, 0x46, 0x82, 0x9e, 0x4c, 0x2c, 0xbb, 0x98,
-	0x69, 0xe2, 0x1d, 0x69, 0x36, 0x43, 0x69, 0xd6, 0x34, 0x94, 0xb6, 0x0b, 0xab, 0x99, 0x8c, 0x93,
-	0x8a, 0xde, 0x85, 0xa2, 0x42, 0x8b, 0xc6, 0xf4, 0xc2, 0x0c, 0x40, 0x29, 0xba, 0x0b, 0x64, 0x8f,
-	0xf5, 0xd8, 0x14, 0x69, 0x7b, 0x1d, 0xe6, 0x23, 0xcf, 0x45, 0xb5, 0xc5, 0x9d, 0x85, 0xd7, 0xe7,
-	0xeb, 0xf3, 0xfb, 0x9e, 0x6b, 0xf3, 0x35, 0x7a, 0x15, 0x56, 0x33, 0x4a, 0xe4, 0x6e, 0x3e, 0x40,
-	0x2f, 0xbf, 0x8c, 0xe2, 0x07, 0x50, 0x1f, 0x6a, 0xc8, 0xf9, 0x67, 0x4d, 0xe5, 0xdf, 0x7f, 0x2d,
-	0x24, 0x4b, 0xb9, 0xf3, 0xb3, 0xd0, 0xc2, 0x18, 0x7c, 0xe4, 0x03, 0x58, 0xc4, 0xa2, 0xe4, 0xaa,
-	0xb0, 0x2c, 0x77, 0xae, 0x5d, 0x9c, 0xaf, 0x2f, 0xa0, 0x35, 0xd4, 0x95, 0x5c, 0xda, 0x0b, 0x28,
-	0xd7, 0x76, 0x39, 0x25, 0xb2, 0x7e, 0x70, 0xd8, 0x45, 0x72, 0x2d, 0xda, 0xe2, 0x86, 0xdc, 0x80,
-	0x8a, 0xe7, 0x07, 0x9d, 0x9e, 0x77, 0xea, 0xc5, 0xc8, 0xa1, 0x45, 0x7b, 0xd1, 0xf3, 0x83, 0xc7,
-	0xfc, 0x9e, 0x67, 0x24, 0xf7, 0x31, 0x6a, 0x96, 0x47, 0x67, 0x24, 0xe6, 0x86, 0x10, 0xa3, 0x04,
-	0xea, 0x43, 0x97, 0xe5, 0x5e, 0xfc, 0xc7, 0x02, 0xf2, 0xa2, 0xef, 0xf2, 0x6c, 0xf9, 0xc6, 0x84,
-	0x62, 0x13, 0x0a, 0x41, 0x5f, 0x1e, 0x32, 0x6b, 0x26, 0xa7, 0x04, 0x60, 0x24, 0xc3, 0x42, 0xd0,
-	0xe7, 0x3b, 0xcf, 0x65, 0x30, 0x3e, 0xe3, 0xc2, 0x80, 0x52, 0x3c, 0x29, 0x33, 0x0e, 0xcb, 0x40,
-	0xfc, 0xd1, 0x12, 0x59, 0xf9, 0x4d, 0x89, 0x02, 0xfd, 0xb1, 0xc8, 0x71, 0x15, 0x24, 0x79, 0x1b,
-	0x4a, 0xf8, 0x58, 0x26, 0x79, 0xc3, 0xc8, 0x63, 0x42, 0x84, 0xfe, 0xde, 0x82, 0x95, 0xb6, 0x1f,
-	0xb1, 0x30, 0x6e, 0xc7, 0xec, 0x34, 0x71, 0xe9, 0x26, 0x40, 0xc4, 0x4b, 0xa1, 0xa3, 0x94, 0x5b,
-	0x05, 0x57, 0x9e, 0xf2, 0x9a, 0xbb, 0x0b, 0xcb, 0xfd, 0x90, 0x1d, 0xb1, 0x30, 0x3d, 0x57, 0xe4,
-	0x61, 0x5a, 0x4b, 0x97, 0xd1, 0x08, 0x3f, 0x00, 0xbd, 0x98, 0x9d, 0xa2, 0x33, 0x3a, 0x23, 0xa1,
-	0x45, 0x14, 0xa0, 0x77, 0x80, 0xa8, 0x28, 0xa4, 0x23, 0x75, 0x98, 0xf7, 0x7c, 0x51, 0xab, 0x45,
-	0x9b, 0x5f, 0xd2, 0x4f, 0x61, 0x45, 0x6c, 0xcb, 0xa5, 0xd0, 0x0a, 0x10, 0x85, 0x49, 0x20, 0x1a,
-	0x49, 0x92, 0xab, 0x20, 0xe8, 0x1e, 0xac, 0x08, 0x7a, 0xba, 0x84, 0x49, 0x09, 0xbc, 0x30, 0x04,
-	0xde, 0x48, 0x98, 0x32, 0xa3, 0x7b, 0x1b, 0xd9, 0xff, 0x4b, 0x29, 0x16, 0x6d, 0x47, 0x26, 0x6c,
-	0x89, 0xc3, 0xd6, 0x24, 0x87, 0x5f, 0xc0, 0x95, 0xc7, 0x9e, 0x7f, 0x32, 0x7d, 0x1c, 0x7b, 0x9e,
-	0x7f, 0x32, 0x22, 0x8e, 0xa8, 0x08, 0x05, 0x68, 0x0d, 0x96, 0x84, 0x5a, 0xe9, 0xe5, 0x67, 0x50,
-	0x7d, 0xe1, 0xf7, 0xa6, 0x37, 0xf4, 0x1e, 0x94, 0x07, 0xbe, 0x62, 0xea, 0x6a, 0xce, 0x94, 0x54,
-	0x26, 0x85, 0x68, 0x1d, 0x6a, 0x89, 0x7a, 0x69, 0xf0, 0x88, 0xfb, 0x15, 0xc5, 0xb3, 0xc6, 0x94,
-	0xb3, 0x6c, 0x14, 0x3b, 0x61, 0xd2, 0xd8, 0x8a, 0x1b, 0x2e, 0xe7, 0x0f, 0x4e, 0x91, 0x71, 0xaa,
-	0x36, 0xbf, 0xa4, 0x2f, 0xb9, 0xa3, 0xd1, 0xf0, 0xf0, 0xbf, 0x01, 0x15, 0x7f, 0x70, 0xda, 0xe1,
-	0x58, 0x22, 0xc1, 0x05, 0xf6, 0xa2, 0x3f, 0x38, 0xe5, 0xc1, 0x88, 0x78, 0x8f, 0x2a, 0x1e, 0x14,
-	0x8c, 0x3d, 0x2a, 0x46, 0x4c, 0x48, 0xd0, 0x05, 0x28, 0xfd, 0x6c, 0xc0, 0xc2, 0x33, 0xce, 0xc5,
-	0x8f, 0xbc, 0xe3, 0x6e, 0xcf, 0x3b, 0xee, 0x26, 0xde, 0xd0, 0x3f, 0x59, 0x50, 0xdd, 0x67, 0x4e,
-	0x78, 0xd8, 0x9d, 0xd2, 0xbf, 0xb7, 0xa1, 0xf4, 0x8a, 0x6b, 0x93, 0xd1, 0xcc, 0xd3, 0x01, 0x5a,
-	0xb2, 0x85, 0xc8, 0xb0, 0xe5, 0xe6, 0x9e, 0x97, 0x64, 0xcb, 0xcd, 0xfd, 0x8a, 0x82, 0x30, 0x66,
-	0x6e, 0xe7, 0xe0, 0x0c, 0xfd, 0xaf, 0xd8, 0x8b, 0x62, 0x61, 0xe7, 0x8c, 0x37, 0xd4, 0xb2, 0x6b,
-	0x2c, 0x6d, 0xcc, 0xdf, 0xab, 0xd8, 0xf2, 0x8e, 0x3e, 0x83, 0x5a, 0x02, 0x53, 0x86, 0x87, 0x7f,
-	0x2e, 0x78, 0x71, 0x24, 0xeb, 0x19, 0xaf, 0x79, 0x54, 0x78, 0x2a, 0x8e, 0x8a, 0x0a, 0x26, 0xab,
-	0x90, 0xa0, 0x7f, 0xe3, 0x8e, 0x73, 0x5a, 0x79, 0xd6, 0x7f, 0xc4, 0x1c, 0x97, 0x85, 0x97, 0x65,
-	0x5e, 0x95, 0x5e, 0x0b, 0xd3, 0x1d, 0x32, 0x92, 0xac, 0xe7, 0x0d, 0x64, 0xfd, 0x3d, 0xa8, 0x86,
-	0xc1, 0x20, 0x66, 0x9d, 0xcf, 0x59, 0x18, 0xf1, 0x0f, 0x51, 0x3c, 0x92, 0x77, 0xea, 0xaf, 0xcf,
-	0xd7, 0x97, 0x6c, 0xfe, 0xe0, 0xa5, 0x58, 0xb7, 0x97, 0x42, 0xe5, 0x8e, 0xfe, 0x0a, 0xae, 0x09,
-	0x2b, 0x1a, 0xe9, 0x7e, 0x17, 0xca, 0x5d, 0xf4, 0x4b, 0x16, 0xee, 0xb7, 0x4c, 0xbc, 0x9d, 0xf8,
-	0x6e, 0x4b, 0xd9, 0xe9, 0xd9, 0xed, 0x1d, 0x78, 0x4b, 0x33, 0x3c, 0x92, 0x67, 0x13, 0x94, 0x3a,
-	0xd9, 0x7e, 0xc5, 0x28, 0xaf, 0x4b, 0x94, 0x06, 0x22, 0xfe, 0xa5, 0xc4, 0xa4, 0xb3, 0xf1, 0x6c,
-	0x98, 0x74, 0x2e, 0x4d, 0x8c, 0x1b, 0x98, 0xfa, 0x33, 0x58, 0xc5, 0x47, 0x39, 0xba, 0x7e, 0x53,
-	0x96, 0x3f, 0x86, 0x46, 0x56, 0xfd, 0x65, 0xa9, 0xfc, 0x15, 0xd4, 0x51, 0x81, 0xca, 0xe7, 0x33,
-	0x6f, 0xd5, 0x74, 0x34, 0xbf, 0x0a, 0x2b, 0x8a, 0x49, 0x19, 0xa7, 0x33, 0x20, 0x62, 0xff, 0x32,
-	0x84, 0x3f, 0x1b, 0x92, 0x4b, 0x9e, 0x03, 0x57, 0xe5, 0x16, 0xe5, 0x0e, 0x83, 0xdf, 0x59, 0x69,
-	0x68, 0x86, 0x47, 0xc2, 0x1b, 0xda, 0xb7, 0xa9, 0x4f, 0x8a, 0x4f, 0xd3, 0x58, 0x7d, 0x05, 0xc7,
-	0xc5, 0x5f, 0x2d, 0x19, 0xf4, 0xec, 0xb1, 0x30, 0x9b, 0x8f, 0x5f, 0xd3, 0x69, 0xf1, 0x5c, 0x6e,
-	0xde, 0x9b, 0x3d, 0x32, 0x7e, 0x63, 0x41, 0xf3, 0x21, 0x8b, 0x77, 0x9d, 0xd8, 0xe9, 0x05, 0xc7,
-	0xbb, 0x5d, 0xc7, 0x3f, 0x66, 0x51, 0x12, 0x1f, 0x8d, 0xc0, 0xad, 0x69, 0x08, 0x5c, 0x1d, 0x2a,
-	0x14, 0x26, 0x0f, 0x15, 0xe8, 0x1f, 0x2c, 0xb8, 0x6e, 0x80, 0x20, 0xfd, 0x9b, 0x11, 0xc3, 0xf7,
-	0xb3, 0x21, 0xd8, 0xc8, 0x0f, 0x3f, 0x55, 0x63, 0x6a, 0x3c, 0x76, 0x60, 0xf5, 0x21, 0x8b, 0xed,
-	0xa0, 0xc7, 0x38, 0xca, 0x34, 0x12, 0xef, 0x40, 0x31, 0x0c, 0x7a, 0x4c, 0x8e, 0x52, 0xdf, 0x32,
-	0x0d, 0x0e, 0x82, 0x1e, 0xb3, 0x51, 0x88, 0x6e, 0x43, 0x23, 0xab, 0x63, 0x38, 0x83, 0x13, 0xdf,
-	0x99, 0xe6, 0x19, 0x9c, 0xf2, 0x89, 0xb9, 0xf5, 0xf7, 0x45, 0xa8, 0xb6, 0xf9, 0xe5, 0xde, 0xce,
-	0x13, 0x27, 0x8a, 0x59, 0x48, 0x3e, 0x81, 0x05, 0x39, 0x60, 0x25, 0x37, 0xcd, 0x93, 0x5c, 0x89,
-	0xb5, 0xb5, 0x36, 0xea, 0xb1, 0x2c, 0xf7, 0x39, 0xf2, 0x53, 0xa8, 0xa4, 0xb3, 0x21, 0x92, 0x9f,
-	0x0b, 0xe7, 0x27, 0x55, 0xad, 0x8d, 0xd1, 0x02, 0xa9, 0xc6, 0x87, 0x50, 0x16, 0x63, 0x1e, 0x92,
-	0xaf, 0xa1, 0xcc, 0xbc, 0xa9, 0x75, 0x73, 0xc4, 0xd3, 0x54, 0xd1, 0x27, 0xb0, 0x20, 0x27, 0x37,
-	0x9a, 0x9b, 0xd9, 0x29, 0x90, 0xe6, 0x66, 0x6e, 0xe0, 0x43, 0xe7, 0xc8, 0x4b, 0xb8, 0xa2, 0x0c,
-	0x70, 0xc8, 0xad, 0x7c, 0x5c, 0xb4, 0x71, 0x62, 0x8b, 0x8e, 0x13, 0x51, 0xf5, 0x2a, 0xe3, 0x18,
-	0x4d, 0xaf, 0x3e, 0xef, 0xd1, 0xf4, 0x9a, 0xa6, 0x39, 0x73, 0xe4, 0x09, 0x2c, 0x26, 0xd3, 0x18,
-	0x62, 0xf0, 0x2e, 0xa3, 0x71, 0x7d, 0xe4, 0xf3, 0x54, 0x5d, 0x17, 0x56, 0xb4, 0xb2, 0x22, 0x77,
-	0xf5, 0xf7, 0x8c, 0xb5, 0xdf, 0xba, 0x37, 0x59, 0x30, 0xb5, 0xf4, 0x73, 0x58, 0x52, 0x13, 0x9e,
-	0x50, 0xfd, 0xdd, 0x7c, 0x45, 0xb5, 0xbe, 0x3d, 0x56, 0x46, 0x8d, 0xf5, 0xf0, 0xcf, 0x00, 0x57,
-	0x8b, 0xb5, 0xfe, 0xf7, 0x81, 0x16, 0x6b, 0xc3, 0x7f, 0x09, 0x22, 0xcf, 0xe4, 0x8c, 0x5f, 0xcb,
-	0xb3, 0xec, 0xdf, 0x06, 0x5a, 0x9e, 0xe5, 0xff, 0x1a, 0x98, 0x23, 0x4f, 0xa1, 0x92, 0xcc, 0xdb,
-	0x23, 0x6d, 0xe3, 0x72, 0xff, 0x1a, 0x68, 0x1b, 0x97, 0x9f, 0xd4, 0xa7, 0x35, 0x60, 0xc4, 0x96,
-	0x1d, 0xc0, 0x9b, 0x6a, 0x20, 0xab, 0x6b, 0xeb, 0x7f, 0xc5, 0x94, 0x48, 0x90, 0x2d, 0x43, 0xb2,
-	0x0f, 0x30, 0x6c, 0x70, 0x49, 0xbe, 0xb8, 0xb5, 0xa6, 0xbb, 0x75, 0x6b, 0x8c, 0x44, 0x0a, 0x79,
-	0x1f, 0x60, 0xd8, 0x8f, 0x6a, 0x4a, 0xb5, 0x1e, 0x59, 0x53, 0x6a, 0x68, 0x66, 0x51, 0xe9, 0xb0,
-	0xcf, 0xd4, 0x94, 0x6a, 0x4d, 0x6e, 0xeb, 0xd6, 0x18, 0x89, 0x5c, 0x70, 0x51, 0xa3, 0x21, 0xb8,
-	0xaa, 0xba, 0xb5, 0x51, 0x8f, 0x53, 0x5d, 0xdb, 0x50, 0xe4, 0x5d, 0x06, 0x69, 0x99, 0x5a, 0x0f,
-	0xa9, 0xe5, 0x86, 0xf1, 0x99, 0x4a, 0x9c, 0xa2, 0x1b, 0xd3, 0x88, 0x33, 0xd3, 0x1f, 0x6a, 0xc4,
-	0x99, 0x6b, 0xe1, 0x24, 0x96, 0x28, 0x36, 0x60, 0x49, 0x7b, 0x3a, 0x03, 0x96, 0x28, 0x47, 0xe2,
-	0xa2, 0xb9, 0xd0, 0xb0, 0x64, 0xda, 0x26, 0x0d, 0x4b, 0xb6, 0x23, 0xa1, 0x73, 0x5b, 0xff, 0x5e,
-	0x00, 0x22, 0x93, 0x4e, 0xb6, 0x2c, 0xe1, 0xe7, 0x2c, 0xe4, 0xfc, 0x96, 0xcc, 0x4d, 0x89, 0xa1,
-	0xaa, 0xd4, 0x91, 0xa1, 0x56, 0x26, 0xda, 0xc0, 0x15, 0xa9, 0x41, 0x19, 0x40, 0x12, 0x73, 0x4a,
-	0x65, 0x94, 0xd2, 0x71, 0x22, 0x79, 0x1a, 0x36, 0xc2, 0xcc, 0x4d, 0x36, 0x8d, 0x34, 0x9c, 0x53,
-	0x77, 0x00, 0xcb, 0xb9, 0xaf, 0x4a, 0x72, 0xdb, 0xd4, 0x67, 0xea, 0x95, 0x77, 0x67, 0x92, 0x98,
-	0x66, 0x43, 0xa9, 0xc1, 0xdb, 0xa3, 0x07, 0xbe, 0x13, 0x6d, 0x18, 0xab, 0x31, 0xb1, 0xa1, 0x94,
-	0xa4, 0xd1, 0x86, 0x5e, 0x97, 0x77, 0x26, 0x89, 0xa9, 0x07, 0x89, 0xfa, 0x91, 0xa7, 0x1d, 0x24,
-	0x86, 0x0f, 0x4c, 0xed, 0x20, 0x31, 0x7d, 0x25, 0x8a, 0x9e, 0x27, 0xfd, 0x16, 0xd3, 0x7a, 0x9e,
-	0xfc, 0x87, 0xa1, 0xd6, 0xf3, 0xe8, 0x9f, 0x71, 0x98, 0x7f, 0xca, 0xd7, 0x94, 0x96, 0x7f, 0xfa,
-	0x47, 0x5e, 0x8b, 0x8e, 0x13, 0x31, 0x20, 0x8d, 0xe2, 0x51, 0x48, 0xa3, 0x78, 0x02, 0xd2, 0x4c,
-	0x61, 0x27, 0x48, 0x65, 0x75, 0x1b, 0x91, 0x66, 0x4b, 0x9c, 0x8e, 0x13, 0x49, 0xf4, 0xee, 0x5c,
-	0xfb, 0xc7, 0xc5, 0x9a, 0xf5, 0xcf, 0x8b, 0x35, 0xeb, 0x5f, 0x17, 0x6b, 0xd6, 0x2f, 0x16, 0x37,
-	0xef, 0x7f, 0x84, 0xd2, 0x07, 0x65, 0xfc, 0xf9, 0xf0, 0xff, 0x01, 0x00, 0x00, 0xff, 0xff, 0x3e,
-	0xaa, 0x2f, 0xe7, 0xe1, 0x20, 0x00, 0x00,
+	// 2115 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xcc, 0x59, 0x5f, 0x6f, 0x1b, 0xc7,
+	0x11, 0xd7, 0x51, 0x24, 0x25, 0x8e, 0x45, 0x8a, 0x5a, 0xd1, 0x0e, 0x4d, 0xd7, 0xa2, 0xbc, 0x85,
+	0x1d, 0x03, 0x69, 0xe4, 0x44, 0x6e, 0xf2, 0xd0, 0x3f, 0x68, 0x45, 0xb1, 0x96, 0x19, 0xd8, 0x4e,
+	0x7b, 0x8a, 0x03, 0x34, 0x29, 0x40, 0x9c, 0x78, 0x2b, 0xf1, 0x20, 0xf2, 0x8e, 0xb9, 0x5b, 0x1a,
+	0x51, 0x80, 0x02, 0x05, 0x8a, 0xa2, 0x45, 0x1f, 0x8a, 0x7e, 0x8e, 0xf6, 0x4b, 0x14, 0x28, 0x50,
+	0xe4, 0xa5, 0x40, 0x3f, 0x81, 0x50, 0x08, 0xe8, 0x17, 0x28, 0x50, 0x14, 0xd0, 0x53, 0xb1, 0x7f,
+	0xee, 0xb8, 0x77, 0xbb, 0xa4, 0x28, 0x29, 0x69, 0xfc, 0xc4, 0xe3, 0xde, 0xec, 0xcc, 0x6f, 0x66,
+	0xe7, 0xdf, 0xce, 0x01, 0xf2, 0xfc, 0xc0, 0x25, 0xee, 0x41, 0xf7, 0x28, 0x1c, 0xf5, 0xb6, 0x46,
+	0x61, 0x40, 0x03, 0x54, 0x96, 0x6b, 0xe2, 0x6f, 0xa3, 0x76, 0x14, 0x1c, 0x05, 0xfc, 0xf1, 0x11,
+	0x7b, 0x92, 0xab, 0x69, 0x22, 0xfc, 0x5b, 0x0b, 0x2a, 0xbb, 0x83, 0x71, 0x44, 0x49, 0x68, 0x93,
+	0xcf, 0xc6, 0x24, 0xa2, 0xe8, 0x87, 0x50, 0x0a, 0x46, 0x24, 0x74, 0xa8, 0x17, 0xf8, 0x75, 0x6b,
+	0xd3, 0x7a, 0x58, 0xd9, 0x6e, 0x6e, 0xa5, 0x76, 0x6d, 0xc9, 0x1d, 0x1f, 0xc6, 0x64, 0xf6, 0x64,
+	0x07, 0x7a, 0x1f, 0x4a, 0x8c, 0xb6, 0xeb, 0xf9, 0x87, 0x41, 0x3d, 0xb7, 0x69, 0x3d, 0xbc, 0xb1,
+	0xbd, 0x9e, 0xd9, 0xfe, 0x22, 0x70, 0x49, 0x2b, 0xff, 0xe5, 0x69, 0x73, 0xc1, 0x5e, 0x66, 0x2f,
+	0x3a, 0xfe, 0x61, 0x80, 0x1f, 0xc3, 0x6a, 0x02, 0x24, 0x1a, 0x05, 0x7e, 0x44, 0xd0, 0x26, 0xe4,
+	0x3c, 0x97, 0x43, 0x28, 0xb7, 0xaa, 0x67, 0xa7, 0xcd, 0x5c, 0xa7, 0x7d, 0x7e, 0xda, 0x2c, 0xb2,
+	0xed, 0x9d, 0xb6, 0x9d, 0xf3, 0x5c, 0x5c, 0x03, 0xb4, 0x33, 0x18, 0x04, 0xbd, 0xb6, 0x17, 0x1d,
+	0x77, 0xda, 0x52, 0x03, 0xdc, 0x86, 0xf5, 0xd4, 0xaa, 0x64, 0xf7, 0x36, 0x2c, 0xb9, 0x5e, 0x74,
+	0xdc, 0x4d, 0x78, 0xd6, 0xce, 0x4e, 0x9b, 0x45, 0x41, 0x74, 0x9e, 0x3c, 0xd9, 0x45, 0x46, 0xd4,
+	0x71, 0xf1, 0x8f, 0xa0, 0xb2, 0xe3, 0xba, 0x6c, 0x31, 0xb6, 0xcc, 0xdb, 0x90, 0x67, 0xef, 0xf8,
+	0x6e, 0x5d, 0x2b, 0x46, 0x29, 0xb5, 0xe2, 0x64, 0x78, 0x0d, 0x56, 0x13, 0x06, 0x02, 0x02, 0xfe,
+	0x93, 0x05, 0xab, 0xcf, 0xbc, 0x88, 0xaa, 0x5c, 0x2b, 0x90, 0x73, 0xbe, 0xe0, 0x3c, 0x4b, 0x76,
+	0xce, 0xf9, 0x02, 0x21, 0xc8, 0x87, 0x4e, 0xef, 0x98, 0xdb, 0xae, 0x64, 0xf3, 0x67, 0xb6, 0xd6,
+	0x0f, 0x22, 0x5a, 0x5f, 0x14, 0x6b, 0xec, 0x19, 0xbd, 0x0b, 0xc5, 0x88, 0x3a, 0x74, 0x1c, 0xd5,
+	0xf3, 0xfc, 0x90, 0x6e, 0x1b, 0xf0, 0xec, 0x73, 0x02, 0x5b, 0x12, 0xa2, 0x5b, 0x50, 0x1c, 0x3a,
+	0xe1, 0x31, 0x09, 0xeb, 0x05, 0x66, 0x00, 0x5b, 0xfe, 0x43, 0x35, 0x28, 0xf4, 0x82, 0xb1, 0x4f,
+	0xeb, 0x45, 0xbe, 0x2c, 0xfe, 0xe0, 0x4f, 0xa1, 0x3a, 0xc1, 0x2a, 0x6d, 0xf8, 0x08, 0x0a, 0x4c,
+	0xb7, 0xa8, 0x6e, 0x6d, 0x2e, 0xce, 0xb6, 0x81, 0xa0, 0x53, 0x44, 0xe6, 0x54, 0x91, 0xcc, 0xba,
+	0x7b, 0x84, 0xa6, 0xad, 0x7b, 0xa9, 0xe3, 0xf9, 0x31, 0xac, 0x26, 0x0c, 0x92, 0x03, 0xbe, 0xd4,
+	0xf9, 0xfc, 0xc5, 0x02, 0xb4, 0x1b, 0x12, 0x87, 0x92, 0xfd, 0x91, 0xd3, 0x23, 0x31, 0x0e, 0x04,
+	0x79, 0xdf, 0x19, 0x12, 0x79, 0x22, 0xfc, 0x19, 0x7d, 0x07, 0xf2, 0xf4, 0x64, 0x44, 0xb8, 0x0e,
+	0x95, 0xed, 0x7a, 0x86, 0x33, 0xdf, 0xfe, 0xd1, 0xc9, 0x88, 0xd8, 0x9c, 0x0a, 0xdd, 0x87, 0x8a,
+	0x4b, 0x22, 0x2f, 0x24, 0x6e, 0x37, 0xea, 0x3b, 0xa1, 0x1b, 0xf1, 0x73, 0x2b, 0xdb, 0x65, 0xb9,
+	0xba, 0xcf, 0x17, 0xd1, 0x0e, 0xac, 0x1c, 0x7a, 0x9f, 0x13, 0xb7, 0x7b, 0xe8, 0x91, 0x81, 0xcb,
+	0x8e, 0x91, 0x99, 0x34, 0xcb, 0xfc, 0x09, 0x7b, 0xf9, 0x9c, 0x50, 0x47, 0x62, 0xbf, 0xc1, 0xf7,
+	0xf0, 0xd5, 0x08, 0x7f, 0x0e, 0xd5, 0xa7, 0xc4, 0x09, 0xe9, 0x01, 0x71, 0xa8, 0x62, 0x47, 0x11,
+	0x80, 0x29, 0x3b, 0x8a, 0xa0, 0x51, 0xc2, 0xa7, 0xc8, 0x23, 0xcf, 0x45, 0xef, 0xc5, 0x27, 0x9a,
+	0xe3, 0xe2, 0x4d, 0x5e, 0x64, 0x93, 0x51, 0x10, 0xd2, 0xd4, 0xb9, 0xe2, 0x75, 0x58, 0x53, 0x24,
+	0x4b, 0xf7, 0x7e, 0x05, 0x65, 0x41, 0x7b, 0x45, 0x2c, 0xef, 0x43, 0x81, 0xa5, 0x8d, 0x18, 0x4b,
+	0x23, 0x6b, 0x67, 0x66, 0xb7, 0x34, 0x18, 0x4e, 0x8e, 0x9f, 0x40, 0x25, 0x96, 0x2b, 0x5d, 0xe1,
+	0xbb, 0x50, 0xa0, 0xce, 0xc4, 0x4f, 0xeb, 0x26, 0x4e, 0x1f, 0x39, 0x13, 0x67, 0xe5, 0xc4, 0x78,
+	0x9b, 0x3b, 0x25, 0x03, 0x15, 0x2b, 0x70, 0x71, 0x0a, 0xea, 0x70, 0x3f, 0x14, 0x7b, 0xa4, 0xf0,
+	0x54, 0x0a, 0xb4, 0xe6, 0x4f, 0x81, 0x1d, 0x58, 0x4f, 0xf9, 0xa3, 0x64, 0xb7, 0x0d, 0x79, 0x25,
+	0x99, 0x1a, 0x9d, 0x4f, 0xf1, 0x0f, 0x4e, 0x8b, 0x77, 0x01, 0xb5, 0xc9, 0x80, 0xcc, 0xe1, 0xda,
+	0xb7, 0x61, 0x31, 0xf2, 0x5c, 0xce, 0x3c, 0xdf, 0x5a, 0x3a, 0x3f, 0x6d, 0x2e, 0xee, 0x7b, 0xae,
+	0xcd, 0xd6, 0xf0, 0x4d, 0x58, 0x4f, 0x31, 0x91, 0xa7, 0x2c, 0x22, 0xef, 0x3a, 0x8c, 0x9f, 0x40,
+	0x75, 0xc2, 0x21, 0xa3, 0xa5, 0x75, 0x09, 0x2d, 0xff, 0x6b, 0xf1, 0x14, 0x2b, 0xfd, 0xe2, 0x2a,
+	0x69, 0x64, 0x06, 0x4a, 0xf4, 0x2e, 0x2c, 0xf3, 0xf0, 0x65, 0xac, 0x78, 0x00, 0xb7, 0x6e, 0x9d,
+	0x9d, 0x36, 0x97, 0xb8, 0x34, 0xce, 0x2b, 0x7e, 0xb4, 0x97, 0x38, 0x5d, 0xc7, 0x65, 0x89, 0x94,
+	0x8c, 0x82, 0x5e, 0x9f, 0xa7, 0xe4, 0xbc, 0x2d, 0xfe, 0xa0, 0x3b, 0x50, 0xf2, 0xfc, 0xa0, 0x3b,
+	0xf0, 0x86, 0x1e, 0xe5, 0x99, 0x37, 0x6f, 0x2f, 0x7b, 0x7e, 0xf0, 0x8c, 0xfd, 0x67, 0x9e, 0xca,
+	0x34, 0x8d, 0xea, 0xc5, 0xe9, 0x9e, 0xaa, 0x78, 0x8b, 0x20, 0xc6, 0x08, 0xaa, 0x13, 0xc5, 0xe5,
+	0xb9, 0xfc, 0xc7, 0x02, 0xf4, 0x72, 0xe4, 0x32, 0xff, 0x79, 0x6d, 0x0c, 0xb2, 0x05, 0xb9, 0x60,
+	0x24, 0x0b, 0xd4, 0x86, 0x49, 0x35, 0x01, 0x98, 0x27, 0xcf, 0x5c, 0x30, 0x62, 0x5e, 0xc0, 0x68,
+	0xb8, 0x95, 0x2e, 0x36, 0x06, 0xa7, 0x65, 0x6e, 0x9a, 0x52, 0x5b, 0x9a, 0xe3, 0x0f, 0x96, 0xf0,
+	0xd3, 0xd7, 0xc5, 0x16, 0xb8, 0x2d, 0xbc, 0x5e, 0x05, 0x89, 0xde, 0x81, 0x02, 0x7f, 0x2d, 0xdd,
+	0xbe, 0x66, 0x52, 0x38, 0x3e, 0x79, 0x4e, 0x88, 0x7f, 0x6f, 0xc1, 0x5a, 0xc7, 0x8f, 0x48, 0x48,
+	0x3b, 0x94, 0x0c, 0x63, 0xc5, 0xee, 0x02, 0x44, 0x2c, 0x44, 0xba, 0x4a, 0x18, 0x96, 0xf8, 0xca,
+	0x0b, 0x16, 0x8b, 0x6f, 0xc2, 0xea, 0x28, 0x24, 0x87, 0x24, 0x4c, 0x6a, 0x92, 0x2c, 0xc7, 0x95,
+	0x64, 0x99, 0x8b, 0x62, 0x25, 0xd4, 0xa3, 0x64, 0xc8, 0x55, 0xd2, 0xb3, 0x16, 0x93, 0x98, 0x04,
+	0x20, 0x25, 0x43, 0xfc, 0x00, 0x90, 0x8a, 0x45, 0x2a, 0x55, 0x85, 0x45, 0xcf, 0x17, 0x91, 0x9c,
+	0xb7, 0xd9, 0x23, 0x76, 0x60, 0x4d, 0x1c, 0xd1, 0x25, 0x30, 0xc7, 0x50, 0x72, 0xf3, 0x41, 0xa9,
+	0xc5, 0xce, 0xaf, 0x42, 0xc1, 0x6d, 0x58, 0x13, 0x29, 0xec, 0x12, 0x82, 0x25, 0xfc, 0xdc, 0x04,
+	0x7e, 0x2d, 0xce, 0xa6, 0x29, 0xde, 0x3b, 0xbc, 0x5a, 0x5c, 0x8b, 0xb1, 0x48, 0xa5, 0x29, 0xe3,
+	0xc5, 0x6a, 0x5b, 0xf3, 0xa9, 0xfd, 0x29, 0xdc, 0x78, 0xe6, 0xf9, 0xc7, 0xf3, 0xdb, 0x74, 0xe0,
+	0xf9, 0xc7, 0x53, 0x6c, 0xca, 0x18, 0xc5, 0xcc, 0x19, 0x19, 0xae, 0xc0, 0x8a, 0x60, 0x2e, 0x35,
+	0xee, 0x41, 0xf9, 0xa5, 0x3f, 0x98, 0x5f, 0xdc, 0x63, 0x28, 0x8e, 0x7d, 0x45, 0xe0, 0xcd, 0x8c,
+	0x40, 0xc1, 0x4c, 0x8a, 0x94, 0xa4, 0xb8, 0x0a, 0x95, 0x58, 0x88, 0x14, 0x7b, 0xc8, 0x74, 0x8c,
+	0xe8, 0x55, 0xad, 0xcc, 0xb2, 0x72, 0x44, 0x9d, 0x30, 0x6e, 0x9f, 0xc5, 0x1f, 0x46, 0xe7, 0x8f,
+	0x87, 0x3c, 0x37, 0x95, 0x6d, 0xf6, 0x88, 0x7f, 0xc1, 0xd4, 0x8d, 0x26, 0x4d, 0xc4, 0x1d, 0x28,
+	0xf9, 0xe3, 0x61, 0x97, 0x61, 0x89, 0x44, 0xbe, 0xb0, 0x97, 0xfd, 0xf1, 0x90, 0x99, 0x24, 0x62,
+	0x9d, 0xb0, 0x78, 0x91, 0x33, 0x76, 0xc2, 0x8a, 0x2d, 0x05, 0x1d, 0x5e, 0x82, 0xc2, 0xcf, 0xc6,
+	0x24, 0x3c, 0x61, 0xb9, 0xfb, 0xa9, 0x77, 0xd4, 0x1f, 0x78, 0x47, 0xfd, 0x58, 0x27, 0xfc, 0x67,
+	0x0b, 0xca, 0xfb, 0xc4, 0x09, 0x7b, 0xfd, 0x39, 0xb5, 0x7c, 0x07, 0x0a, 0x9f, 0x31, 0x6e, 0xd2,
+	0xb2, 0xd9, 0xc4, 0xc1, 0x25, 0xc5, 0xf2, 0x39, 0xe1, 0xa4, 0xc9, 0x67, 0x56, 0x28, 0xc8, 0x26,
+	0x9f, 0xe9, 0x18, 0x05, 0x21, 0x25, 0x6e, 0xf7, 0xe0, 0x84, 0xdb, 0xa2, 0x64, 0x2f, 0x8b, 0x85,
+	0xd6, 0x09, 0x6b, 0xde, 0x65, 0x6f, 0x5a, 0xd8, 0x5c, 0x7c, 0x58, 0xb2, 0xe5, 0x3f, 0xfc, 0x12,
+	0x2a, 0x31, 0x58, 0x69, 0x2a, 0x76, 0x41, 0xf1, 0x68, 0x24, 0x63, 0x9e, 0x3f, 0x33, 0x0b, 0x31,
+	0x17, 0x9d, 0x66, 0x21, 0xc5, 0x95, 0x05, 0x1d, 0xfe, 0x2b, 0x33, 0x02, 0x4b, 0x43, 0x1f, 0x8e,
+	0x9e, 0x12, 0xc7, 0x25, 0xe1, 0x65, 0xf3, 0xb5, 0x9a, 0x94, 0x73, 0xf3, 0x15, 0x28, 0x99, 0xe2,
+	0x17, 0x0d, 0x29, 0xfe, 0x3d, 0x28, 0x87, 0xc1, 0x98, 0x92, 0xee, 0x2b, 0x12, 0x46, 0xec, 0x32,
+	0xcc, 0x8b, 0x7a, 0xab, 0x7a, 0x7e, 0xda, 0x5c, 0xb1, 0xd9, 0x8b, 0x8f, 0xc5, 0xba, 0xbd, 0x12,
+	0x2a, 0xff, 0xf0, 0xaf, 0x2d, 0xb8, 0x25, 0xc4, 0x68, 0x59, 0xfa, 0x7b, 0x50, 0xec, 0x73, 0xc5,
+	0x64, 0x74, 0x7f, 0xcb, 0x94, 0xee, 0x63, 0xe5, 0xe3, 0xb0, 0xe8, 0xc7, 0xa6, 0xb8, 0x54, 0x3a,
+	0x7c, 0x0b, 0xde, 0xd0, 0x40, 0x4c, 0x4d, 0xcf, 0x09, 0x64, 0x3d, 0x49, 0xff, 0x1f, 0x21, 0xdf,
+	0x96, 0x90, 0x0d, 0x69, 0xfc, 0x50, 0xe2, 0xd3, 0x73, 0xf9, 0x75, 0xf0, 0xe9, 0xf9, 0x38, 0x86,
+	0x60, 0xc8, 0xf6, 0x3d, 0x58, 0xe7, 0xaf, 0x32, 0x29, 0xff, 0xab, 0x95, 0xff, 0x13, 0xa8, 0xa5,
+	0x85, 0x5c, 0xad, 0x28, 0xfc, 0x12, 0xaa, 0x9c, 0x8d, 0x5a, 0x19, 0xae, 0x79, 0x90, 0x97, 0x29,
+	0x1b, 0xeb, 0xb0, 0xa6, 0x88, 0x97, 0xf6, 0xfb, 0x8d, 0x05, 0x48, 0x1c, 0x6f, 0xaa, 0x82, 0x5c,
+	0x07, 0xd6, 0x95, 0xca, 0xcb, 0x4d, 0x79, 0x8e, 0x99, 0x1a, 0xf3, 0x3b, 0x2b, 0xb1, 0xd9, 0xa4,
+	0xd2, 0x7c, 0xa5, 0x87, 0x3b, 0x77, 0x19, 0x72, 0x12, 0xf3, 0x7d, 0x6d, 0xb5, 0xe8, 0xef, 0xf1,
+	0x61, 0xa4, 0x6b, 0xce, 0x75, 0xf4, 0xfd, 0x46, 0x0b, 0xd2, 0x27, 0xf2, 0x50, 0xbf, 0x8e, 0xaa,
+	0xf4, 0x2b, 0x0b, 0xea, 0x7b, 0x84, 0xee, 0x3a, 0xd4, 0x19, 0x04, 0x47, 0xbb, 0x7d, 0xc7, 0x3f,
+	0x22, 0x51, 0x6c, 0x31, 0xad, 0x46, 0x58, 0xf3, 0xd4, 0x08, 0x75, 0x2e, 0x92, 0xbb, 0x78, 0x2e,
+	0x82, 0xff, 0x68, 0xc1, 0x6d, 0x03, 0x04, 0xa9, 0xe5, 0x15, 0x31, 0xfc, 0x20, 0x6d, 0x88, 0xcd,
+	0xec, 0x8c, 0x57, 0x15, 0xa6, 0x5b, 0xa5, 0x05, 0xeb, 0x7b, 0x84, 0xda, 0xc1, 0x80, 0x30, 0xac,
+	0x89, 0x3d, 0xde, 0x82, 0x7c, 0x18, 0x0c, 0x88, 0x9c, 0x1b, 0xbf, 0x61, 0x98, 0x7a, 0xb0, 0x2d,
+	0x36, 0x27, 0xc2, 0x7b, 0x50, 0x4b, 0xf3, 0x98, 0x0c, 0x19, 0xc5, 0x95, 0xd8, 0x3c, 0x64, 0xd4,
+	0x6e, 0xc3, 0xdb, 0x7f, 0x5b, 0x86, 0x72, 0x87, 0x3d, 0xb6, 0x5b, 0xcf, 0x9d, 0x88, 0x92, 0x10,
+	0x7d, 0x00, 0x4b, 0x72, 0x9a, 0x8c, 0xee, 0x9a, 0x87, 0xd7, 0x12, 0x71, 0x63, 0x63, 0xda, 0x6b,
+	0x99, 0x18, 0x16, 0xd0, 0x4f, 0xa1, 0x94, 0x8c, 0xba, 0x50, 0x76, 0x14, 0x9e, 0x1d, 0xbf, 0x35,
+	0x36, 0xa7, 0x13, 0x24, 0x1c, 0xf7, 0xa0, 0x28, 0xe6, 0x55, 0x28, 0x1b, 0x61, 0xa9, 0xf1, 0x59,
+	0xe3, 0xee, 0x94, 0xb7, 0x09, 0xa3, 0x0f, 0x60, 0x49, 0x0e, 0x9f, 0x34, 0x35, 0xd3, 0x83, 0x2c,
+	0x4d, 0xcd, 0xcc, 0xcc, 0x0a, 0x2f, 0xa0, 0x8f, 0xe1, 0x86, 0x32, 0x7d, 0x42, 0xf7, 0xb2, 0x76,
+	0xd1, 0x26, 0xa5, 0x0d, 0x3c, 0x8b, 0x44, 0xe5, 0xab, 0x4c, 0x91, 0x34, 0xbe, 0xfa, 0x98, 0x4a,
+	0xe3, 0x6b, 0x1a, 0x42, 0x2d, 0xa0, 0xe7, 0xb0, 0x1c, 0x0f, 0x91, 0x90, 0x41, 0xbb, 0x14, 0xc7,
+	0xe6, 0xd4, 0xf7, 0x09, 0xbb, 0x3e, 0xac, 0x69, 0x21, 0x86, 0xde, 0xd4, 0xf7, 0x19, 0xf3, 0x40,
+	0xe3, 0xe1, 0xc5, 0x84, 0x89, 0xa4, 0x9f, 0xc3, 0x8a, 0xea, 0xf6, 0x08, 0xeb, 0x7b, 0xb3, 0x71,
+	0xd5, 0xf8, 0xf6, 0x4c, 0x1a, 0xd5, 0xd6, 0x93, 0x2f, 0x1f, 0xae, 0x66, 0x6b, 0xfd, 0x5b, 0x89,
+	0x66, 0x6b, 0xc3, 0x87, 0x13, 0xe1, 0x67, 0xf2, 0x53, 0x86, 0xe6, 0x67, 0xe9, 0x6f, 0x24, 0x9a,
+	0x9f, 0x65, 0xbf, 0x80, 0x2c, 0xa0, 0x17, 0x50, 0x8a, 0x3f, 0x2b, 0x44, 0xda, 0xc1, 0x65, 0x3e,
+	0x8e, 0x68, 0x07, 0x97, 0xfd, 0x20, 0x91, 0xc4, 0x80, 0x11, 0x5b, 0xfa, 0x0b, 0x83, 0x29, 0x06,
+	0xd2, 0xbc, 0xb6, 0xff, 0x9d, 0x4f, 0x12, 0x09, 0xcf, 0x9c, 0x21, 0xda, 0x07, 0x98, 0xb4, 0xd0,
+	0x28, 0x1b, 0xdc, 0x5a, 0x8b, 0xdf, 0xb8, 0x37, 0x83, 0x22, 0x81, 0xbc, 0x0f, 0x30, 0x69, 0x72,
+	0x35, 0xa6, 0x5a, 0x13, 0xae, 0x31, 0x35, 0x74, 0xc8, 0x9c, 0xe9, 0xa4, 0x6d, 0xd5, 0x98, 0x6a,
+	0x9d, 0x73, 0xe3, 0xde, 0x0c, 0x8a, 0x8c, 0x71, 0x39, 0x47, 0x83, 0x71, 0x55, 0x76, 0x1b, 0xd3,
+	0x5e, 0x27, 0xbc, 0x76, 0x20, 0xcf, 0x3a, 0x11, 0xd4, 0x30, 0xb4, 0x27, 0x31, 0x97, 0x3b, 0xc6,
+	0x77, 0x6a, 0xe2, 0x14, 0x7d, 0x9b, 0x96, 0x38, 0x53, 0x5d, 0xa5, 0x96, 0x38, 0x33, 0xcd, 0x9e,
+	0xc4, 0x12, 0x51, 0x03, 0x96, 0xa4, 0xfb, 0x33, 0x60, 0x89, 0x32, 0x49, 0x5c, 0xb4, 0x1b, 0x1a,
+	0x96, 0x54, 0x53, 0xa5, 0x61, 0x49, 0xf7, 0x28, 0x78, 0x61, 0xfb, 0x5f, 0x4b, 0x80, 0xa4, 0xd3,
+	0xc9, 0x26, 0x26, 0x7c, 0x45, 0x42, 0x96, 0xdf, 0xe2, 0x11, 0x2f, 0x32, 0x44, 0x95, 0x3a, 0xd7,
+	0xd4, 0xc2, 0x44, 0x9b, 0x0d, 0xf3, 0xd4, 0xa0, 0x4c, 0x49, 0x91, 0xd9, 0xa5, 0x52, 0x4c, 0xf1,
+	0x2c, 0x92, 0x6c, 0x1a, 0x36, 0xc2, 0xcc, 0x8c, 0x5f, 0x8d, 0x69, 0x38, 0xc3, 0xee, 0x00, 0x56,
+	0x33, 0xf7, 0x56, 0x74, 0xdf, 0xd4, 0x85, 0xea, 0x91, 0xf7, 0xe0, 0x22, 0x32, 0x4d, 0x86, 0x12,
+	0x83, 0xf7, 0xa7, 0xcf, 0xa6, 0x2f, 0x94, 0x61, 0x8c, 0xc6, 0x58, 0x86, 0x12, 0x92, 0x46, 0x19,
+	0x7a, 0x5c, 0x3e, 0xb8, 0x88, 0x4c, 0x2d, 0x24, 0xea, 0x6d, 0x51, 0x2b, 0x24, 0x86, 0xfb, 0xaa,
+	0x56, 0x48, 0x4c, 0xd7, 0x4d, 0xd1, 0xf3, 0x24, 0x57, 0x38, 0xad, 0xe7, 0xc9, 0xde, 0x2d, 0xb5,
+	0x9e, 0x47, 0xbf, 0xfd, 0x71, 0xff, 0x53, 0xee, 0x5d, 0x9a, 0xff, 0xe9, 0x57, 0xc3, 0x06, 0x9e,
+	0x45, 0x62, 0x40, 0x1a, 0xd1, 0x69, 0x48, 0x23, 0x7a, 0x01, 0xd2, 0x54, 0x60, 0xc7, 0x48, 0x65,
+	0x74, 0x1b, 0x91, 0xa6, 0x43, 0x1c, 0xcf, 0x22, 0x89, 0xf9, 0xb6, 0x6e, 0x7d, 0x79, 0xb6, 0x61,
+	0xfd, 0xe3, 0x6c, 0xc3, 0xfa, 0xe7, 0xd9, 0x86, 0xf5, 0xc9, 0xf2, 0xd6, 0xa3, 0xef, 0x73, 0xea,
+	0x83, 0x22, 0xff, 0x79, 0xfc, 0xbf, 0x00, 0x00, 0x00, 0xff, 0xff, 0x7d, 0x0d, 0x71, 0xc7, 0xd4,
+	0x21, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -5035,18 +5037,16 @@ func (m *ClusterRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.NodeInfo != nil {
-		{
-			size, err := m.NodeInfo.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	{
+		size, err := m.NodeInfo.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0x12
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
+	i--
+	dAtA[i] = 0x12
 	if m.Operation != 0 {
 		i = encodeVarintInodedbGrpc(dAtA, i, uint64(m.Operation))
 		i--
@@ -5170,18 +5170,16 @@ func (m *AddDiskRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.Disk != nil {
-		{
-			size, err := m.Disk.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	{
+		size, err := m.Disk.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0xa
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
+	i--
+	dAtA[i] = 0xa
 	return len(dAtA) - i, nil
 }
 
@@ -5377,18 +5375,16 @@ func (m *GetDiskResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.Disk != nil {
-		{
-			size, err := m.Disk.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	{
+		size, err := m.Disk.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0xa
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
+	i--
+	dAtA[i] = 0xa
 	return len(dAtA) - i, nil
 }
 
@@ -5666,18 +5662,16 @@ func (m *GetNodeResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.NodeInfo != nil {
-		{
-			size, err := m.NodeInfo.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	{
+		size, err := m.NodeInfo.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0xa
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
+	i--
+	dAtA[i] = 0xa
 	return len(dAtA) - i, nil
 }
 
@@ -5705,18 +5699,16 @@ func (m *CreateSpaceResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.Info != nil {
-		{
-			size, err := m.Info.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	{
+		size, err := m.Info.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0x12
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
+	i--
+	dAtA[i] = 0x12
 	return len(dAtA) - i, nil
 }
 
@@ -5849,18 +5841,16 @@ func (m *GetSpaceResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.Info != nil {
-		{
-			size, err := m.Info.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	{
+		size, err := m.Info.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0xa
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
+	i--
+	dAtA[i] = 0xa
 	return len(dAtA) - i, nil
 }
 
@@ -5981,18 +5971,16 @@ func (m *UpdateShardRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.Node != nil {
-		{
-			size, err := m.Node.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	{
+		size, err := m.Node.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0x2a
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
+	i--
+	dAtA[i] = 0x2a
 	if m.Op != 0 {
 		i = encodeVarintInodedbGrpc(dAtA, i, uint64(m.Op))
 		i--
@@ -6109,18 +6097,16 @@ func (m *GetShardResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.Shard != nil {
-		{
-			size, err := m.Shard.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	{
+		size, err := m.Shard.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0xa
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
+	i--
+	dAtA[i] = 0xa
 	return len(dAtA) - i, nil
 }
 
@@ -6148,18 +6134,16 @@ func (m *InsertItemRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.Item != nil {
-		{
-			size, err := m.Item.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	{
+		size, err := m.Item.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0x1a
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
+	i--
+	dAtA[i] = 0x1a
 	if m.PreferredShard != 0 {
 		i = encodeVarintInodedbGrpc(dAtA, i, uint64(m.PreferredShard))
 		i--
@@ -6231,18 +6215,16 @@ func (m *UpdateItemRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.Item != nil {
-		{
-			size, err := m.Item.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	{
+		size, err := m.Item.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0x12
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
+	i--
+	dAtA[i] = 0x12
 	if len(m.SpaceName) > 0 {
 		i -= len(m.SpaceName)
 		copy(dAtA[i:], m.SpaceName)
@@ -6409,18 +6391,16 @@ func (m *GetItemResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.Item != nil {
-		{
-			size, err := m.Item.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	{
+		size, err := m.Item.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0xa
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
+	i--
+	dAtA[i] = 0xa
 	return len(dAtA) - i, nil
 }
 
@@ -6448,18 +6428,16 @@ func (m *LinkRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.Link != nil {
-		{
-			size, err := m.Link.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	{
+		size, err := m.Link.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0x12
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
+	i--
+	dAtA[i] = 0x12
 	if len(m.SpaceName) > 0 {
 		i -= len(m.SpaceName)
 		copy(dAtA[i:], m.SpaceName)
@@ -6521,18 +6499,16 @@ func (m *UnlinkRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.Unlink != nil {
-		{
-			size, err := m.Unlink.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	{
+		size, err := m.Unlink.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0x12
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
+	i--
+	dAtA[i] = 0x12
 	if len(m.SpaceName) > 0 {
 		i -= len(m.SpaceName)
 		copy(dAtA[i:], m.SpaceName)
@@ -6766,18 +6742,16 @@ func (m *SearchRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x18
 	}
-	if m.Query != nil {
-		{
-			size, err := m.Query.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	{
+		size, err := m.Query.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0x12
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
+	i--
+	dAtA[i] = 0x12
 	if len(m.SpaceName) > 0 {
 		i -= len(m.SpaceName)
 		copy(dAtA[i:], m.SpaceName)
@@ -6905,30 +6879,26 @@ func (m *ShardInsertItemRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) 
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.Item != nil {
-		{
-			size, err := m.Item.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	{
+		size, err := m.Item.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0x12
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
-	if m.Header != nil {
-		{
-			size, err := m.Header.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	i--
+	dAtA[i] = 0x12
+	{
+		size, err := m.Header.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0xa
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
+	i--
+	dAtA[i] = 0xa
 	return len(dAtA) - i, nil
 }
 
@@ -6988,30 +6958,26 @@ func (m *ShardUpdateItemRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) 
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.Item != nil {
-		{
-			size, err := m.Item.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	{
+		size, err := m.Item.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0x12
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
-	if m.Header != nil {
-		{
-			size, err := m.Header.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	i--
+	dAtA[i] = 0x12
+	{
+		size, err := m.Header.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0xa
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
+	i--
+	dAtA[i] = 0xa
 	return len(dAtA) - i, nil
 }
 
@@ -7071,18 +7037,16 @@ func (m *ShardDeleteItemRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) 
 		i--
 		dAtA[i] = 0x10
 	}
-	if m.Header != nil {
-		{
-			size, err := m.Header.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	{
+		size, err := m.Header.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0xa
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
+	i--
+	dAtA[i] = 0xa
 	return len(dAtA) - i, nil
 }
 
@@ -7142,18 +7106,16 @@ func (m *ShardGetItemRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x10
 	}
-	if m.Header != nil {
-		{
-			size, err := m.Header.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	{
+		size, err := m.Header.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0xa
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
+	i--
+	dAtA[i] = 0xa
 	return len(dAtA) - i, nil
 }
 
@@ -7181,18 +7143,16 @@ func (m *ShardGetItemResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.Item != nil {
-		{
-			size, err := m.Item.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	{
+		size, err := m.Item.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0xa
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
+	i--
+	dAtA[i] = 0xa
 	return len(dAtA) - i, nil
 }
 
@@ -7220,30 +7180,26 @@ func (m *ShardLinkRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.Link != nil {
-		{
-			size, err := m.Link.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	{
+		size, err := m.Link.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0x12
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
-	if m.Header != nil {
-		{
-			size, err := m.Header.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	i--
+	dAtA[i] = 0x12
+	{
+		size, err := m.Header.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0xa
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
+	i--
+	dAtA[i] = 0xa
 	return len(dAtA) - i, nil
 }
 
@@ -7298,30 +7254,26 @@ func (m *ShardUnlinkRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.Unlink != nil {
-		{
-			size, err := m.Unlink.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	{
+		size, err := m.Unlink.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0x12
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
-	if m.Header != nil {
-		{
-			size, err := m.Header.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	i--
+	dAtA[i] = 0x12
+	{
+		size, err := m.Header.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0xa
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
+	i--
+	dAtA[i] = 0xa
 	return len(dAtA) - i, nil
 }
 
@@ -7393,18 +7345,16 @@ func (m *ShardListRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x10
 	}
-	if m.Header != nil {
-		{
-			size, err := m.Header.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	{
+		size, err := m.Header.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0xa
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
+	i--
+	dAtA[i] = 0xa
 	return len(dAtA) - i, nil
 }
 
@@ -7499,30 +7449,26 @@ func (m *ShardSearchRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x18
 	}
-	if m.Query != nil {
-		{
-			size, err := m.Query.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	{
+		size, err := m.Query.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0x12
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
-	if m.Header != nil {
-		{
-			size, err := m.Header.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
+	i--
+	dAtA[i] = 0x12
+	{
+		size, err := m.Header.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0xa
+		i -= size
+		i = encodeVarintInodedbGrpc(dAtA, i, uint64(size))
 	}
+	i--
+	dAtA[i] = 0xa
 	return len(dAtA) - i, nil
 }
 
@@ -7748,10 +7694,8 @@ func (m *ClusterRequest) Size() (n int) {
 	if m.Operation != 0 {
 		n += 1 + sovInodedbGrpc(uint64(m.Operation))
 	}
-	if m.NodeInfo != nil {
-		l = m.NodeInfo.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
+	l = m.NodeInfo.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -7806,10 +7750,8 @@ func (m *AddDiskRequest) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Disk != nil {
-		l = m.Disk.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
+	l = m.Disk.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -7903,10 +7845,8 @@ func (m *GetDiskResponse) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Disk != nil {
-		l = m.Disk.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
+	l = m.Disk.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -8034,10 +7974,8 @@ func (m *GetNodeResponse) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.NodeInfo != nil {
-		l = m.NodeInfo.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
+	l = m.NodeInfo.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -8050,10 +7988,8 @@ func (m *CreateSpaceResponse) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Info != nil {
-		l = m.Info.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
+	l = m.Info.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -8116,10 +8052,8 @@ func (m *GetSpaceResponse) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Info != nil {
-		l = m.Info.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
+	l = m.Info.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -8189,10 +8123,8 @@ func (m *UpdateShardRequest) Size() (n int) {
 	if m.Op != 0 {
 		n += 1 + sovInodedbGrpc(uint64(m.Op))
 	}
-	if m.Node != nil {
-		l = m.Node.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
+	l = m.Node.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -8238,10 +8170,8 @@ func (m *GetShardResponse) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Shard != nil {
-		l = m.Shard.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
+	l = m.Shard.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -8261,10 +8191,8 @@ func (m *InsertItemRequest) Size() (n int) {
 	if m.PreferredShard != 0 {
 		n += 1 + sovInodedbGrpc(uint64(m.PreferredShard))
 	}
-	if m.Item != nil {
-		l = m.Item.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
+	l = m.Item.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -8296,10 +8224,8 @@ func (m *UpdateItemRequest) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovInodedbGrpc(uint64(l))
 	}
-	if m.Item != nil {
-		l = m.Item.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
+	l = m.Item.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -8374,10 +8300,8 @@ func (m *GetItemResponse) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Item != nil {
-		l = m.Item.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
+	l = m.Item.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -8394,10 +8318,8 @@ func (m *LinkRequest) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovInodedbGrpc(uint64(l))
 	}
-	if m.Link != nil {
-		l = m.Link.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
+	l = m.Link.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -8426,10 +8348,8 @@ func (m *UnlinkRequest) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovInodedbGrpc(uint64(l))
 	}
-	if m.Unlink != nil {
-		l = m.Unlink.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
+	l = m.Unlink.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -8529,10 +8449,8 @@ func (m *SearchRequest) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovInodedbGrpc(uint64(l))
 	}
-	if m.Query != nil {
-		l = m.Query.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
+	l = m.Query.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
 	if m.Count != 0 {
 		n += 1 + sovInodedbGrpc(uint64(m.Count))
 	}
@@ -8603,14 +8521,10 @@ func (m *ShardInsertItemRequest) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Header != nil {
-		l = m.Header.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
-	if m.Item != nil {
-		l = m.Item.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
+	l = m.Header.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
+	l = m.Item.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -8638,14 +8552,10 @@ func (m *ShardUpdateItemRequest) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Header != nil {
-		l = m.Header.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
-	if m.Item != nil {
-		l = m.Item.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
+	l = m.Header.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
+	l = m.Item.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -8670,10 +8580,8 @@ func (m *ShardDeleteItemRequest) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Header != nil {
-		l = m.Header.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
+	l = m.Header.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
 	if m.Ino != 0 {
 		n += 1 + sovInodedbGrpc(uint64(m.Ino))
 	}
@@ -8701,10 +8609,8 @@ func (m *ShardGetItemRequest) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Header != nil {
-		l = m.Header.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
+	l = m.Header.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
 	if m.Ino != 0 {
 		n += 1 + sovInodedbGrpc(uint64(m.Ino))
 	}
@@ -8720,10 +8626,8 @@ func (m *ShardGetItemResponse) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Item != nil {
-		l = m.Item.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
+	l = m.Item.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -8736,14 +8640,10 @@ func (m *ShardLinkRequest) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Header != nil {
-		l = m.Header.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
-	if m.Link != nil {
-		l = m.Link.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
+	l = m.Header.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
+	l = m.Link.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -8768,14 +8668,10 @@ func (m *ShardUnlinkRequest) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Header != nil {
-		l = m.Header.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
-	if m.Unlink != nil {
-		l = m.Unlink.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
+	l = m.Header.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
+	l = m.Unlink.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -8800,10 +8696,8 @@ func (m *ShardListRequest) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Header != nil {
-		l = m.Header.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
+	l = m.Header.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
 	if m.Ino != 0 {
 		n += 1 + sovInodedbGrpc(uint64(m.Ino))
 	}
@@ -8847,14 +8741,10 @@ func (m *ShardSearchRequest) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Header != nil {
-		l = m.Header.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
-	if m.Query != nil {
-		l = m.Query.Size()
-		n += 1 + l + sovInodedbGrpc(uint64(l))
-	}
+	l = m.Header.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
+	l = m.Query.Size()
+	n += 1 + l + sovInodedbGrpc(uint64(l))
 	if m.Count != 0 {
 		n += 1 + sovInodedbGrpc(uint64(m.Count))
 	}
@@ -9049,9 +8939,6 @@ func (m *ClusterRequest) Unmarshal(dAtA []byte) error {
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
-			}
-			if m.NodeInfo == nil {
-				m.NodeInfo = &Node{}
 			}
 			if err := m.NodeInfo.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -9327,9 +9214,6 @@ func (m *AddDiskRequest) Unmarshal(dAtA []byte) error {
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
-			}
-			if m.Disk == nil {
-				m.Disk = &Disk{}
 			}
 			if err := m.Disk.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -9670,7 +9554,7 @@ func (m *ListDiskResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Disks = append(m.Disks, &Disk{})
+			m.Disks = append(m.Disks, Disk{})
 			if err := m.Disks[len(m.Disks)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -9844,9 +9728,6 @@ func (m *GetDiskResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Disk == nil {
-				m.Disk = &Disk{}
-			}
 			if err := m.Disk.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -10001,7 +9882,7 @@ func (m *CreateSpaceRequest) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.FixedFields = append(m.FixedFields, &FieldMeta{})
+			m.FixedFields = append(m.FixedFields, FieldMeta{})
 			if err := m.FixedFields[len(m.FixedFields)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -10105,7 +9986,7 @@ func (m *HeartbeatRequest) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Disks = append(m.Disks, &DiskReport{})
+			m.Disks = append(m.Disks, DiskReport{})
 			if err := m.Disks[len(m.Disks)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -10260,7 +10141,7 @@ func (m *ReportRequest) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Infos = append(m.Infos, &ShardReport{})
+			m.Infos = append(m.Infos, ShardReport{})
 			if err := m.Infos[len(m.Infos)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -10345,7 +10226,7 @@ func (m *ReportResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Tasks = append(m.Tasks, &ShardTask{})
+			m.Tasks = append(m.Tasks, ShardTask{})
 			if err := m.Tasks[len(m.Tasks)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -10500,9 +10381,6 @@ func (m *GetNodeResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.NodeInfo == nil {
-				m.NodeInfo = &Node{}
-			}
 			if err := m.NodeInfo.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -10586,9 +10464,6 @@ func (m *CreateSpaceResponse) Unmarshal(dAtA []byte) error {
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
-			}
-			if m.Info == nil {
-				m.Info = &SpaceMeta{}
 			}
 			if err := m.Info.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -10929,9 +10804,6 @@ func (m *GetSpaceResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Info == nil {
-				m.Info = &SpaceMeta{}
-			}
 			if err := m.Info.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -11111,7 +10983,7 @@ func (m *AddShardRequest) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Nodes = append(m.Nodes, &ShardNode{})
+			m.Nodes = append(m.Nodes, ShardNode{})
 			if err := m.Nodes[len(m.Nodes)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -11322,9 +11194,6 @@ func (m *UpdateShardRequest) Unmarshal(dAtA []byte) error {
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
-			}
-			if m.Node == nil {
-				m.Node = &ShardNode{}
 			}
 			if err := m.Node.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -11569,9 +11438,6 @@ func (m *GetShardResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Shard == nil {
-				m.Shard = &Shard{}
-			}
 			if err := m.Shard.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -11706,9 +11572,6 @@ func (m *InsertItemRequest) Unmarshal(dAtA []byte) error {
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
-			}
-			if m.Item == nil {
-				m.Item = &Item{}
 			}
 			if err := m.Item.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -11895,9 +11758,6 @@ func (m *UpdateItemRequest) Unmarshal(dAtA []byte) error {
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
-			}
-			if m.Item == nil {
-				m.Item = &Item{}
 			}
 			if err := m.Item.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -12289,9 +12149,6 @@ func (m *GetItemResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Item == nil {
-				m.Item = &Item{}
-			}
 			if err := m.Item.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -12407,9 +12264,6 @@ func (m *LinkRequest) Unmarshal(dAtA []byte) error {
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
-			}
-			if m.Link == nil {
-				m.Link = &Link{}
 			}
 			if err := m.Link.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -12577,9 +12431,6 @@ func (m *UnlinkRequest) Unmarshal(dAtA []byte) error {
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
-			}
-			if m.Unlink == nil {
-				m.Unlink = &Unlink{}
 			}
 			if err := m.Unlink.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -12888,7 +12739,7 @@ func (m *ListResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Links = append(m.Links, &Link{})
+			m.Links = append(m.Links, Link{})
 			if err := m.Links[len(m.Links)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -13107,9 +12958,6 @@ func (m *SearchRequest) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Query == nil {
-				m.Query = &Query{}
-			}
 			if err := m.Query.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -13296,7 +13144,7 @@ func (m *SearchResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Items = append(m.Items, &Item{})
+			m.Items = append(m.Items, Item{})
 			if err := m.Items[len(m.Items)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -13508,9 +13356,6 @@ func (m *ShardInsertItemRequest) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Header == nil {
-				m.Header = &ShardOpHeader{}
-			}
 			if err := m.Header.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -13543,9 +13388,6 @@ func (m *ShardInsertItemRequest) Unmarshal(dAtA []byte) error {
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
-			}
-			if m.Item == nil {
-				m.Item = &Item{}
 			}
 			if err := m.Item.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -13701,9 +13543,6 @@ func (m *ShardUpdateItemRequest) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Header == nil {
-				m.Header = &ShardOpHeader{}
-			}
 			if err := m.Header.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -13736,9 +13575,6 @@ func (m *ShardUpdateItemRequest) Unmarshal(dAtA []byte) error {
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
-			}
-			if m.Item == nil {
-				m.Item = &Item{}
 			}
 			if err := m.Item.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -13874,9 +13710,6 @@ func (m *ShardDeleteItemRequest) Unmarshal(dAtA []byte) error {
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
-			}
-			if m.Header == nil {
-				m.Header = &ShardOpHeader{}
 			}
 			if err := m.Header.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -14032,9 +13865,6 @@ func (m *ShardGetItemRequest) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Header == nil {
-				m.Header = &ShardOpHeader{}
-			}
 			if err := m.Header.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -14138,9 +13968,6 @@ func (m *ShardGetItemResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Item == nil {
-				m.Item = &Item{}
-			}
 			if err := m.Item.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -14225,9 +14052,6 @@ func (m *ShardLinkRequest) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Header == nil {
-				m.Header = &ShardOpHeader{}
-			}
 			if err := m.Header.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -14260,9 +14084,6 @@ func (m *ShardLinkRequest) Unmarshal(dAtA []byte) error {
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
-			}
-			if m.Link == nil {
-				m.Link = &Link{}
 			}
 			if err := m.Link.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -14399,9 +14220,6 @@ func (m *ShardUnlinkRequest) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Header == nil {
-				m.Header = &ShardOpHeader{}
-			}
 			if err := m.Header.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -14434,9 +14252,6 @@ func (m *ShardUnlinkRequest) Unmarshal(dAtA []byte) error {
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
-			}
-			if m.Unlink == nil {
-				m.Unlink = &Unlink{}
 			}
 			if err := m.Unlink.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -14572,9 +14387,6 @@ func (m *ShardListRequest) Unmarshal(dAtA []byte) error {
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
-			}
-			if m.Header == nil {
-				m.Header = &ShardOpHeader{}
 			}
 			if err := m.Header.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -14749,7 +14561,7 @@ func (m *ShardListResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Links = append(m.Links, &Link{})
+			m.Links = append(m.Links, Link{})
 			if err := m.Links[len(m.Links)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -14834,9 +14646,6 @@ func (m *ShardSearchRequest) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Header == nil {
-				m.Header = &ShardOpHeader{}
-			}
 			if err := m.Header.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -14869,9 +14678,6 @@ func (m *ShardSearchRequest) Unmarshal(dAtA []byte) error {
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
-			}
-			if m.Query == nil {
-				m.Query = &Query{}
 			}
 			if err := m.Query.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -15059,7 +14865,7 @@ func (m *ShardSearchResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Items = append(m.Items, &Item{})
+			m.Items = append(m.Items, Item{})
 			if err := m.Items[len(m.Items)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -15252,7 +15058,7 @@ func (m *GetCatalogChangesResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Items = append(m.Items, &CatalogChangeItem{})
+			m.Items = append(m.Items, CatalogChangeItem{})
 			if err := m.Items[len(m.Items)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -15407,7 +15213,7 @@ func (m *GetRoleNodesResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Nodes = append(m.Nodes, &Node{})
+			m.Nodes = append(m.Nodes, Node{})
 			if err := m.Nodes[len(m.Nodes)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}

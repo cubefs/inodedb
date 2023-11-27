@@ -76,7 +76,7 @@ message Disk {
 	uint64 create_at = 7;
 	uint64 last_update = 8;
 	DropStatus drop_status = 9;
-	DiskReport info = 10;
+	DiskReport info = 10 [(gogoproto.nullable) = false];
 }
 
 message DiskReport {
@@ -90,8 +90,8 @@ message SpaceMeta {
 	uint64 sid = 1 [(gogoproto.casttype) = "Sid"];
 	string name = 2;
 	SpaceType type = 3;
-	repeated FieldMeta fixed_fields = 4;
-	repeated Shard shards = 5;
+	repeated FieldMeta fixed_fields = 4 [(gogoproto.nullable) = false];
+	repeated Shard shards = 5 [(gogoproto.nullable) = false];
 }
 
 message Shard {
@@ -100,7 +100,7 @@ message Shard {
 	uint64 ino_limit = 3;
 	uint64 ino_used = 4;
 	uint32 leader_id = 5 [(gogoproto.customname) = "LeaderID", (gogoproto.casttype) = "DiskID"]; // 0 means no leader
-	repeated ShardNode nodes = 6; // nodes related to replicate nodes or stripe nodes
+	repeated ShardNode nodes = 6 [(gogoproto.nullable) = false]; // nodes related to replicate nodes or stripe nodes
 	uint64 ino_cursor = 7;
 	uint64 link_count = 8;
 }
@@ -119,7 +119,7 @@ message ShardNode {
 message Item {
 	uint64 ino = 1;
 	uint64 links = 2;
-	repeated Field fields = 3;
+	repeated Field fields = 3 [(gogoproto.nullable) = false];
 }
 
 message Field {
@@ -156,7 +156,7 @@ message Link {
 	uint64 parent = 1;
 	string name = 2;
 	uint64 child = 3;
-	repeated Field fields = 4;
+	repeated Field fields = 4 [(gogoproto.nullable) = false];
 }
 
 message Unlink {
@@ -167,7 +167,7 @@ message Unlink {
 message ShardReport {
 	uint64 sid = 1 [(gogoproto.casttype) = "Sid"];
 	uint32 disk_id = 2 [(gogoproto.customname) = "DiskID", (gogoproto.casttype) = "DiskID"];
-	Shard  shard = 3;
+	Shard  shard = 3 [(gogoproto.nullable) = false];
 }
 
 message CatalogChangeItem {
@@ -186,7 +186,7 @@ message CatalogChangeSpaceAdd {
 	uint64 sid = 1 [(gogoproto.casttype) = "Sid"];
 	string name = 2;
 	SpaceType type = 3;
-	repeated FieldMeta fixed_fields = 4;
+	repeated FieldMeta fixed_fields = 4 [(gogoproto.nullable) = false];
 }
 
 message CatalogChangeSpaceDelete {
@@ -201,7 +201,7 @@ message CatalogChangeShardAdd {
 	uint64 epoch = 4;
 	uint64 ino_limit = 5;
 	uint32 leader = 6 [(gogoproto.casttype) = "DiskID"];
-	repeated ShardNode nodes = 7;
+	repeated ShardNode nodes = 7 [(gogoproto.nullable) = false];
 }
 
 message ShardTask {
@@ -211,8 +211,8 @@ message ShardTask {
 	}
 
 	Type type = 1;
-	uint64 sid = 2 [(gogoproto.casttype) = "Sid"];
-	uint32 shard_id = 3 [(gogoproto.customname) = "ShardID", (gogoproto.casttype) = "ShardID"];
-	uint64 epoch = 4;
-	google.protobuf.Any reserved = 5;
+	uint32 disk_id = 2 [(gogoproto.customname) = "DiskID", (gogoproto.casttype) = "DiskID"];
+	uint64 sid = 3 [(gogoproto.casttype) = "Sid"];
+	uint32 shard_id = 4 [(gogoproto.customname) = "ShardID", (gogoproto.casttype) = "ShardID"];
+	uint64 epoch = 5;
 }
