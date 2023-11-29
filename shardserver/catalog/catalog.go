@@ -7,17 +7,16 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cubefs/cubefs/blobstore/util/taskpool"
-
-	"github.com/cubefs/cubefs/blobstore/util/log"
-
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
+	"github.com/cubefs/cubefs/blobstore/util/log"
+	"github.com/cubefs/cubefs/blobstore/util/taskpool"
 	"github.com/cubefs/inodedb/client"
 	apierrors "github.com/cubefs/inodedb/errors"
 	"github.com/cubefs/inodedb/proto"
 	"github.com/cubefs/inodedb/raft"
 	"github.com/cubefs/inodedb/shardserver/store"
+	"github.com/gogo/protobuf/types"
 )
 
 const defaultTaskPoolSize = 64
@@ -29,61 +28,47 @@ type (
 		NodeConfig      proto.Node          `json:"node_config"`
 		RaftConfig      raft.Config         `json:"raft_config"`
 		ShardBaseConfig ShardBaseConfig     `json:"shard_base_config"`
+		Disks           []string            `json:"disks_config"`
 	}
 )
 
 type Catalog struct {
-	routeVersion   uint64
-	spaces         sync.Map
-	spaceIdToNames sync.Map
-	done           chan struct{}
+	routeVersion uint64
+	spaces       sync.Map
+	done         chan struct{}
 
-	transport   *transport
+	disks       sync.Map
 	store       *store.Store
+	transport   *transport
 	raftManager raft.Manager
 	taskPool    taskpool.TaskPool
 	cfg         *Config
 }
 
 func NewCatalog(ctx context.Context, cfg *Config) *Catalog {
-	span := trace.SpanFromContext(ctx)
 	initConfig(cfg)
+	span := trace.SpanFromContext(ctx)
 
 	masterClient, err := client.NewMasterClient(&cfg.MasterConfig)
 	if err != nil {
 		span.Fatalf("new master client failed: %s", err)
 	}
-
-	if cfg.NodeConfig.GrpcPort == 0 || cfg.NodeConfig.RaftPort == 0 {
-		span.Fatalf("invalid node[%+v] config port", cfg.NodeConfig)
-	}
-
-	cfg.StoreConfig.KVOption.ColumnFamily = append(cfg.StoreConfig.KVOption.ColumnFamily, lockCF, dataCF, writeCF)
-	cfg.StoreConfig.RaftOption.ColumnFamily = append(cfg.StoreConfig.KVOption.ColumnFamily, raftWalCF)
-	store, err := store.NewStore(ctx, &cfg.StoreConfig)
-	if err != nil {
-		span.Fatalf("new store instance failed: %s", err)
-	}
-
-	transporter := newTransport(masterClient, &cfg.NodeConfig)
-	if err := transporter.Register(ctx); err != nil {
+	transport := newTransport(masterClient, &cfg.NodeConfig)
+	// register node
+	if err := transport.Register(ctx); err != nil {
 		span.Fatalf("register shard server failed: %s", err)
 	}
+	nodeID := transport.GetMyself().ID
 
 	catalog := &Catalog{
-		transport: transporter,
-		store:     store,
+		transport: transport,
 		done:      make(chan struct{}),
 		taskPool:  taskpool.New(defaultTaskPoolSize, defaultTaskPoolSize),
 		cfg:       cfg,
 	}
 
-	catalog.initRaftConfig(&cfg.RaftConfig)
-	catalog.raftManager, err = raft.NewManager(&cfg.RaftConfig)
-	if err != nil {
-		span.Fatalf("new raft manager failed: %s", err)
-	}
-
+	catalog.initRaftConfig()
+	catalog.initDisk(ctx, nodeID)
 	if err := catalog.initRoute(ctx); err != nil {
 		span.Fatalf("update route failed: %s", errors.Detail(err))
 	}
@@ -93,72 +78,69 @@ func NewCatalog(ctx context.Context, cfg *Config) *Catalog {
 	return catalog
 }
 
-func (c *Catalog) GetSpace(ctx context.Context, spaceName string) (*Space, error) {
-	return c.getSpace(ctx, spaceName)
-}
-
-func (c *Catalog) AddShard(ctx context.Context, spaceName string, shardId uint32, epoch uint64, inoLimit uint64, nodes []*proto.ShardNode) error {
+func (c *Catalog) AddShard(ctx context.Context, diskID proto.DiskID, sid proto.Sid, shardID proto.ShardID, epoch uint64, inoLimit uint64, nodes []*proto.ShardNode) error {
 	span := trace.SpanFromContext(ctx)
-	v, ok := c.spaces.Load(spaceName)
-	if ok {
-		space := v.(*Space)
-		return space.AddShard(ctx, shardId, epoch, inoLimit, nodes)
-	}
-
-	if err := c.updateSpace(ctx, spaceName); err != nil {
-		span.Warnf("update route failed: %s", err)
-		return apierrors.ErrSpaceDoesNotExist
-	}
-
-	v, ok = c.spaces.Load(spaceName)
+	_, ok := c.spaces.Load(sid)
 	if !ok {
-		span.Warnf("still can not get route update for space[%s]", spaceName)
-		return apierrors.ErrSpaceDoesNotExist
-	}
-	space := v.(*Space)
-	return space.AddShard(ctx, shardId, epoch, inoLimit, nodes)
-}
-
-func (c *Catalog) UpdateShard(ctx context.Context, spaceName string, shardId uint32, epoch uint64) error {
-	v, ok := c.spaces.Load(spaceName)
-	if !ok {
-		return apierrors.ErrSpaceNotExist
+		if err := c.updateSpace(ctx, sid); err != nil {
+			span.Warnf("update route failed: %s", err)
+			return apierrors.ErrSpaceDoesNotExist
+		}
 	}
 
-	space := v.(*Space)
-	return space.UpdateShard(ctx, shardId, epoch)
-}
-
-func (c *Catalog) GetShard(ctx context.Context, spaceName string, shardID uint32) (*proto.Shard, error) {
-	shard, err := c.getShard(ctx, spaceName, shardID)
+	disk, err := c.getDisk(diskID)
 	if err != nil {
-		return nil, err
+		return err
+	}
+
+	return disk.AddShard(ctx, sid, shardID, epoch, inoLimit, nodes)
+}
+
+// UpdateShard update shard info
+// todo: update shard nodes support
+func (c *Catalog) UpdateShard(ctx context.Context, diskID proto.DiskID, sid proto.Sid, shardID proto.ShardID, epoch uint64) error {
+	disk, err := c.getDisk(diskID)
+	if err != nil {
+		return err
+	}
+
+	return disk.UpdateShard(ctx, sid, shardID, epoch)
+}
+
+func (c *Catalog) GetShardInfo(ctx context.Context, diskID proto.DiskID, sid proto.Sid, shardID proto.ShardID) (ret proto.Shard, err error) {
+	disk, err := c.getDisk(diskID)
+	if err != nil {
+		return
+	}
+	shard, err := disk.GetShard(sid, shardID)
+	if err != nil {
+		return
 	}
 
 	shardStat := shard.Stats()
 	// transform into external nodes
-	nodes := make([]*proto.ShardNode, 0, len(shardStat.nodes))
+	nodes := make([]proto.ShardNode, 0, len(shardStat.nodes))
 	for _, node := range shardStat.nodes {
-		nodes = append(nodes, &proto.ShardNode{
-			Id:      node.Id,
+		nodes = append(nodes, proto.ShardNode{
+			DiskID:  node.DiskID,
 			Learner: node.Learner,
 		})
 	}
 
-	return &proto.Shard{
-		Id:       shard.shardID,
+	return proto.Shard{
+		ShardID:  shard.shardID,
 		InoLimit: shardStat.inoLimit,
 		InoUsed:  shardStat.inoUsed,
 		Nodes:    nodes,
 	}, nil
 }
 
-func (c *Catalog) GetNodeInfo() *proto.Node {
-	return c.transport.GetMyself()
+func (c *Catalog) GetSpace(ctx context.Context, sid proto.Sid) (*Space, error) {
+	return c.getSpace(sid)
 }
 
-func (c *Catalog) GetRaftManager() raft.Manager {
-	return c.raftManager
+func (c *Catalog) GetNodeInfo() *proto.Node {
+	return c.transport.GetMyself()
 }
 
 func (c *Catalog) GetShardBaseConfig() *ShardBaseConfig {
@@ -215,8 +197,18 @@ func (c *Catalog) loop(ctx context.Context) {
 	}
 }
 
-func (c *Catalog) getSpace(ctx context.Context, spaceName string) (*Space, error) {
-	v, ok := c.spaces.Load(spaceName)
+func (c *Catalog) getDisk(diskID proto.DiskID) (*disk, error) {
+	v, ok := c.disks.Load(diskID)
+	if !ok {
+		return nil, apierrors.ErrDiskNotExist
+	}
+
+	disk := v.(*disk)
+	return disk, nil
+}
+
+func (c *Catalog) getSpace(sid proto.Sid) (*Space, error) {
+	v, ok := c.spaces.Load(sid)
 	if !ok {
 		return nil, apierrors.ErrSpaceDoesNotExist
 	}
@@ -225,46 +217,56 @@ func (c *Catalog) getSpace(ctx context.Context, spaceName string) (*Space, error
 	return space, nil
 }
 
-// TODO: get altered shards, optimized the load of master
-func (c *Catalog) getAlteredShardReports() []*proto.ShardReport {
-	ret := make([]*proto.ShardReport, 0, 1<<10)
-	c.spaces.Range(func(key, value interface{}) bool {
-		space := value.(*Space)
-		space.shards.Range(func(key, value interface{}) bool {
-			shard := value.(*shard)
-			stats := shard.Stats()
+func (c *Catalog) getShard(diskID proto.DiskID, sid proto.Sid, shardID proto.ShardID) (*shard, error) {
+	disk, err := c.getDisk(diskID)
+	if err != nil {
+		return nil, err
+	}
+	shard, err := disk.GetShard(sid, shardID)
+	if err != nil {
+		return nil, err
+	}
 
-			ret = append(ret, &proto.ShardReport{
-				Sid: space.sid,
-				Shard: &proto.Shard{
-					Epoch:    stats.routeVersion,
-					Id:       shard.shardID,
-					LeaderId: stats.leader,
+	return shard, nil
+}
+
+// TODO: get altered shards, optimized the load of master
+func (c *Catalog) getAlteredShardReports() []proto.ShardReport {
+	ret := make([]proto.ShardReport, 0, 1<<10)
+
+	c.disks.Range(func(key, value interface{}) bool {
+		disk := value.(*disk)
+		disk.RangeShard(func(s *shard) bool {
+			stats := s.Stats()
+			ret = append(ret, proto.ShardReport{
+				Sid: s.sid,
+				Shard: proto.Shard{
+					Epoch:    stats.epoch,
+					ShardID:  s.shardID,
+					LeaderID: stats.leader,
 					InoLimit: stats.inoLimit,
 					InoUsed:  stats.inoUsed,
 				},
 			})
-
 			return true
 		})
 		return true
 	})
+
 	return ret
 }
 
 // TODO: get altered shards, optimized the load of master
-func (c *Catalog) getAlteredShardCheckpointTasks() []*proto.ShardTask {
-	ret := make([]*proto.ShardTask, 0, 1<<10)
-	c.spaces.Range(func(key, value interface{}) bool {
-		space := value.(*Space)
-		space.shards.Range(func(key, value interface{}) bool {
-			shard := value.(*shard)
-			ret = append(ret, &proto.ShardTask{
-				Type:      proto.ShardTaskType_Checkpoint,
-				SpaceName: space.name,
-				ShardId:   shard.shardID,
+func (c *Catalog) getAlteredShardCheckpointTasks() []proto.ShardTask {
+	ret := make([]proto.ShardTask, 0, 1<<10)
+	c.disks.Range(func(key, value interface{}) bool {
+		disk := value.(*disk)
+		disk.RangeShard(func(s *shard) bool {
+			ret = append(ret, proto.ShardTask{
+				Type:    proto.ShardTask_Checkpoint,
+				Sid:     s.sid,
+				ShardID: s.shardID,
 			})
-
 			return true
 		})
 		return true
@@ -272,15 +274,15 @@ func (c *Catalog) getAlteredShardCheckpointTasks() []*proto.ShardTask {
 	return ret
 }
 
-func (c *Catalog) updateSpace(ctx context.Context, spaceName string) error {
-	spaceMeta, err := c.transport.GetSpace(ctx, spaceName)
+func (c *Catalog) updateSpace(ctx context.Context, sid proto.Sid) error {
+	spaceMeta, err := c.transport.GetSpace(ctx, sid)
 	if err != nil {
 		return err
 	}
 
 	fixedFields := make(map[string]proto.FieldMeta, len(spaceMeta.FixedFields))
 	for _, field := range spaceMeta.FixedFields {
-		fixedFields[field.Name] = *field
+		fixedFields[field.Name] = field
 	}
 
 	space := &Space{
@@ -288,20 +290,13 @@ func (c *Catalog) updateSpace(ctx context.Context, spaceName string) error {
 		name:        spaceMeta.Name,
 		spaceType:   spaceMeta.Type,
 		fixedFields: fixedFields,
-
-		store:        c.store,
-		shardHandler: c,
+		locateShard: c.getShard,
 	}
-	if _, loaded := c.spaces.LoadOrStore(spaceMeta.Name, space); loaded {
+	if _, loaded := c.spaces.LoadOrStore(spaceMeta.Sid, space); loaded {
 		return nil
 	}
 
-	c.spaceIdToNames.Store(spaceMeta.Sid, spaceMeta.Name)
-	// load space's shards
-	if err := space.Load(ctx); err != nil {
-		return errors.Info(err, "load space failed")
-	}
-
+	// c.spaceIdToNames.Store(spaceMeta.Sid, spaceMeta.Name)
 	return nil
 }
 
@@ -313,15 +308,15 @@ func (c *Catalog) initRoute(ctx context.Context) error {
 
 	for _, routeItem := range changes {
 		switch routeItem.Type {
-		case proto.CatalogChangeType_AddSpace:
+		case proto.CatalogChangeItem_AddSpace:
 			spaceItem := new(proto.CatalogChangeSpaceAdd)
-			if err := routeItem.Item.UnmarshalTo(spaceItem); err != nil {
-				return errors.Info(err, "unmarshal add space item failed")
+			if err := types.UnmarshalAny(routeItem.Item, spaceItem); err != nil {
+				return errors.Info(err, "unmarshal add Space item failed")
 			}
 
 			fixedFields := make(map[string]proto.FieldMeta, len(spaceItem.FixedFields))
 			for _, field := range spaceItem.FixedFields {
-				fixedFields[field.Name] = *field
+				fixedFields[field.Name] = field
 			}
 
 			space := &Space{
@@ -329,29 +324,19 @@ func (c *Catalog) initRoute(ctx context.Context) error {
 				name:        spaceItem.Name,
 				spaceType:   spaceItem.Type,
 				fixedFields: fixedFields,
-
-				store:        c.store,
-				shardHandler: c,
+				locateShard: c.getShard,
 			}
 			if _, loaded := c.spaces.LoadOrStore(spaceItem.Name, space); loaded {
 				continue
 			}
 
-			c.spaceIdToNames.Store(spaceItem.Sid, spaceItem.Name)
-			// load space's shards
-			if err := space.Load(ctx); err != nil {
-				return errors.Info(err, "load space failed")
-			}
-
-		case proto.CatalogChangeType_DeleteSpace:
+		case proto.CatalogChangeItem_DeleteSpace:
 			spaceItem := new(proto.CatalogChangeSpaceDelete)
-			if err := routeItem.Item.UnmarshalTo(spaceItem); err != nil {
-				return errors.Info(err, "unmarshal delete space item failed")
+			if err := types.UnmarshalAny(routeItem.Item, spaceItem); err != nil {
+				return errors.Info(err, "unmarshal delete Space item failed")
 			}
 
-			spaceName, _ := c.spaceIdToNames.Load(spaceItem.Sid)
-			c.spaces.Delete(spaceName.(string))
-			c.spaceIdToNames.Delete(spaceItem.Sid)
+			c.spaces.Delete(spaceItem.Sid)
 		default:
 		}
 		c.updateRouteVersion(routeItem.RouteVersion)
@@ -383,20 +368,103 @@ func (c *Catalog) updateRouteVersion(new uint64) {
 	}
 }
 
-func (c *Catalog) getShard(ctx context.Context, spaceName string, shardId uint32) (*shard, error) {
-	space, err := c.getSpace(ctx, spaceName)
+func (c *Catalog) initDisk(ctx context.Context, nodeID proto.NodeID) {
+	span := trace.SpanFromContext(ctx)
+
+	// load disk from master
+	registeredDisks, err := c.transport.ListDisks(ctx)
 	if err != nil {
-		return nil, err
+		span.Fatalf("list disks from master failed: %s", err)
+	}
+	registeredDisksMap := make(map[proto.DiskID]proto.Disk)
+	// map's key is disk path, and map's value is the disk which has not been repaired yet,
+	// disk which not repaired can be replaced for security consider
+	registerDiskPathsMap := make(map[string]proto.Disk)
+	for _, disk := range registeredDisks {
+		registeredDisksMap[disk.DiskID] = disk
+		if disk.Status != proto.DiskStatus_DiskStatusRepaired {
+			registerDiskPathsMap[disk.Path] = disk
+		}
 	}
 
-	return space.GetShard(ctx, shardId)
+	// load disk from local
+	disks := make([]*disk, len(c.cfg.Disks))
+	for _, diskPath := range c.cfg.Disks {
+		disk := openDisk(ctx, diskConfig{
+			nodeID:       nodeID,
+			diskPath:     diskPath,
+			storeConfig:  c.cfg.StoreConfig,
+			raftConfig:   c.cfg.RaftConfig,
+			shardHandler: c,
+		})
+		disks = append(disks, disk)
+	}
+	// compare local disk and remote disk info, alloc new disk id and register new disk
+	// when local disk is not register and local disk is not saved
+	newDisks := make([]*disk, 0)
+	for _, disk := range disks {
+		// not disk id and the old path disk device has been repaired, add new disk
+		if disk.DiskID == 0 {
+			if unrepairedDisk, ok := registerDiskPathsMap[disk.Path]; ok {
+				span.Fatalf("disk device has been replaced but old disk device[%+v] is not repaired", unrepairedDisk)
+			}
+			newDisks = append(newDisks, disk)
+		}
+		// alloc disk id already but didn't register yet, add new disk
+		if _, ok := registeredDisksMap[disk.DiskID]; !ok {
+			newDisks = append(newDisks, disk)
+		}
+	}
+
+	// register disk
+	for _, disk := range newDisks {
+		diskInfo := disk.GetDiskInfo()
+		// alloc new disk id
+		if diskInfo.DiskID == 0 {
+			diskID, err := c.transport.AllocDiskID(ctx)
+			if err != nil {
+				span.Fatalf("alloc disk id failed: %s", err)
+			}
+			diskInfo.DiskID = diskID
+		}
+		// save disk meta
+		if err := disk.SaveDiskInfo(); err != nil {
+			span.Fatalf("save disk info[%+v] failed: %s", diskInfo, err)
+		}
+		// register disk
+		if err := c.transport.RegisterDisk(ctx, proto.Disk{
+			DiskID: diskInfo.DiskID,
+			NodeID: nodeID,
+			Path:   diskInfo.Path,
+			Info: proto.DiskReport{
+				DiskID: diskInfo.DiskID,
+				Used:   diskInfo.Used,
+				Total:  diskInfo.Total,
+			},
+		}); err != nil {
+			span.Fatalf("register new disk[%+v] failed: %s", disk, err)
+		}
+	}
+
+	// load disk concurrently
+	wg := sync.WaitGroup{}
+	wg.Add(len(disks))
+	for i := range disks {
+		disk := disks[i]
+		go func() {
+			defer wg.Done()
+			if err := disk.Load(ctx); err != nil {
+				span.Fatalf("load disk[%+v] failed", disk)
+			}
+		}()
+	}
+	wg.Wait()
 }
 
-func (c *Catalog) initRaftConfig(cfg *raft.Config) {
-	cfg.NodeID = uint64(c.transport.GetMyself().Id)
-	cfg.Logger = log.DefaultLogger
-	cfg.Resolver = &addressResolver{t: c.transport}
-	cfg.Storage = &raftStorage{kvStore: c.store.RaftStore()}
+func (c *Catalog) initRaftConfig() {
+	c.cfg.RaftConfig.NodeID = uint64(c.transport.GetMyself().ID)
+	c.cfg.RaftConfig.Logger = log.DefaultLogger
+	c.cfg.RaftConfig.Resolver = &addressResolver{t: c.transport}
 }
 
 func initConfig(cfg *Config) {
@@ -409,4 +477,13 @@ func initConfig(cfg *Config) {
 	if cfg.ShardBaseConfig.RaftSnapTransmitConfig.BatchInflightSize <= 0 {
 		cfg.ShardBaseConfig.RaftSnapTransmitConfig.BatchInflightSize = 1 << 20
 	}
+	if cfg.ShardBaseConfig.InoAllocRangeStep <= 0 {
+		cfg.ShardBaseConfig.InoAllocRangeStep = 1 << 10
+	}
+	if cfg.NodeConfig.GrpcPort == 0 || cfg.NodeConfig.RaftPort == 0 {
+		log.Fatalf("invalid node[%+v] config port", cfg.NodeConfig)
+	}
+
+	cfg.StoreConfig.KVOption.ColumnFamily = append(cfg.StoreConfig.KVOption.ColumnFamily, lockCF, dataCF, writeCF)
+	cfg.StoreConfig.RaftOption.ColumnFamily = append(cfg.StoreConfig.KVOption.ColumnFamily, raftWalCF)
 }

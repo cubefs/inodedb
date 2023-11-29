@@ -13,9 +13,11 @@ type Config struct {
 }
 
 type Store struct {
-	kvStore   kvstore.Store
-	raftStore kvstore.Store
-	rawFS     RawFS
+	kvStore      kvstore.Store
+	raftStore    kvstore.Store
+	defaultRawFS RawFS
+
+	cfg *Config
 }
 
 func NewStore(ctx context.Context, cfg *Config) (*Store, error) {
@@ -35,9 +37,10 @@ func NewStore(ctx context.Context, cfg *Config) (*Store, error) {
 	}
 
 	return &Store{
-		kvStore:   kvStore,
-		raftStore: raftStore,
-		rawFS:     &posixRawFS{path: cfg.Path + "/raw"},
+		kvStore:      kvStore,
+		raftStore:    raftStore,
+		defaultRawFS: &posixRawFS{path: cfg.Path + "/raw"},
+		cfg:          cfg,
 	}, nil
 }
 
@@ -49,6 +52,14 @@ func (s *Store) RaftStore() kvstore.Store {
 	return s.raftStore
 }
 
-func (s *Store) RawFS() RawFS {
-	return s.rawFS
+func (s *Store) NewRawFS(path string) RawFS {
+	return &posixRawFS{path: s.cfg.Path + "/" + path}
+}
+
+func (s *Store) DefaultRawFS() RawFS {
+	return s.defaultRawFS
+}
+
+func (s *Store) Stats() (Stats, error) {
+	return StatFS(s.cfg.Path)
 }

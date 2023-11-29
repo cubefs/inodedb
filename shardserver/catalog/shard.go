@@ -2,10 +2,13 @@ package catalog
 
 import (
 	"context"
+	"encoding/binary"
 	"hash/crc32"
 	"strconv"
 	"sync"
 	"sync/atomic"
+
+	"golang.org/x/sync/singleflight"
 
 	"github.com/cubefs/cubefs/blobstore/util/errors"
 	apierrors "github.com/cubefs/inodedb/errors"
@@ -16,7 +19,6 @@ import (
 	"github.com/cubefs/inodedb/shardserver/store"
 	"github.com/cubefs/inodedb/shardserver/vector"
 	"github.com/cubefs/inodedb/util"
-	pb "google.golang.org/protobuf/proto"
 )
 
 const keyLocksNum = 1024
@@ -25,24 +27,47 @@ type (
 	ShardBaseConfig struct {
 		RaftSnapTransmitConfig RaftSnapshotTransmitConfig `json:"raft_snap_transmit_config"`
 		TruncateWalLogInterval uint64                     `json:"truncate_wal_log_interval"`
+		InoAllocRangeStep      uint64                     `json:"ino_alloc_range_step"`
 	}
 
 	shardConfig struct {
 		*ShardBaseConfig
+		diskID      proto.DiskID
 		shardInfo   shardInfo
 		nodeInfo    *proto.Node
 		store       *store.Store
 		raftManager raft.Manager
 	}
+
+	shardStats struct {
+		leader    proto.DiskID
+		epoch     uint64
+		inoUsed   uint64
+		inoCursor uint64
+		inoLimit  uint64
+		nodes     []persistent.ShardNode
+	}
 )
+
+type inodeRange struct {
+	start uint64
+	end   uint64
+}
+
+func (i inodeRange) isEmpty() bool {
+	return i.start == 0 && i.end == 0
+}
 
 func newShard(ctx context.Context, cfg shardConfig) (s *shard, err error) {
 	s = &shard{
-		shardID:  cfg.shardInfo.ShardId,
-		startIno: calculateStartIno(cfg.shardInfo.ShardId),
-		store:    cfg.store,
+		sid:      cfg.shardInfo.Sid,
+		shardID:  cfg.shardInfo.ShardID,
+		diskID:   cfg.diskID,
+		startIno: calculateStartIno(cfg.shardInfo.ShardID),
+
+		store: cfg.store,
 		shardKeys: &shardKeysGenerator{
-			shardId: cfg.shardInfo.ShardId,
+			shardId: cfg.shardInfo.ShardID,
 			spaceId: cfg.shardInfo.Sid,
 		},
 		cfg: cfg.ShardBaseConfig,
@@ -51,7 +76,7 @@ func newShard(ctx context.Context, cfg shardConfig) (s *shard, err error) {
 
 	learner := false
 	for _, node := range cfg.shardInfo.Nodes {
-		if node.Id == cfg.nodeInfo.Id {
+		if node.DiskID == cfg.diskID {
 			learner = node.Learner
 			break
 		}
@@ -60,7 +85,7 @@ func newShard(ctx context.Context, cfg shardConfig) (s *shard, err error) {
 	members := make([]raft.Member, 0, len(cfg.shardInfo.Nodes))
 	for _, node := range cfg.shardInfo.Nodes {
 		members = append(members, raft.Member{
-			NodeID:  uint64(node.Id),
+			NodeID:  uint64(node.DiskID),
 			Host:    cfg.nodeInfo.Addr + strconv.Itoa(int(cfg.nodeInfo.RaftPort)),
 			Type:    raft.MemberChangeType_AddMember,
 			Learner: learner,
@@ -84,24 +109,19 @@ func newShard(ctx context.Context, cfg shardConfig) (s *shard, err error) {
 	return
 }
 
-type shardStats struct {
-	leader       uint32
-	routeVersion uint64
-	inoUsed      uint64
-	inoCursor    uint64
-	inoLimit     uint64
-	nodes        []*persistent.ShardNode
-}
-
 type shard struct {
-	shardID      uint32
-	startIno     uint64
-	appliedIndex uint64
-	shardMu      struct {
+	sid      proto.Sid
+	shardID  proto.ShardID
+	diskID   proto.DiskID
+	startIno uint64
+
+	shardMu struct {
 		sync.RWMutex
 		shardInfo
-		leader uint32
+		leader proto.DiskID
 	}
+	inoRange atomic.Value
+	sf       singleflight.Group
 	keyLocks [keyLocksNum]sync.Mutex
 
 	shardKeys   *shardKeysGenerator
@@ -112,14 +132,17 @@ type shard struct {
 	cfg         *ShardBaseConfig
 }
 
-func (s *shard) InsertItem(ctx context.Context, i *proto.Item) (uint64, error) {
-	ino, err := s.nextIno()
+func (s *shard) InsertItem(ctx context.Context, i proto.Item) (uint64, error) {
+	if !s.isLeader() {
+		return 0, apierrors.ErrNotLeader
+	}
+	ino, err := s.nextIno(ctx)
 	if err != nil {
 		return 0, err
 	}
 
 	i.Ino = ino
-	data, err := pb.Marshal(i)
+	data, err := i.Marshal()
 	if err != nil {
 		return 0, err
 	}
@@ -135,12 +158,15 @@ func (s *shard) InsertItem(ctx context.Context, i *proto.Item) (uint64, error) {
 	return ino, nil
 }
 
-func (s *shard) UpdateItem(ctx context.Context, updateItem *proto.Item) error {
+func (s *shard) UpdateItem(ctx context.Context, updateItem proto.Item) error {
+	if !s.isLeader() {
+		return apierrors.ErrNotLeader
+	}
 	if !s.checkInoMatchRange(updateItem.Ino) {
 		return apierrors.ErrInoMismatchShardRange
 	}
 
-	data, err := pb.Marshal(updateItem)
+	data, err := updateItem.Marshal()
 	if err != nil {
 		return err
 	}
@@ -155,6 +181,9 @@ func (s *shard) UpdateItem(ctx context.Context, updateItem *proto.Item) error {
 }
 
 func (s *shard) DeleteItem(ctx context.Context, ino uint64) error {
+	if !s.isLeader() {
+		return apierrors.ErrNotLeader
+	}
 	if !s.checkInoMatchRange(ino) {
 		return apierrors.ErrInoMismatchShardRange
 	}
@@ -169,35 +198,38 @@ func (s *shard) DeleteItem(ctx context.Context, ino uint64) error {
 	return err
 }
 
-func (s *shard) GetItem(ctx context.Context, ino uint64) (*proto.Item, error) {
+func (s *shard) GetItem(ctx context.Context, ino uint64) (protoItem proto.Item, err error) {
 	if !s.checkInoMatchRange(ino) {
-		return nil, apierrors.ErrInoMismatchShardRange
+		err = apierrors.ErrInoMismatchShardRange
+		return
 	}
 
 	kvStore := s.store.KVStore()
 	data, err := kvStore.GetRaw(ctx, dataCF, s.shardKeys.encodeInoKey(ino), nil)
 	if err != nil {
-		return nil, err
+		return
 	}
-	item := &item{}
-	if err := item.Unmarshal(data); err != nil {
-		return nil, err
+	item := item{}
+	if err = item.Unmarshal(data); err != nil {
+		return
 	}
 
+	protoItem.Ino = item.Ino
+	protoItem.Links = item.Links
 	// transform into external item
-	fields := internalFieldsToProtoFields(item.Fields)
-	return &proto.Item{Ino: item.Ino, Links: item.Links, Fields: fields}, nil
+	protoItem.Fields = internalFieldsToProtoFields(item.Fields)
+	return
 }
 
-func (s *shard) Link(ctx context.Context, l *proto.Link) error {
-	if !s.checkInoMatchRange(l.Parent) {
-		return apierrors.ErrInoMismatchShardRange
+func (s *shard) Link(ctx context.Context, l proto.Link) error {
+	if !s.isLeader() {
+		return apierrors.ErrNotLeader
 	}
-	if !s.checkInoMatchRange(l.Child) {
+	if !s.checkInoMatchRange(l.Parent) || !s.checkInoMatchRange(l.Child) {
 		return apierrors.ErrInoMismatchShardRange
 	}
 
-	data, err := pb.Marshal(l)
+	data, err := l.Marshal()
 	if err != nil {
 		return err
 	}
@@ -210,12 +242,15 @@ func (s *shard) Link(ctx context.Context, l *proto.Link) error {
 	return err
 }
 
-func (s *shard) Unlink(ctx context.Context, unlink *proto.Unlink) error {
+func (s *shard) Unlink(ctx context.Context, unlink proto.Unlink) error {
+	if !s.isLeader() {
+		return apierrors.ErrNotLeader
+	}
 	if !s.checkInoMatchRange(unlink.Parent) {
 		return apierrors.ErrInoMismatchShardRange
 	}
 
-	data, err := pb.Marshal(unlink)
+	data, err := unlink.Marshal()
 	if err != nil {
 		return err
 	}
@@ -228,7 +263,7 @@ func (s *shard) Unlink(ctx context.Context, unlink *proto.Unlink) error {
 	return err
 }
 
-func (s *shard) List(ctx context.Context, ino uint64, start string, num uint32) (ret []*proto.Link, err error) {
+func (s *shard) List(ctx context.Context, ino uint64, start string, num uint32) (ret []proto.Link, err error) {
 	if !s.checkInoMatchRange(ino) {
 		return nil, apierrors.ErrInoMismatchShardRange
 	}
@@ -264,7 +299,7 @@ func (s *shard) List(ctx context.Context, ino uint64, start string, num uint32) 
 		_, link.Name = s.shardKeys.decodeLinkKey(kg.Key())
 		fields := internalFieldsToProtoFields(link.Fields)
 		// transform to external link
-		ret = append(ret, &proto.Link{
+		ret = append(ret, proto.Link{
 			Parent: link.Parent,
 			Name:   link.Name,
 			Child:  link.Child,
@@ -299,20 +334,20 @@ func (s *shard) GetEpoch() uint64 {
 
 func (s *shard) Stats() *shardStats {
 	s.shardMu.RLock()
-	replicates := make([]*persistent.ShardNode, len(s.shardMu.Nodes))
+	replicates := make([]persistent.ShardNode, len(s.shardMu.Nodes))
 	copy(replicates, s.shardMu.Nodes)
 	inoLimit := s.shardMu.InoLimit
-	routeVersion := s.shardMu.Epoch
+	epoch := s.shardMu.Epoch
 	leader := s.shardMu.leader
 	s.shardMu.RUnlock()
 
 	return &shardStats{
-		leader:       leader,
-		routeVersion: routeVersion,
-		inoUsed:      atomic.LoadUint64(&s.shardMu.InoUsed),
-		inoCursor:    atomic.LoadUint64(&s.shardMu.InoCursor),
-		inoLimit:     inoLimit,
-		nodes:        replicates,
+		leader:    leader,
+		epoch:     epoch,
+		inoUsed:   atomic.LoadUint64(&s.shardMu.InoUsed),
+		inoCursor: atomic.LoadUint64(&s.shardMu.InoCursor),
+		inoLimit:  inoLimit,
+		nodes:     replicates,
 	}
 }
 
@@ -357,8 +392,8 @@ func (s *shard) SaveShardInfo(ctx context.Context, withLock bool) error {
 	}
 
 	kvStore := s.store.KVStore()
-	key := make([]byte, shardPrefixSize())
-	encodeShardPrefix(s.shardMu.Sid, s.shardID, key)
+	key := make([]byte, shardInfoPrefixSize())
+	encodeShardInfoPrefix(s.shardMu.Sid, s.shardID, key)
 	value, err := s.shardMu.shardInfo.Marshal()
 	if err != nil {
 		return err
@@ -414,21 +449,66 @@ func (s *shard) GetVectors(ctx context.Context, ids []uint64) ([][]float32, erro
 	return ret, nil
 }
 
-func (s *shard) nextIno() (uint64, error) {
+func (s *shard) nextIno(ctx context.Context) (uint64, error) {
 	if atomic.LoadUint64(&s.shardMu.InoUsed) > s.shardMu.InoLimit {
 		return 0, apierrors.ErrInodeLimitExceed
 	}
 
+	inoRange := s.inoRange.Load().(*inodeRange)
 	for {
-		cur := atomic.LoadUint64(&s.shardMu.InoCursor)
-		if cur >= s.startIno+proto.ShardRangeStepSize {
-			return 0, apierrors.ErrInoOutOfRange
+	RETRY:
+		// try cas get inode
+		cur := atomic.LoadUint64(&inoRange.start)
+		if cur < inoRange.end {
+			newId := cur + 1
+			if atomic.CompareAndSwapUint64(&inoRange.start, cur, newId) {
+				return newId, nil
+			}
+			goto RETRY
 		}
-		newId := cur + 1
-		if atomic.CompareAndSwapUint64(&s.shardMu.InoCursor, cur, newId) {
-			return newId, nil
+
+		if _, err, _ := s.sf.Do("alloc-ino-range", func() (interface{}, error) {
+			// check inode range has been updated or not
+			tmp := inoRange
+			if inoRange := s.inoRange.Load().(*inodeRange); inoRange != tmp {
+				return nil, nil
+			}
+
+			// alloc new range and swap atomic value
+			newRange, err := s.allocInoRange(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if newRange.isEmpty() {
+				return nil, apierrors.ErrInodeLimitExceed
+			}
+
+			s.inoRange.Store(&newRange)
+			inoRange = &newRange
+			return nil, nil
+		}); err != nil {
+			return 0, err
 		}
 	}
+}
+
+func (s *shard) allocInoRange(ctx context.Context) (inodeRange, error) {
+	if atomic.LoadUint64(&s.shardMu.InoUsed) > s.shardMu.InoLimit {
+		return inodeRange{}, apierrors.ErrInodeLimitExceed
+	}
+
+	data := make([]byte, 8)
+	binary.BigEndian.PutUint64(data, s.cfg.InoAllocRangeStep)
+
+	ret, err := s.raftGroup.Propose(ctx, &raft.ProposalData{
+		Op:   RaftOpAllocInoRange,
+		Data: data,
+	})
+	if err != nil {
+		return inodeRange{}, err
+	}
+
+	return ret.Data.(inodeRange), nil
 }
 
 func (s *shard) checkInoMatchRange(ino uint64) bool {
@@ -440,6 +520,14 @@ func (s *shard) getKeyLock(key []byte) sync.Mutex {
 	crc32.Write(key)
 	idx := crc32.Sum32() % keyLocksNum
 	return s.keyLocks[idx]
+}
+
+func (s *shard) isLeader() bool {
+	s.shardMu.RLock()
+	isLeader := s.shardMu.leader == s.diskID
+	s.shardMu.RUnlock()
+
+	return isLeader
 }
 
 type shardKeysGenerator struct {
@@ -456,29 +544,29 @@ func (s *shardKeysGenerator) encodeInoKey(ino uint64) []byte {
 
 func (s *shardKeysGenerator) encodeLinkKey(ino uint64, name string) []byte {
 	shardDataPrefixSize := shardLinkPrefixSize()
-	key := make([]byte, shardDataPrefixSize+8+len(infix)+len(name))
+	key := make([]byte, shardDataPrefixSize+8+len(shardSuffix)+len(name))
 	encodeShardLinkPrefix(s.spaceId, s.shardId, key)
 	encodeIno(ino, key[shardDataPrefixSize:])
-	copy(key[shardDataPrefixSize+8:], infix)
-	copy(key[shardDataPrefixSize+8+len(infix):], util.StringsToBytes(name))
+	copy(key[shardDataPrefixSize+8:], shardSuffix)
+	copy(key[shardDataPrefixSize+8+len(shardSuffix):], util.StringsToBytes(name))
 	return key
 }
 
 func (s *shardKeysGenerator) decodeLinkKey(key []byte) (ino uint64, name string) {
 	shardDataPrefixSize := shardLinkPrefixSize()
 	ino = decodeIno(key[shardDataPrefixSize:])
-	nameRaw := make([]byte, len(key[shardDataPrefixSize+8+len(infix):]))
-	copy(nameRaw, key[shardDataPrefixSize+8+len(infix):])
+	nameRaw := make([]byte, len(key[shardDataPrefixSize+8+len(shardSuffix):]))
+	copy(nameRaw, key[shardDataPrefixSize+8+len(shardSuffix):])
 	name = util.BytesToString(nameRaw)
 	return
 }
 
 func (s *shardKeysGenerator) encodeLinkKeyPrefix(ino uint64) []byte {
 	shardDataPrefixSize := shardLinkPrefixSize()
-	keyPrefix := make([]byte, shardDataPrefixSize+8+len(infix))
+	keyPrefix := make([]byte, shardDataPrefixSize+8+len(shardSuffix))
 	encodeShardLinkPrefix(s.spaceId, s.shardId, keyPrefix)
 	encodeIno(ino, keyPrefix[shardDataPrefixSize:])
-	copy(keyPrefix[shardDataPrefixSize+8:], infix)
+	copy(keyPrefix[shardDataPrefixSize+8:], shardSuffix)
 	return keyPrefix
 }
 
@@ -489,10 +577,10 @@ func (s *shardKeysGenerator) encodeVectorKey(vid uint64) []byte {
 	return key
 }
 
-func protoFieldsToInternalFields(external []*proto.Field) []*persistent.Field {
-	ret := make([]*persistent.Field, len(external))
+func protoFieldsToInternalFields(external []proto.Field) []persistent.Field {
+	ret := make([]persistent.Field, len(external))
 	for i := range external {
-		ret[i] = &persistent.Field{
+		ret[i] = persistent.Field{
 			Name:  external[i].Name,
 			Value: external[i].Value,
 		}
@@ -500,13 +588,17 @@ func protoFieldsToInternalFields(external []*proto.Field) []*persistent.Field {
 	return ret
 }
 
-func internalFieldsToProtoFields(internal []*persistent.Field) []*proto.Field {
-	ret := make([]*proto.Field, len(internal))
+func internalFieldsToProtoFields(internal []persistent.Field) []proto.Field {
+	ret := make([]proto.Field, len(internal))
 	for i := range internal {
-		ret[i] = &proto.Field{
+		ret[i] = proto.Field{
 			Name:  internal[i].Name,
 			Value: internal[i].Value,
 		}
 	}
 	return ret
+}
+
+func calculateStartIno(shardID proto.ShardID) uint64 {
+	return uint64(shardID-1)*proto.ShardRangeStepSize + 1
 }

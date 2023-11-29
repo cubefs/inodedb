@@ -4,33 +4,47 @@ package persistent;
 
 option go_package = "./;persistent";
 
+option (gogoproto.sizer_all) = true;
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+
+import "gogoproto/gogo.proto";
+
+message DiskInfo {
+    uint32 disk_id = 1 [(gogoproto.customname) = "DiskID", (gogoproto.casttype) = "github.com/cubefs/inodedb/proto.DiskID"];
+    uint32 node_id = 2 [(gogoproto.customname) = "NodeID", (gogoproto.casttype) = "github.com/cubefs/inodedb/proto.NodeID"];
+    string path = 3;
+    uint64 used = 4;  // used size with unit byte
+    uint64 total = 5; // total size with unit byte
+}
+
 message ShardInfo {
-    uint32 shard_id = 1;
-    uint64 sid = 2;
+    uint32 shard_id = 1 [(gogoproto.customname) = "ShardID", (gogoproto.casttype) = "github.com/cubefs/inodedb/proto.ShardID"];
+    uint64 sid = 2 [(gogoproto.casttype) = "github.com/cubefs/inodedb/proto.Sid"];
     uint64 applied_index = 3;
     uint64 ino_cursor = 4;
     uint64 ino_used = 5;
     uint64 ino_limit = 6;
     uint64 epoch = 7;
-    repeated ShardNode nodes = 8;
+    repeated ShardNode nodes = 8 [(gogoproto.nullable) = false];
 }
 
 message ShardNode {
-    uint32 id = 1;
+    uint32 disk_id = 1 [(gogoproto.customname) = "DiskID", (gogoproto.casttype) = "github.com/cubefs/inodedb/proto.DiskID"];
     bool learner = 2;
 }
 
 message Item {
     uint64 ino = 1;
     uint64 links = 2;
-    repeated Field fields = 3;
+    repeated Field fields = 3 [(gogoproto.nullable) = false];
 }
 
 message Link {
     uint64 parent = 1;
     string name = 2;
     uint64 child = 3;
-    repeated Field fields = 4;
+    repeated Field fields = 4 [(gogoproto.nullable) = false];
 }
 
 message Field {

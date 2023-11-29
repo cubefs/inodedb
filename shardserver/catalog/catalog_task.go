@@ -10,29 +10,29 @@ import (
 
 type catalogTask Catalog
 
-func (c *catalogTask) executeShardTask(ctx context.Context, task *proto.ShardTask) error {
+func (c *catalogTask) executeShardTask(ctx context.Context, task proto.ShardTask) error {
 	span := trace.SpanFromContext(ctx)
 
-	space, err := (*Catalog)(c).GetSpace(ctx, task.SpaceName)
+	disk, err := (*Catalog)(c).getDisk(task.DiskID)
 	if err != nil {
-		return errors.Info(err, "get space failed", task.SpaceName)
+		return errors.Info(err, "get disk failed", task.Sid)
 	}
-	shard, err := space.GetShard(ctx, task.ShardId)
+	shard, err := disk.GetShard(task.Sid, task.ShardID)
 	if err != nil {
-		return errors.Info(err, "get shard failed", task.ShardId)
+		return errors.Info(err, "get shard failed", task.ShardID)
 	}
 
 	switch task.Type {
-	case proto.ShardTaskType_ClearShard:
+	case proto.ShardTask_ClearShard:
 		c.taskPool.Run(func() {
 			if shard.GetEpoch() == task.Epoch {
-				err := space.DeleteShard(ctx, task.ShardId)
+				err := disk.DeleteShard(ctx, task.Sid, task.ShardID)
 				if err != nil {
 					span.Errorf("delete shard task[%+v] failed: %s", task, err)
 				}
 			}
 		})
-	case proto.ShardTaskType_Checkpoint:
+	case proto.ShardTask_Checkpoint:
 		c.taskPool.Run(func() {
 			if err := shard.Checkpoint(ctx); err != nil {
 				span.Errorf("do shard checkpoint task[%+v] failed: %s", task, err)

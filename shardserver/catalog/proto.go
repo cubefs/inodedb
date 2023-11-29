@@ -3,8 +3,8 @@ package catalog
 import (
 	"encoding/binary"
 
+	"github.com/cubefs/inodedb/proto"
 	"github.com/cubefs/inodedb/shardserver/catalog/persistent"
-	pb "google.golang.org/protobuf/proto"
 )
 
 const (
@@ -14,7 +14,10 @@ const (
 )
 
 var (
-	infix        = []byte{'/'}
+	spacePrefix     = []byte{'s'}
+	shardInfoPrefix = []byte{'n'}
+
+	shardSuffix  = []byte{'p'}
 	inodeSuffix  = []byte{'i'}
 	linkSuffix   = []byte{'l'}
 	vectorSuffix = []byte{'v'}
@@ -24,55 +27,25 @@ type Timestamp struct{}
 
 // proto for storage encoding/decoding and function return value
 
-type shardInfo persistent.ShardInfo
+type shardInfo = persistent.ShardInfo
 
-func (s *shardInfo) Marshal() ([]byte, error) {
-	return pb.Marshal((*persistent.ShardInfo)(s))
-}
+type item = persistent.Item
 
-func (s *shardInfo) Unmarshal(raw []byte) error {
-	return pb.Unmarshal(raw, (*persistent.ShardInfo)(s))
-}
+type link = persistent.Link
 
-type item persistent.Item
+type embedding = persistent.Embedding
 
-// Marshal return marshaled data of item
-// TODO: As the flatbuffer unpacking data is more faster than protobuffer(10X above),
-// we may use flatbuffer for the internal encoding/decoding to avoid unpacking data time cost
-func (i *item) Marshal() ([]byte, error) {
-	return pb.Marshal((*persistent.Item)(i))
-}
-
-func (i *item) Unmarshal(raw []byte) error {
-	return pb.Unmarshal(raw, (*persistent.Item)(i))
-}
-
-type link persistent.Link
-
-func (l *link) Marshal() ([]byte, error) {
-	return pb.Marshal((*persistent.Link)(l))
-}
-
-func (l *link) Unmarshal(raw []byte) error {
-	return pb.Unmarshal(raw, (*persistent.Link)(l))
-}
-
-type embedding persistent.Embedding
-
-func (e *embedding) Marshal() ([]byte, error) {
-	return pb.Marshal((*persistent.Embedding)(e))
-}
-
-func (e *embedding) Unmarshal(raw []byte) error {
-	return pb.Unmarshal(raw, (*persistent.Embedding)(e))
-}
-
+// todo: merge these encode and decode function into shard?
 func spacePrefixSize() int {
-	return 8 + len(infix)
+	return 8 + len(spacePrefix) + len(shardSuffix)
 }
 
 func shardPrefixSize() int {
 	return spacePrefixSize() + 4
+}
+
+func shardInfoPrefixSize() int {
+	return 8 + len(shardInfoPrefix) + len(shardSuffix)
 }
 
 func shardInodePrefixSize() int {
@@ -87,50 +60,56 @@ func shardVectorPrefixSize() int {
 	return shardPrefixSize() + len(vectorSuffix)
 }
 
-func encodeSpacePrefix(sid uint64, raw []byte) {
+func encodeSpacePrefix(sid proto.Sid, raw []byte) {
 	if raw == nil || cap(raw) == 0 {
 		panic("invalid raw input")
 	}
-	binary.BigEndian.PutUint64(raw[:8], sid)
-	copy(raw[8:], infix)
+	prefixSize := len(spacePrefix)
+	copy(raw, spacePrefix)
+	binary.BigEndian.PutUint64(raw[prefixSize:8], uint64(sid))
+	copy(raw[8+prefixSize:], shardSuffix)
 }
 
-func encodeShardPrefix(sid uint64, shardId uint32, raw []byte) {
+func encodeShardInfoListPrefix(raw []byte) {
 	if raw == nil || cap(raw) == 0 {
 		panic("invalid raw input")
 	}
-	infixSize := len(infix)
-	binary.BigEndian.PutUint64(raw[:8], sid)
-	copy(raw[8:], infix)
-	binary.BigEndian.PutUint32(raw[8+infixSize:], shardId)
+	copy(raw, shardInfoPrefix)
 }
 
-func encodeShardInodePrefix(sid uint64, shardId uint32, raw []byte) {
+func encodeShardInfoPrefix(sid proto.Sid, shardID proto.ShardID, raw []byte) {
 	if raw == nil || cap(raw) == 0 {
 		panic("invalid raw input")
 	}
-	infixSize := len(infix)
-	binary.BigEndian.PutUint64(raw[:8], sid)
-	copy(raw[8:], infix)
-	binary.BigEndian.PutUint32(raw[8+infixSize:], shardId)
-	copy(raw[8+infixSize+4:], inodeSuffix)
+	prefixSize := len(shardInfoPrefix)
+	copy(raw, shardInfoPrefix)
+	binary.BigEndian.PutUint64(raw[prefixSize:8], sid)
+	copy(raw[8+prefixSize:], shardSuffix)
+	binary.BigEndian.PutUint32(raw[8+prefixSize+len(shardSuffix):], shardID)
 }
 
-func encodeShardLinkPrefix(sid uint64, shardId uint32, raw []byte) {
-	if raw == nil || cap(raw) == 0 {
-		panic("invalid raw input")
-	}
-	infixSize := len(infix)
-	binary.BigEndian.PutUint64(raw[:8], sid)
-	copy(raw[8:], infix)
-	binary.BigEndian.PutUint32(raw[8+infixSize:], shardId)
-	copy(raw[8+infixSize+4:], linkSuffix)
+func encodeShardPrefix(sid proto.Sid, shardID proto.ShardID, raw []byte) {
+	spacePrefixSize := spacePrefixSize()
+	encodeSpacePrefix(sid, raw[:spacePrefixSize])
+	binary.BigEndian.PutUint32(raw[spacePrefixSize:], uint32(shardID))
 }
 
-func encodeShardVectorPrefix(sid uint64, shardId uint32, raw []byte) {
+func encodeShardInodePrefix(sid proto.Sid, shardID proto.ShardID, raw []byte) {
 	shardPrefixSize := shardPrefixSize()
-	encodeShardPrefix(sid, shardId, raw[:shardPrefixSize])
+	encodeShardPrefix(sid, shardID, raw[:shardPrefixSize])
 	copy(raw[shardPrefixSize:], inodeSuffix)
+}
+
+func encodeShardLinkPrefix(sid proto.Sid, shardID proto.ShardID, raw []byte) {
+	shardPrefixSize := shardPrefixSize()
+	encodeShardPrefix(sid, shardID, raw[:shardPrefixSize])
+	copy(raw[shardPrefixSize:], linkSuffix)
+}
+
+func encodeShardVectorPrefix(sid proto.Sid, shardID proto.ShardID, raw []byte) {
+	shardPrefixSize := shardPrefixSize()
+	encodeShardPrefix(sid, shardID, raw[:shardPrefixSize])
+	copy(raw[shardPrefixSize:], vectorSuffix)
 }
 
 func encodeIno(ino uint64, raw []byte) {

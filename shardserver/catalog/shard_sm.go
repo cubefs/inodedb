@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"sync/atomic"
@@ -12,7 +13,6 @@ import (
 	"github.com/cubefs/inodedb/proto"
 	"github.com/cubefs/inodedb/raft"
 	"github.com/cubefs/inodedb/shardserver/catalog/persistent"
-	pb "google.golang.org/protobuf/proto"
 )
 
 const (
@@ -21,6 +21,7 @@ const (
 	RaftOpDeleteItem
 	RaftOpLinkItem
 	RaftOpUnlinkItem
+	RaftOpAllocInoRange
 )
 
 type shardSM shard
@@ -56,6 +57,10 @@ func (s *shardSM) Apply(cxt context.Context, pd []raft.ProposalData, index uint6
 				return
 			}
 			rets[i] = nil
+		case RaftOpAllocInoRange:
+			if rets[i], err = s.applyAllocInoRange(ctx, pd[i].Data); err != nil {
+				return
+			}
 		default:
 			panic(fmt.Sprintf("unsupported operation type: %d", pd[i].Op))
 		}
@@ -68,7 +73,7 @@ func (s *shardSM) Apply(cxt context.Context, pd []raft.ProposalData, index uint6
 func (s *shardSM) LeaderChange(peerID uint64) error {
 	// todo: report leader change to master
 	s.shardMu.Lock()
-	s.shardMu.leader = uint32(peerID)
+	s.shardMu.leader = proto.DiskID(peerID)
 	s.shardMu.Unlock()
 
 	return nil
@@ -84,20 +89,20 @@ func (s *shardSM) ApplyMemberChange(cc *raft.Member, index uint64) error {
 	case raft.MemberChangeType_AddMember:
 		found := false
 		for _, node := range s.shardMu.Nodes {
-			if node.Id == uint32(cc.NodeID) {
+			if node.DiskID == uint32(cc.NodeID) {
 				found = true
 				break
 			}
 		}
 		if !found {
-			s.shardMu.Nodes = append(s.shardMu.Nodes, &persistent.ShardNode{
-				Id:      uint32(cc.NodeID),
+			s.shardMu.Nodes = append(s.shardMu.Nodes, persistent.ShardNode{
+				DiskID:  uint32(cc.NodeID),
 				Learner: cc.Learner,
 			})
 		}
 	case raft.MemberChangeType_RemoveMember:
 		for i, node := range s.shardMu.Nodes {
-			if node.Id == uint32(cc.NodeID) {
+			if node.DiskID == uint32(cc.NodeID) {
 				s.shardMu.Nodes = append(s.shardMu.Nodes[:i], s.shardMu.Nodes[i+1:]...)
 				break
 			}
@@ -133,6 +138,8 @@ func (s *shardSM) Snapshot() raft.Snapshot {
 }
 
 func (s *shardSM) ApplySnapshot(snap raft.Snapshot) error {
+	// todo: clear all data with shard prefix
+
 	defer snap.Close()
 	kvStore := s.store.KVStore()
 	_, ctx := trace.StartSpanFromContext(context.Background(), "")
@@ -162,9 +169,12 @@ func (s *shardSM) ApplySnapshot(snap raft.Snapshot) error {
 
 func (s *shardSM) applyInsertItem(ctx context.Context, data []byte) error {
 	protoItem := &proto.Item{}
-	if err := pb.Unmarshal(data, protoItem); err != nil {
+	if err := protoItem.Unmarshal(data); err != nil {
 		return err
 	}
+
+	// update inode cursor, so the follower node can keep up with leader's inode cursor
+	s.updateInoCursor(protoItem.Ino)
 
 	kvStore := s.store.KVStore()
 	key := s.shardKeys.encodeInoKey(protoItem.Ino)
@@ -201,7 +211,7 @@ func (s *shardSM) applyInsertItem(ctx context.Context, data []byte) error {
 func (s *shardSM) applyUpdateItem(ctx context.Context, data []byte) error {
 	span := trace.SpanFromContext(ctx)
 	protoItem := &proto.Item{}
-	if err := pb.Unmarshal(data, protoItem); err != nil {
+	if err := protoItem.Unmarshal(data); err != nil {
 		return err
 	}
 
@@ -231,7 +241,7 @@ func (s *shardSM) applyUpdateItem(ctx context.Context, data []byte) error {
 			item.Fields[idx].Value = updateField.Value
 			continue
 		}
-		item.Fields = append(item.Fields, &persistent.Field{Name: updateField.Name, Value: updateField.Value})
+		item.Fields = append(item.Fields, persistent.Field{Name: updateField.Name, Value: updateField.Value})
 	}
 	// todo: add embedding type store with write batch
 
@@ -267,7 +277,7 @@ func (s *shardSM) applyDeleteItem(ctx context.Context, data []byte) error {
 
 func (s *shardSM) applyLink(ctx context.Context, data []byte) error {
 	protoLink := &proto.Link{}
-	if err := pb.Unmarshal(data, protoLink); err != nil {
+	if err := protoLink.Unmarshal(data); err != nil {
 		return err
 	}
 
@@ -322,7 +332,7 @@ func (s *shardSM) applyLink(ctx context.Context, data []byte) error {
 
 func (s *shardSM) applyUnlink(ctx context.Context, data []byte) error {
 	protoUnlink := &proto.Unlink{}
-	if err := pb.Unmarshal(data, protoUnlink); err != nil {
+	if err := protoUnlink.Unmarshal(data); err != nil {
 		return err
 	}
 
@@ -361,6 +371,24 @@ func (s *shardSM) applyUnlink(ctx context.Context, data []byte) error {
 	return kvStore.Write(ctx, batch, nil)
 }
 
+func (s *shardSM) applyAllocInoRange(ctx context.Context, data []byte) (inodeRange, error) {
+	if inoUsed := atomic.LoadUint64(&s.shardMu.InoUsed); inoUsed > s.shardMu.InoLimit {
+		span := trace.SpanFromContext(ctx)
+		span.Warnf("inode limit exceed[%d], can alloc inode range any more", inoUsed)
+		return inodeRange{}, nil
+	}
+
+	count := binary.BigEndian.Uint64(data)
+	s.shardMu.Lock()
+	inoRange := inodeRange{
+		start: s.shardMu.InoCursor,
+		end:   s.shardMu.InoCursor + count,
+	}
+	s.shardMu.Unlock()
+
+	return inoRange, nil
+}
+
 // todo: how to optimized the lock arena of shardMu and InoUsed modification
 func (s *shardSM) increaseInoUsed() {
 	atomic.AddUint64(&s.shardMu.InoUsed, 1)
@@ -383,4 +411,17 @@ func (s *shardSM) setAppliedIndex(index uint64) {
 
 func (s *shardSM) getAppliedIndex() uint64 {
 	return atomic.LoadUint64(&s.shardMu.AppliedIndex)
+}
+
+func (s *shardSM) updateInoCursor(new uint64) {
+	for {
+		cur := atomic.LoadUint64(&s.shardMu.InoCursor)
+		if cur >= new {
+			return
+		}
+
+		if atomic.CompareAndSwapUint64(&s.shardMu.InoCursor, cur, new) {
+			return
+		}
+	}
 }
