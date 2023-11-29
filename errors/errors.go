@@ -49,6 +49,8 @@ var (
 	ErrListNumExceed         = errors.New("list num exceed")
 	ErrInvalidShardID        = errors.New("invalid shard id")
 	ErrUnknownField          = errors.New("unknown field")
+	ErrDiskNotExist          = errors.New("disk not exist")
+	ErrNotLeader             = errors.New("current shard node is not leader")
 )
 
 // master error definition

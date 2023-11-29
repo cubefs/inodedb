@@ -114,7 +114,7 @@ type shardNode struct {
 	Learner bool   `json:"learner"`
 }
 
-func protoFieldMetasToInternalFieldMetas(fields []*proto.FieldMeta) []FieldMeta {
+func protoFieldMetasToInternalFieldMetas(fields []proto.FieldMeta) []FieldMeta {
 	ret := make([]FieldMeta, len(fields))
 	for i := range fields {
 		ret[i] = FieldMeta{
