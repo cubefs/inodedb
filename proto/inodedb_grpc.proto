@@ -21,7 +21,7 @@ service InodeDBMaster {
 	rpc GetCatalogChanges (GetCatalogChangesRequest) returns (GetCatalogChangesResponse) {}
 	rpc GetRoleNodes (GetRoleNodesRequest) returns (GetRoleNodesResponse) {}
 	
-	rpc AllocDiskId (AllocDiskIDRequest) returns (AllocDiskIDResponse) {}
+	rpc AllocDiskID (AllocDiskIDRequest) returns (AllocDiskIDResponse) {}
 	rpc AddDisk (AddDiskRequest) returns (AddDiskResponse) {}
 	rpc ListDisks (ListDiskRequest) returns (ListDiskResponse) {}
 	rpc GetDisk (GetDiskRequest) returns (GetDiskResponse) {}
@@ -78,7 +78,7 @@ message AddDiskResponse {
 message ListDiskRequest {
 	string az = 1;
 	string rack = 2;
-	string host = 3; // should be host:port format
+	uint32 node_id = 3 [(gogoproto.customname) = "NodeID", (gogoproto.casttype) = "NodeID"]; // should be host:port format
 	DiskStatus status = 4;
 	uint32 marker = 5;
 	uint32 count = 6;

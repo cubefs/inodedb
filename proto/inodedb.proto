@@ -69,7 +69,6 @@ message Node {
 message Disk {
 	uint32 disk_id = 1 [(gogoproto.customname) = "DiskID", (gogoproto.casttype) = "DiskID"];
 	uint32 node_id = 2  [(gogoproto.customname) = "NodeID", (gogoproto.casttype) = "NodeID"];
-	uint32 port = 3;
 	string path = 4;
 	DiskStatus status = 5;
 	bool readonly = 6;
@@ -81,8 +80,8 @@ message Disk {
 
 message DiskReport {
 	uint32 disk_id = 1 [(gogoproto.customname) = "DiskID", (gogoproto.casttype) = "DiskID"];
-	uint64 used = 2;
-	uint64 total = 3;
+	uint64 used = 2;   // used size with unit byte
+	uint64 total = 3;  // total size with unit byte
 	uint64 shardCnt = 4;
 }
 
