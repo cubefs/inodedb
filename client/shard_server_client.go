@@ -2,13 +2,15 @@ package client
 
 import (
 	"context"
-	"errors"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/cubefs/cubefs/blobstore/util/errors"
+
 	"github.com/cubefs/inodedb/proto"
+	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc"
 )
 
@@ -22,11 +24,14 @@ type (
 	ShardServerClient struct {
 		// shardServerClients maintains grpc client by node id
 		shardServerClients sync.Map
+		// diskNodes maintains the reflection of disk id to node id
+		diskNodes sync.Map
 		// catalog maintains space/shard info of the cluster
 		catalog      sync.Map
 		masterClient *MasterClient
 		tc           *TransportConfig
 		dialOpts     []grpc.DialOption
+		sf           singleflight.Group
 	}
 	shardServer struct {
 		conn *grpc.ClientConn
@@ -70,16 +75,35 @@ func NewShardServerClient(cfg *ShardServerConfig) (*ShardServerClient, error) {
 	return shardServerClient, nil
 }
 
-func (s *ShardServerClient) GetClient(ctx context.Context, nodeId uint32) (proto.InodeDBShardServerClient, error) {
-	client, ok := s.shardServerClients.Load(nodeId)
+func (s *ShardServerClient) GetShardServerClient(ctx context.Context, diskID proto.DiskID) (proto.InodeDBShardServerClient, error) {
+	v, ok := s.diskNodes.Load(diskID)
 	if !ok {
-		// rebuild shard server client
-		if err := s.refreshShardServerClients(ctx); err != nil {
+		//  refresh shard server disks
+		if _, err, _ := s.sf.Do("refresh-disk", func() (interface{}, error) {
+			if err := s.refreshShardDisks(ctx); err != nil {
+				return nil, err
+			}
+			return nil, nil
+		}); err != nil {
 			return nil, err
 		}
 	}
 
-	client, ok = s.shardServerClients.Load(nodeId)
+	nodeID := v.(proto.NodeID)
+	client, ok := s.shardServerClients.Load(nodeID)
+	if !ok {
+		// rebuild shard server client
+		if _, err, _ := s.sf.Do("refresh-server", func() (interface{}, error) {
+			if err := s.refreshShardServerClients(ctx); err != nil {
+				return nil, err
+			}
+			return nil, nil
+		}); err != nil {
+			return nil, err
+		}
+	}
+
+	client, ok = s.shardServerClients.Load(nodeID)
 	if !ok {
 		return nil, errors.New("shard server not found")
 	}
@@ -98,28 +122,51 @@ func (s *ShardServerClient) refreshShardServerClients(ctx context.Context) error
 	// get all shard server list by master and build shard server clients
 	resp, err := s.masterClient.GetRoleNodes(ctx, &proto.GetRoleNodesRequest{Role: proto.NodeRole_ShardServer})
 	if err != nil {
-		return err
+		return errors.Info(err, "get role nodes failed")
 	}
 	if len(resp.Nodes) == 0 {
 		return errors.New("no role shard server nodes registered")
 	}
 
 	for _, node := range resp.Nodes {
-		if _, ok := s.shardServerClients.Load(node.Id); ok {
+		if _, ok := s.shardServerClients.Load(node.ID); ok {
 			continue
 		}
 
-		routerAddress := node.Addr + ":" + strconv.Itoa(int(node.GrpcPort))
-		conn, err := grpc.Dial(routerAddress, s.dialOpts...)
+		address := node.Addr + ":" + strconv.Itoa(int(node.GrpcPort))
+		conn, err := grpc.Dial(address, s.dialOpts...)
 		if err != nil {
-			return err
+			return errors.Info(err, "dial shard server failed", address)
 		}
 
 		shardServer := &shardServer{
 			conn:                     conn,
 			InodeDBShardServerClient: proto.NewInodeDBShardServerClient(conn),
 		}
-		s.shardServerClients.Store(node.Id, shardServer)
+		s.shardServerClients.Store(node.ID, shardServer)
+	}
+
+	return nil
+}
+
+func (s *ShardServerClient) refreshShardDisks(ctx context.Context) error {
+	marker := uint32(0)
+	for {
+		resp, err := s.masterClient.ListDisks(ctx, &proto.ListDiskRequest{
+			Marker: marker,
+			Count:  1000,
+		})
+		if err != nil {
+			return err
+		}
+		if len(resp.Disks) == 0 {
+			break
+		}
+
+		for i := range resp.Disks {
+			s.diskNodes.LoadOrStore(resp.Disks[i].DiskID, resp.Disks[i].NodeID)
+		}
+		marker = resp.Marker
 	}
 
 	return nil
