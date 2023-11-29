@@ -7,21 +7,21 @@ import (
 )
 
 type ShardInfo struct {
-	ShardId  uint32
-	Epoch    uint64
-	LeaderId uint32
-	Nodes    []*proto.ShardNode
+	ShardID proto.ShardID
+	Epoch   uint64
+	Leader  proto.DiskID
+	Nodes   []proto.ShardNode
 }
 
 type shard struct {
+	shardID uint32
 	epoch   uint64
-	shardId uint32
 	tr      *transport
 
 	info *ShardInfo
 }
 
-func (s *shard) InsertItem(ctx context.Context, req *proto.InsertItemRequest) (uint64, error) {
+func (s *shard) InsertItem(ctx context.Context, req *proto.ShardInsertItemRequest) (uint64, error) {
 	sc, err := s.getLeaderClient(ctx)
 	if err != nil {
 		return 0, err
@@ -33,7 +33,7 @@ func (s *shard) InsertItem(ctx context.Context, req *proto.InsertItemRequest) (u
 	return item.Ino, nil
 }
 
-func (s *shard) UpdateItem(ctx context.Context, req *proto.UpdateItemRequest) error {
+func (s *shard) UpdateItem(ctx context.Context, req *proto.ShardUpdateItemRequest) error {
 	sc, err := s.getLeaderClient(ctx)
 	if err != nil {
 		return err
@@ -45,7 +45,7 @@ func (s *shard) UpdateItem(ctx context.Context, req *proto.UpdateItemRequest) er
 	return nil
 }
 
-func (s *shard) DeleteItem(ctx context.Context, req *proto.DeleteItemRequest) error {
+func (s *shard) DeleteItem(ctx context.Context, req *proto.ShardDeleteItemRequest) error {
 	sc, err := s.getLeaderClient(ctx)
 	if err != nil {
 		return err
@@ -57,19 +57,19 @@ func (s *shard) DeleteItem(ctx context.Context, req *proto.DeleteItemRequest) er
 	return nil
 }
 
-func (s *shard) GetItem(ctx context.Context, req *proto.GetItemRequest) (*proto.Item, error) {
+func (s *shard) GetItem(ctx context.Context, req *proto.ShardGetItemRequest) (proto.Item, error) {
 	sc, err := s.getLeaderClient(ctx)
 	if err != nil {
-		return nil, err
+		return proto.Item{}, err
 	}
 	resp, err := sc.ShardGetItem(ctx, req)
 	if err != nil {
-		return nil, err
+		return proto.Item{}, err
 	}
 	return resp.Item, nil
 }
 
-func (s *shard) Link(ctx context.Context, req *proto.LinkRequest) error {
+func (s *shard) Link(ctx context.Context, req *proto.ShardLinkRequest) error {
 	sc, err := s.getLeaderClient(ctx)
 	if err != nil {
 		return err
@@ -81,7 +81,7 @@ func (s *shard) Link(ctx context.Context, req *proto.LinkRequest) error {
 	return nil
 }
 
-func (s *shard) Unlink(ctx context.Context, req *proto.UnlinkRequest) error {
+func (s *shard) Unlink(ctx context.Context, req *proto.ShardUnlinkRequest) error {
 	sc, err := s.getLeaderClient(ctx)
 	if err != nil {
 		return err
@@ -93,7 +93,7 @@ func (s *shard) Unlink(ctx context.Context, req *proto.UnlinkRequest) error {
 	return nil
 }
 
-func (s *shard) List(ctx context.Context, req *proto.ListRequest) (ret []*proto.Link, err error) {
+func (s *shard) List(ctx context.Context, req *proto.ShardListRequest) (ret []proto.Link, err error) {
 	sc, err := s.getLeaderClient(ctx)
 	if err != nil {
 		return nil, err
@@ -106,9 +106,9 @@ func (s *shard) List(ctx context.Context, req *proto.ListRequest) (ret []*proto.
 }
 
 func (s *shard) getLeaderClient(ctx context.Context) (ShardServerClient, error) {
-	leader := s.info.LeaderId
-	if s.info.LeaderId == 0 {
-		leader = s.info.Nodes[0].Id
+	leader := s.info.Leader
+	if s.info.Leader == 0 {
+		leader = s.info.Nodes[0].DiskID
 	}
 	return s.tr.GetClient(ctx, leader)
 }

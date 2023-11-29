@@ -6,6 +6,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/gogo/protobuf/types"
+
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"golang.org/x/sync/singleflight"
 
@@ -109,32 +111,32 @@ func (c *Catalog) GetCatalogChanges(ctx context.Context) error {
 				continue
 			}
 			switch item.Type {
-			case proto.CatalogChangeType_AddSpace:
+			case proto.CatalogChangeItem_AddSpace:
 				spaceItem := new(proto.CatalogChangeSpaceAdd)
-				if err = item.Item.UnmarshalTo(spaceItem); err != nil {
+				if err = types.UnmarshalAny(item.Item, spaceItem); err != nil {
 					return nil, err
 				}
 				space := newSpace(ctx, spaceItem.Name, spaceItem.Sid, c.GetCatalogChanges)
 				c.spaces.Put(space)
 
-			case proto.CatalogChangeType_DeleteSpace:
+			case proto.CatalogChangeItem_DeleteSpace:
 				spaceItem := new(proto.CatalogChangeSpaceDelete)
-				if err = item.Item.UnmarshalTo(spaceItem); err != nil {
+				if err = types.UnmarshalAny(item.Item, spaceItem); err != nil {
 					return nil, err
 				}
 				c.spaces.Delete(spaceItem.Sid)
 
-			case proto.CatalogChangeType_AddShard:
+			case proto.CatalogChangeItem_AddShard:
 				shardItem := new(proto.CatalogChangeShardAdd)
-				if err = item.Item.UnmarshalTo(shardItem); err != nil {
+				if err = types.UnmarshalAny(item.Item, shardItem); err != nil {
 					return nil, err
 				}
 				space := c.spaces.Get(shardItem.Sid)
 				space.AddShard(&ShardInfo{
-					ShardId:  shardItem.ShardId,
-					Epoch:    shardItem.Epoch,
-					Nodes:    shardItem.Nodes,
-					LeaderId: shardItem.Leader,
+					ShardID: shardItem.ShardID,
+					Epoch:   shardItem.Epoch,
+					Nodes:   shardItem.Nodes,
+					Leader:  shardItem.Leader,
 				}, c.transporter)
 			default:
 				span.Panicf("parse catalog change from master failed, err: %s", errors.ErrUnknownOperationType)

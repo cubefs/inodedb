@@ -13,14 +13,14 @@ import (
 )
 
 type ShardServerClient interface {
-	ShardInsertItem(ctx context.Context, in *proto.InsertItemRequest, opts ...grpc.CallOption) (*proto.InsertItemResponse, error)
-	ShardUpdateItem(ctx context.Context, in *proto.UpdateItemRequest, opts ...grpc.CallOption) (*proto.UpdateItemResponse, error)
-	ShardDeleteItem(ctx context.Context, in *proto.DeleteItemRequest, opts ...grpc.CallOption) (*proto.DeleteItemResponse, error)
-	ShardGetItem(ctx context.Context, in *proto.GetItemRequest, opts ...grpc.CallOption) (*proto.GetItemResponse, error)
-	ShardLink(ctx context.Context, in *proto.LinkRequest, opts ...grpc.CallOption) (*proto.LinkResponse, error)
-	ShardUnlink(ctx context.Context, in *proto.UnlinkRequest, opts ...grpc.CallOption) (*proto.UnlinkResponse, error)
-	ShardList(ctx context.Context, in *proto.ListRequest, opts ...grpc.CallOption) (*proto.ListResponse, error)
-	ShardSearch(ctx context.Context, in *proto.SearchRequest, opts ...grpc.CallOption) (*proto.SearchResponse, error)
+	ShardInsertItem(ctx context.Context, in *proto.ShardInsertItemRequest, opts ...grpc.CallOption) (*proto.ShardInsertItemResponse, error)
+	ShardUpdateItem(ctx context.Context, in *proto.ShardUpdateItemRequest, opts ...grpc.CallOption) (*proto.ShardUpdateItemResponse, error)
+	ShardDeleteItem(ctx context.Context, in *proto.ShardDeleteItemRequest, opts ...grpc.CallOption) (*proto.ShardDeleteItemResponse, error)
+	ShardGetItem(ctx context.Context, in *proto.ShardGetItemRequest, opts ...grpc.CallOption) (*proto.ShardGetItemResponse, error)
+	ShardLink(ctx context.Context, in *proto.ShardLinkRequest, opts ...grpc.CallOption) (*proto.ShardLinkResponse, error)
+	ShardUnlink(ctx context.Context, in *proto.ShardUnlinkRequest, opts ...grpc.CallOption) (*proto.ShardUnlinkResponse, error)
+	ShardList(ctx context.Context, in *proto.ShardListRequest, opts ...grpc.CallOption) (*proto.ShardListResponse, error)
+	ShardSearch(ctx context.Context, in *proto.ShardSearchRequest, opts ...grpc.CallOption) (*proto.ShardSearchResponse, error)
 }
 
 type ShardServerConfig struct {
@@ -56,7 +56,7 @@ func NewTransport(cfg *ShardServerConfig, info *proto.Node) (*transport, error) 
 func (s *transport) Register(ctx context.Context) error {
 	resp, err := s.masterClient.Cluster(ctx, &proto.ClusterRequest{
 		Operation: proto.ClusterOperation_Join,
-		NodeInfo: &proto.Node{
+		NodeInfo: proto.Node{
 			Addr:     s.info.Addr,
 			GrpcPort: s.info.GrpcPort,
 			HttpPort: s.info.HttpPort,
@@ -70,7 +70,7 @@ func (s *transport) Register(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	s.info.Id = resp.Id
+	s.info.ID = resp.ID
 	return nil
 }
 
@@ -83,7 +83,7 @@ func (s *transport) StartHeartbeat(ctx context.Context) {
 		for {
 			select {
 			case <-heartbeatTicker.C:
-				if _, err := s.masterClient.Heartbeat(ctx, &proto.HeartbeatRequest{Id: s.info.Id}); err != nil {
+				if _, err := s.masterClient.Heartbeat(ctx, &proto.HeartbeatRequest{NodeID: s.info.ID}); err != nil {
 					span.Warnf("heartbeat to master failed: %s", err)
 				}
 			case <-s.done:
@@ -93,8 +93,8 @@ func (s *transport) StartHeartbeat(ctx context.Context) {
 	}()
 }
 
-func (s *transport) GetClient(ctx context.Context, nodeId uint32) (ShardServerClient, error) {
-	client, err := s.shardServerClient.GetClient(ctx, nodeId)
+func (s *transport) GetClient(ctx context.Context, diskID proto.DiskID) (ShardServerClient, error) {
+	client, err := s.shardServerClient.GetShardServerClient(ctx, diskID)
 	if err != nil {
 		return nil, err
 	}

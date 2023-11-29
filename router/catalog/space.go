@@ -24,7 +24,7 @@ type Space struct {
 	shards           *concurrentShards
 	getCatalogChange getCatalogChangeFunc
 
-	shardIds []uint32
+	shardIDs []uint32
 	lock     sync.RWMutex
 }
 
@@ -40,12 +40,12 @@ func newSpace(ctx context.Context, spaceName string, sid uint64, f getCatalogCha
 }
 
 func (s *Space) AddShard(info *ShardInfo, tr *transport) {
-	if get := s.shards.Get(info.ShardId); get != nil {
+	if get := s.shards.Get(info.ShardID); get != nil {
 		return
 	}
 	newShard := &shard{
 		epoch:   info.Epoch,
-		shardId: info.ShardId,
+		shardID: info.ShardID,
 		tr:      tr,
 		info:    info,
 	}
@@ -53,23 +53,26 @@ func (s *Space) AddShard(info *ShardInfo, tr *transport) {
 
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	s.shardIds = append(s.shardIds, info.ShardId)
+	s.shardIDs = append(s.shardIDs, info.ShardID)
 }
 
-func (s *Space) GetShard(ctx context.Context, shardId uint32) *shard {
-	return s.shards.Get(shardId)
+func (s *Space) GetShard(ctx context.Context, shardID proto.ShardID) *shard {
+	return s.shards.Get(shardID)
 }
 
-func (s *Space) InsertItem(ctx context.Context, item *proto.Item) (uint64, error) {
-	shardId := s.getRandShardId()
-	shard := s.GetShard(ctx, shardId)
+func (s *Space) InsertItem(ctx context.Context, item proto.Item) (uint64, error) {
+	shardID := s.getRandShardID()
+	shard := s.GetShard(ctx, shardID)
 
-	itemRequest := &proto.InsertItemRequest{
-		Item:           item,
-		SpaceName:      s.name,
-		PreferredShard: shardId,
+	itemRequest := &proto.ShardInsertItemRequest{
+		Header: proto.ShardOpHeader{
+			DiskID:       shard.info.Leader,
+			ShardID:      shard.shardID,
+			Sid:          s.sid,
+			RouteVersion: 0,
+		},
+		Item: item,
 	}
-
 	ino, err := shard.InsertItem(ctx, itemRequest)
 	if err != nil {
 		return 0, err
@@ -78,15 +81,20 @@ func (s *Space) InsertItem(ctx context.Context, item *proto.Item) (uint64, error
 	return ino, nil
 }
 
-func (s *Space) UpdateItem(ctx context.Context, item *proto.Item) error {
+func (s *Space) UpdateItem(ctx context.Context, item proto.Item) error {
 	shard := s.locateShard(ctx, item.Ino)
 	if shard == nil {
 		return errors.ErrInoRangeNotFound
 	}
 
-	itemRequest := &proto.UpdateItemRequest{
-		Item:      item,
-		SpaceName: s.name,
+	itemRequest := &proto.ShardUpdateItemRequest{
+		Header: proto.ShardOpHeader{
+			DiskID:       shard.info.Leader,
+			ShardID:      shard.shardID,
+			Sid:          s.sid,
+			RouteVersion: 0,
+		},
+		Item: item,
 	}
 	return shard.UpdateItem(ctx, itemRequest)
 }
@@ -97,60 +105,91 @@ func (s *Space) DeleteItem(ctx context.Context, ino uint64) error {
 		return errors.ErrInoRangeNotFound
 	}
 
-	deleteRequest := &proto.DeleteItemRequest{
-		SpaceName: s.name,
-		Ino:       ino,
+	deleteRequest := &proto.ShardDeleteItemRequest{
+		Header: proto.ShardOpHeader{
+			DiskID:       shard.info.Leader,
+			ShardID:      shard.shardID,
+			Sid:          s.sid,
+			RouteVersion: 0,
+		},
+		Ino: ino,
 	}
 	return shard.DeleteItem(ctx, deleteRequest)
 }
 
-func (s *Space) GetItem(ctx context.Context, ino uint64) (*proto.Item, error) {
+func (s *Space) GetItem(ctx context.Context, ino uint64) (proto.Item, error) {
 	shard := s.locateShard(ctx, ino)
 	if shard == nil {
-		return nil, errors.ErrInoRangeNotFound
+		return proto.Item{}, errors.ErrInoRangeNotFound
 	}
 
-	getItemRequest := &proto.GetItemRequest{
-		SpaceName: s.name,
-		Ino:       ino,
+	getItemRequest := &proto.ShardGetItemRequest{
+		Header: proto.ShardOpHeader{
+			DiskID:       shard.info.Leader,
+			ShardID:      shard.shardID,
+			Sid:          s.sid,
+			RouteVersion: 0,
+		},
+		Ino: ino,
 	}
 	return shard.GetItem(ctx, getItemRequest)
 }
 
-func (s *Space) Link(ctx context.Context, link *proto.Link) error {
+func (s *Space) Link(ctx context.Context, link proto.Link) error {
 	shard := s.locateShard(ctx, link.Parent)
 	if shard == nil {
 		return errors.ErrInoRangeNotFound
 	}
 
-	linkRequest := &proto.LinkRequest{
-		SpaceName: s.name,
-		Link:      link,
+	linkRequest := &proto.ShardLinkRequest{
+		Header: proto.ShardOpHeader{
+			DiskID:       shard.info.Leader,
+			ShardID:      shard.shardID,
+			Sid:          s.sid,
+			RouteVersion: 0,
+		},
+		Link: link,
 	}
 
 	return shard.Link(ctx, linkRequest)
 }
 
-func (s *Space) Unlink(ctx context.Context, unlink *proto.Unlink) error {
+func (s *Space) Unlink(ctx context.Context, unlink proto.Unlink) error {
 	shard := s.locateShard(ctx, unlink.Parent)
 	if shard == nil {
 		return errors.ErrInoRangeNotFound
 	}
 
-	unlinkRequest := &proto.UnlinkRequest{
-		SpaceName: s.name,
-		Unlink:    unlink,
+	unlinkRequest := &proto.ShardUnlinkRequest{
+		Header: proto.ShardOpHeader{
+			DiskID:       shard.info.Leader,
+			ShardID:      shard.shardID,
+			Sid:          s.sid,
+			RouteVersion: 0,
+		},
+		Unlink: unlink,
 	}
 
 	return shard.Unlink(ctx, unlinkRequest)
 }
 
-func (s *Space) List(ctx context.Context, req *proto.ListRequest) ([]*proto.Link, error) {
+func (s *Space) List(ctx context.Context, req *proto.ListRequest) ([]proto.Link, error) {
 	shard := s.locateShard(ctx, req.Ino)
 	if shard == nil {
 		return nil, errors.ErrInoRangeNotFound
 	}
-	return shard.List(ctx, req)
+
+	return shard.List(ctx, &proto.ShardListRequest{
+		Header: proto.ShardOpHeader{
+			DiskID:       shard.info.Leader,
+			ShardID:      shard.shardID,
+			Sid:          s.sid,
+			RouteVersion: 0,
+		},
+		Ino:   req.Ino,
+		Start: req.Start,
+		Num:   req.Num,
+	})
 }
 
 func (s *Space) Search(ctx context.Context, req *proto.SearchRequest) (*proto.SearchResponse, error) {
@@ -170,15 +209,15 @@ func (s *Space) locateShard(ctx context.Context, ino uint64) *shard {
 	return s.shards.Get(shardId)
 }
 
-func (s *Space) getRandShardId() uint32 {
+func (s *Space) getRandShardID() uint32 {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
-	num := len(s.shardIds)
+	num := len(s.shardIDs)
 	rand.Seed(time.Now().UnixNano())
 	idx := rand.Intn(num)
 
-	return s.shardIds[idx]
+	return s.shardIDs[idx]
 }
 
 // concurrentShards is an effective data struct (concurrent map implements)
@@ -212,7 +251,7 @@ func (s *concurrentShards) Get(sid uint32) *shard {
 
 // Put new shard into concurrentShards
 func (s *concurrentShards) Put(v *shard) {
-	id := v.shardId
+	id := v.shardID
 	idx := id % s.num
 	s.locks[idx].Lock()
 	defer s.locks[idx].Unlock()
