@@ -147,7 +147,7 @@ type (
 		// The default value is 5s.
 		ReadIndexTimeoutMS int
 
-		TransportConfig TransportConfig `json:"-"`
+		TransportConfig TransportConfig
 		Logger          raft.Logger     `json:"-"`
 		Storage         Storage         `json:"-"`
 		Resolver        AddressResolver `json:"-"`

@@ -306,6 +306,7 @@ func (s *storage) SetAppliedIndex(index uint64) {
 // SaveHardStateAndEntries is called by one worker only
 func (s *storage) SaveHardStateAndEntries(hs raftpb.HardState, entries []raftpb.Entry) error {
 	batch := s.rawStg.NewBatch()
+	defer batch.Close()
 
 	if !raft.IsEmptyHardState(hs) {
 		value, err := hs.Marshal()
@@ -358,6 +359,8 @@ func (s *storage) Truncate(index uint64) error {
 	}
 
 	batch := s.rawStg.NewBatch()
+	defer batch.Close()
+
 	batch.DeleteRange(encodeIndexLogKey(s.id, 0), encodeIndexLogKey(s.id, index))
 	if err := s.rawStg.Write(batch); err != nil {
 		return err
