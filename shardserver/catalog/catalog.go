@@ -37,12 +37,10 @@ type Catalog struct {
 	spaces       sync.Map
 	done         chan struct{}
 
-	disks       sync.Map
-	store       *store.Store
-	transport   *transport
-	raftManager raft.Manager
-	taskPool    taskpool.TaskPool
-	cfg         *Config
+	disks     sync.Map
+	transport *transport
+	taskPool  taskpool.TaskPool
+	cfg       *Config
 }
 
 func NewCatalog(ctx context.Context, cfg *Config) *Catalog {

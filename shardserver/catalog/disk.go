@@ -8,6 +8,8 @@ import (
 	"os"
 	"sync"
 
+	"github.com/cubefs/cubefs/blobstore/util/log"
+
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
 	apierrors "github.com/cubefs/inodedb/errors"
@@ -79,10 +81,18 @@ func openDisk(ctx context.Context, cfg diskConfig) *disk {
 		}
 	}
 
+	cfg.raftConfig.Storage = &raftStorage{kvStore: store.RaftStore()}
+	cfg.raftConfig.Logger = log.DefaultLogger
+	cfg.raftConfig.Resolver = &addressResolver{t: cfg.transport}
+	raftManager, err := raft.NewManager(&cfg.raftConfig)
+	if err != nil {
+		span.Fatalf("new raft manager failed: %s", err)
+	}
+
 	return &disk{
 		DiskInfo:     diskInfo,
 		shardHandler: cfg.shardHandler,
-		raftManager:  nil,
+		raftManager:  raftManager,
 		store:        store,
 	}
 }

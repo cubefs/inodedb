@@ -180,6 +180,7 @@ func (s *shardSM) applyInsertItem(ctx context.Context, data []byte) error {
 	key := s.shardKeys.encodeInoKey(protoItem.Ino)
 	vg, err := kvStore.Get(ctx, dataCF, key, nil)
 	if err != nil && err != kvstore.ErrNotFound {
+		s.increaseInoUsed()
 		return err
 	}
 	// already insert, just return
@@ -263,6 +264,7 @@ func (s *shardSM) applyDeleteItem(ctx context.Context, data []byte) error {
 		if err != kvstore.ErrNotFound {
 			return err
 		}
+		s.decreaseInoUsed()
 		return nil
 	}
 	vg.Close()

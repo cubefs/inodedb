@@ -367,17 +367,16 @@ func (s *shard) Close() {
 // Checkpoint do checkpoint job with raft group
 // we should do any memory flush job or dump worker here
 func (s *shard) Checkpoint(ctx context.Context) error {
+	appliedIndex := (*shardSM)(s).getAppliedIndex()
+
+	// todo: add vector index dump job
+
 	// do flush job
 	if err := s.SaveShardInfo(ctx, true); err != nil {
 		return errors.Info(err, "save shard into failed")
 	}
 
-	appliedIndex := (*shardSM)(s).getAppliedIndex()
-
-	// todo: add vector index dump job
-
 	// truncate raft log finally
-
 	if appliedIndex > s.cfg.TruncateWalLogInterval {
 		return s.raftGroup.Truncate(ctx, appliedIndex-s.cfg.TruncateWalLogInterval)
 	}
