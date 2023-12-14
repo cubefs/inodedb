@@ -12,7 +12,7 @@ func TestProto(t *testing.T) {
 	}
 	itemInfo := &routeItemInfo{
 		RouteVersion: 1,
-		Type:         proto.CatalogChangeType_AddSpace,
+		Type:         proto.CatalogChangeItem_AddSpace,
 		ItemDetail:   detail,
 	}
 

@@ -10,12 +10,12 @@ import (
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
 	"github.com/cubefs/cubefs/blobstore/util/log"
-	"github.com/cubefs/inodedb/common/raft"
 	apierrors "github.com/cubefs/inodedb/errors"
 	"github.com/cubefs/inodedb/master/cluster/transport"
 	idGenerator "github.com/cubefs/inodedb/master/idgenerator"
 	"github.com/cubefs/inodedb/master/store"
 	"github.com/cubefs/inodedb/proto"
+	"github.com/cubefs/inodedb/raft"
 )
 
 const (
@@ -33,6 +33,7 @@ type Cluster interface {
 	ListNodeInfo(ctx context.Context, roles []proto.NodeRole) ([]*proto.Node, error)
 	HandleHeartbeat(ctx context.Context, args *HeartbeatArgs) error
 	Load(ctx context.Context)
+	GetSM() raft.Applier
 	Close()
 }
 
@@ -96,6 +97,10 @@ func NewCluster(ctx context.Context, cfg *Config) Cluster {
 	c.Load(ctx)
 	c.loop()
 
+	return c
+}
+
+func (c *cluster) GetSM() raft.Applier {
 	return c
 }
 
@@ -202,11 +207,10 @@ func (c *cluster) Register(ctx context.Context, args *proto.Node) (uint32, error
 		if err != nil {
 			return 0, err
 		}
-		_, err = c.raftGroup.Propose(ctx, &raft.ProposeRequest{
-			Module:     module,
-			Op:         RaftOpUpdateNode,
-			Data:       data,
-			WithResult: false,
+		_, err = c.raftGroup.Propose(ctx, &raft.ProposalData{
+			Module: []byte(Module),
+			Op:     RaftOpUpdateNode,
+			Data:   data,
 		})
 		if err != nil {
 			return 0, err
@@ -229,11 +233,10 @@ func (c *cluster) Register(ctx context.Context, args *proto.Node) (uint32, error
 		return 0, err
 	}
 
-	_, err = c.raftGroup.Propose(ctx, &raft.ProposeRequest{
-		Module:     module,
-		Op:         RaftOpRegisterNode,
-		Data:       data,
-		WithResult: false,
+	_, err = c.raftGroup.Propose(ctx, &raft.ProposalData{
+		Module: []byte(Module),
+		Op:     RaftOpRegisterNode,
+		Data:   data,
 	})
 	if err != nil {
 		return 0, err
@@ -252,11 +255,10 @@ func (c *cluster) Unregister(ctx context.Context, nodeId uint32) error {
 	data := c.encodeNodeId(nodeId)
 	// todo 1. raft
 
-	_, err := c.raftGroup.Propose(ctx, &raft.ProposeRequest{
-		Module:     module,
-		Op:         RaftOpUnregisterNode,
-		Data:       data,
-		WithResult: false,
+	_, err := c.raftGroup.Propose(ctx, &raft.ProposalData{
+		Module: []byte(Module),
+		Op:     RaftOpUnregisterNode,
+		Data:   data,
 	})
 	if err != nil {
 		return err
@@ -298,11 +300,10 @@ func (c *cluster) HandleHeartbeat(ctx context.Context, args *HeartbeatArgs) erro
 	if err != nil {
 		return err
 	}
-	_, err = c.raftGroup.Propose(ctx, &raft.ProposeRequest{
-		Module:     module,
-		Op:         RaftOpHeartbeat,
-		Data:       data,
-		WithResult: false,
+	_, err = c.raftGroup.Propose(ctx, &raft.ProposalData{
+		Module: []byte(Module),
+		Op:     RaftOpHeartbeat,
+		Data:   data,
 	})
 	if err != nil {
 		return err

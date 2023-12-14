@@ -7,16 +7,16 @@ import (
 
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
-	"github.com/cubefs/inodedb/common/raft"
 	"github.com/cubefs/inodedb/proto"
+	"github.com/cubefs/inodedb/raft"
 )
 
 const (
-	module = "catalog"
+	Module = "catalog"
 )
 
 const (
-	RaftOpCreateSpace raft.Op = iota + 1
+	RaftOpCreateSpace uint32 = iota + 1
 	RaftOpInitSpaceShards
 	RaftOpUpdateSpaceRoute
 	RaftOpShardReport
@@ -25,17 +25,36 @@ const (
 	RaftOpDeleteSpace
 )
 
-func (c *catalog) Apply(ctx context.Context, op raft.Op, data []byte) error {
-	switch op {
+func (c *catalog) Apply(cxt context.Context, pd raft.ProposalData, index uint64) (ret interface{}, err error) {
+	_, ctx := trace.StartSpanFromContextWithTraceID(context.Background(), "", string(pd.Context))
+	data := pd.Data
+	switch pd.Op {
 	case RaftOpCreateSpace:
-		return c.applyCreateSpace(ctx, data)
+		return nil, c.applyCreateSpace(ctx, data)
+	case RaftOpDeleteSpace:
+		return nil, c.applyDeleteSpace(ctx, data)
+	case RaftOpShardReport:
+		return c.applyShardReport(ctx, data)
+	case RaftOpUpdateSpaceRoute:
+		return nil, c.applyUpdateSpaceRoute(ctx, data)
+	case RaftOpExpandSpaceUpdateRoute:
+		return nil, c.applyExpandSpaceUpdateRoute(ctx, data)
+	case RaftOpInitSpaceShards:
+		return nil, c.applyInitSpaceShards(ctx, data)
+	case RaftOpExpandSpaceCreateShards:
+		return nil, c.applyExpandSpaceShards(ctx, data)
 	default:
-		return errors.New(fmt.Sprintf("unsupported operation type: %d", op))
+		panic(fmt.Sprintf("unsupported operation type: %d", pd.Op))
 	}
 }
 
-func (c *catalog) LeaderChange(leader uint64, addr string) error {
-	if leader != c.raftGroup.Stat().Id {
+func (c *catalog) LeaderChange(leader uint64) error {
+	stat, err := c.raftGroup.Stat()
+	if err != nil {
+		panic(fmt.Errorf("raft group stat failed, err %s", err.Error()))
+	}
+
+	if leader != stat.ID {
 		c.taskMgr.Close()
 		return nil
 	}
@@ -93,7 +112,7 @@ func (c *catalog) applyDeleteSpace(ctx context.Context, data []byte) error {
 
 	routeItem := &routeItemInfo{
 		RouteVersion: c.routeMgr.GenRouteVersion(ctx, 1),
-		Type:         proto.CatalogChangeType_DeleteSpace,
+		Type:         proto.CatalogChangeItem_DeleteSpace,
 		ItemDetail:   &routeItemSpaceDelete{Sid: args.Sid},
 	}
 	if err := c.storage.DeleteSpace(ctx, args.Sid, routeItem); err != nil {
@@ -159,7 +178,7 @@ func (c *catalog) applyUpdateSpaceRoute(ctx context.Context, data []byte) error 
 	info.Epoch = args.SpaceEpoch
 	routeItems := []*routeItemInfo{{
 		RouteVersion: c.routeMgr.GenRouteVersion(ctx, 1),
-		Type:         proto.CatalogChangeType_AddSpace,
+		Type:         proto.CatalogChangeItem_AddSpace,
 		ItemDetail:   &routeItemSpaceAdd{Sid: args.Sid},
 	}}
 	routeItems = append(routeItems, c.genShardRouteItems(ctx, args.Sid, args.ShardInfos)...)
@@ -188,7 +207,7 @@ func (c *catalog) applyShardReport(ctx context.Context, data []byte) (ret *shard
 
 	for _, reportInfo := range args.infos {
 		space := c.spaces.Get(reportInfo.Sid)
-		shard := space.GetShard(reportInfo.Shard.Id)
+		shard := space.GetShard(reportInfo.Shard.ShardID)
 		// shard may not find when space is expanding
 		if shard == nil {
 			continue
@@ -196,12 +215,12 @@ func (c *catalog) applyShardReport(ctx context.Context, data []byte) (ret *shard
 
 		shard.lock.Lock()
 		info := shard.info
-		if reportInfo.Shard.Epoch < info.Epoch && !isReplicateMember(reportInfo.NodeId, info.Nodes) {
+		if reportInfo.Shard.Epoch < info.Epoch && !isReplicateMember(reportInfo.DiskID, info.Nodes) {
 			ret.tasks = append(ret.tasks, &proto.ShardTask{
-				Type:      proto.ShardTaskType_ClearShard,
-				SpaceName: space.GetInfo().Name,
-				ShardId:   reportInfo.Shard.Id,
-				Epoch:     reportInfo.Shard.Epoch,
+				Type:    proto.ShardTask_ClearShard,
+				Sid:     space.GetInfo().Sid,
+				ShardID: reportInfo.Shard.ShardID,
+				Epoch:   reportInfo.Shard.Epoch,
 			})
 			shard.lock.Unlock()
 			continue
@@ -296,7 +315,7 @@ func (c *catalog) genShardRouteItems(ctx context.Context, sid uint64, shardInfos
 	for i := range shardInfos {
 		routeItems[i] = &routeItemInfo{
 			RouteVersion: baseRouteVersion + uint64(i),
-			Type:         proto.CatalogChangeType_AddShard,
+			Type:         proto.CatalogChangeItem_AddShard,
 			ItemDetail: &routeItemShardAdd{
 				Sid:     sid,
 				ShardId: shardInfos[i].ShardId,

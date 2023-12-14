@@ -28,7 +28,7 @@ func (s *shard) GetInfo() *shardInfo {
 	return &(*s.info)
 }
 
-func (s *shard) UpdateReportInfoNoLock(info *proto.Shard) {
+func (s *shard) UpdateReportInfoNoLock(info proto.Shard) {
 	s.info.InoUsed = info.InoUsed
-	s.info.Leader = info.LeaderId
+	s.info.Leader = info.LeaderID
 }

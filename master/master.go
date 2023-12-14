@@ -4,17 +4,18 @@ import (
 	"context"
 
 	"github.com/cubefs/cubefs/blobstore/common/trace"
-	"github.com/cubefs/inodedb/common/raft"
 	"github.com/cubefs/inodedb/master/catalog"
 	"github.com/cubefs/inodedb/master/cluster"
 	"github.com/cubefs/inodedb/master/idgenerator"
 	"github.com/cubefs/inodedb/master/store"
+	"github.com/cubefs/inodedb/raft"
 )
 
 type Config struct {
 	StoreConfig   store.Config   `json:"store_config"`
 	CatalogConfig catalog.Config `json:"catalog_config"`
 	ClusterConfig cluster.Config `json:"cluster_config"`
+	RaftConfig    raftNodeCfg    `json:"raft_config"`
 }
 
 type Master struct {
@@ -31,9 +32,28 @@ func NewMaster(cfg *Config) *Master {
 	if err != nil {
 		span.Fatalf("new store failed: %s", err)
 	}
-	raftGroup := raft.NewRaftGroup(&raft.Config{
-		Raft: &raft.NoopRaft{},
-	})
+
+	raftNode, err := newRaftNode(&cfg.RaftConfig, store)
+	if err != nil {
+		span.Fatalf("new raft node failed, err %s", err.Error())
+	}
+
+	manager, err := raft.NewManager(&cfg.RaftConfig.RaftConfig)
+	if err != nil {
+		span.Fatalf("new manager failed, err %s", err.Error())
+	}
+
+	groupCfg := &raft.GroupConfig{
+		ID:      cfg.RaftConfig.RaftConfig.NodeID,
+		SM:      raftNode,
+		Applied: raftNode.AppliedIndex,
+		Members: raftNode.cfg.Members,
+	}
+	raftGroup, err := manager.CreateRaftGroup(ctx, groupCfg)
+	if err != nil {
+		span.Fatalf("create raft group failed, err %s", err.Error())
+	}
+	raftNode.raftGroup = raftGroup
 
 	idGenerator, err := idgenerator.NewIDGenerator(store, raftGroup)
 	if err != nil {
@@ -42,15 +62,23 @@ func NewMaster(cfg *Config) *Master {
 
 	cfg.CatalogConfig.IdGenerator = idGenerator
 	cfg.CatalogConfig.Store = store
+	cfg.CatalogConfig.RaftGroup = raftGroup
+
 	cfg.ClusterConfig.Store = store
 	cfg.ClusterConfig.IdGenerator = idGenerator
 	cfg.ClusterConfig.RaftGroup = raftGroup
-	cfg.CatalogConfig.RaftGroup = raftGroup
 
 	newCluster := cluster.NewCluster(ctx, &cfg.ClusterConfig)
 	cfg.CatalogConfig.Cluster = newCluster
+
+	newCatalog := catalog.NewCatalog(ctx, &cfg.CatalogConfig)
+
+	raftNode.addApplier(idgenerator.Module, idGenerator.GetSM())
+	raftNode.addApplier(catalog.Module, newCatalog.GetSM())
+	raftNode.addApplier(cluster.Module, newCluster.GetSM())
+
 	return &Master{
-		Catalog: catalog.NewCatalog(ctx, &cfg.CatalogConfig),
+		Catalog: newCatalog,
 		Cluster: newCluster,
 	}
 }

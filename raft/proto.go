@@ -61,6 +61,10 @@ type (
 		From(data []byte)
 		Close()
 	}
+	Applier interface {
+		Apply(cxt context.Context, pd ProposalData, index uint64) (rets interface{}, err error)
+		LeaderChange(leader uint64) error
+	}
 )
 
 type (

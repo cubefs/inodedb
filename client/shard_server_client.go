@@ -130,22 +130,23 @@ func (s *ShardServerClient) refreshShardServerClients(ctx context.Context) error
 
 	for _, node := range resp.Nodes {
 		if _, ok := s.shardServerClients.Load(node.ID); ok {
-			continue
-		}
+			if _, ok := s.shardServerClients.Load(node.ID); ok {
+				continue
+			}
 
-		address := node.Addr + ":" + strconv.Itoa(int(node.GrpcPort))
-		conn, err := grpc.Dial(address, s.dialOpts...)
-		if err != nil {
-			return errors.Info(err, "dial shard server failed", address)
-		}
+			address := node.Addr + ":" + strconv.Itoa(int(node.GrpcPort))
+			conn, err := grpc.Dial(address, s.dialOpts...)
+			if err != nil {
+				return errors.Info(err, "dial shard server failed", address)
+			}
 
-		shardServer := &shardServer{
-			conn:                     conn,
-			InodeDBShardServerClient: proto.NewInodeDBShardServerClient(conn),
+			shardServer := &shardServer{
+				conn:                     conn,
+				InodeDBShardServerClient: proto.NewInodeDBShardServerClient(conn),
+			}
+			s.shardServerClients.Store(node.ID, shardServer)
 		}
-		s.shardServerClients.Store(node.ID, shardServer)
 	}
-
 	return nil
 }
 

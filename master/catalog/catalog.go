@@ -6,17 +6,16 @@ import (
 	"fmt"
 	"sync"
 
-	"google.golang.org/protobuf/types/known/anypb"
-
 	"github.com/cubefs/inodedb/master/store"
+	"github.com/gogo/protobuf/types"
 
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
-	"github.com/cubefs/inodedb/common/raft"
 	apierrors "github.com/cubefs/inodedb/errors"
 	"github.com/cubefs/inodedb/master/cluster"
 	"github.com/cubefs/inodedb/master/idgenerator"
 	"github.com/cubefs/inodedb/proto"
+	"github.com/cubefs/inodedb/raft"
 )
 
 const (
@@ -36,13 +35,14 @@ const (
 )
 
 type Catalog interface {
-	CreateSpace(ctx context.Context, SpaceName string, SpaceType proto.SpaceType, DesiredShards uint32, FixedFields []*proto.FieldMeta) error
+	CreateSpace(ctx context.Context, SpaceName string, SpaceType proto.SpaceType, DesiredShards uint32, FixedFields []proto.FieldMeta) error
 	DeleteSpace(ctx context.Context, sid uint64) error
 	DeleteSpaceByName(ctx context.Context, name string) error
 	GetSpace(ctx context.Context, sid uint64) (*proto.SpaceMeta, error)
 	GetSpaceByName(ctx context.Context, name string) (*proto.SpaceMeta, error)
 	Report(ctx context.Context, nodeId uint32, infos []*proto.ShardReport) ([]*proto.ShardTask, error)
 	GetCatalogChanges(ctx context.Context, routerVersion uint64, nodeId uint32) (uint64, []*proto.CatalogChangeItem, error)
+	GetSM() raft.Applier
 	Close()
 }
 
@@ -125,6 +125,10 @@ func NewCatalog(ctx context.Context, cfg *Config) Catalog {
 	return c
 }
 
+func (c *catalog) GetSM() raft.Applier {
+	return c
+}
+
 func (c *catalog) Load(ctx context.Context) error {
 	span := trace.SpanFromContext(ctx)
 	c.spaces = newConcurrentSpaces(defaultSplitMapNum)
@@ -164,12 +168,13 @@ func (c *catalog) Load(ctx context.Context) error {
 	return nil
 }
 
+// CreateSpace(ctx context.Context, SpaceName string, SpaceType proto.SpaceType, DesiredShards uint32, FixedFields []*proto.FieldMeta) error
 func (c *catalog) CreateSpace(
 	ctx context.Context,
 	spaceName string,
 	spaceType proto.SpaceType,
 	desiredShards uint32,
-	fixedFields []*proto.FieldMeta,
+	fixedFields []proto.FieldMeta,
 ) error {
 	if desiredShards > MaxDesiredShardsNum {
 		return apierrors.ErrExceedMaxDesiredShardNum
@@ -201,17 +206,11 @@ func (c *catalog) CreateSpace(
 		return errors.Info(err, "marshal create space argument failed")
 	}
 
-	if _, err = c.raftGroup.Propose(ctx, &raft.ProposeRequest{
-		Module:     module,
-		Op:         RaftOpCreateSpace,
-		Data:       data,
-		WithResult: false,
+	if _, err = c.raftGroup.Propose(ctx, &raft.ProposalData{
+		Module: []byte(Module),
+		Op:     RaftOpCreateSpace,
+		Data:   data,
 	}); err != nil {
-		return err
-	}
-
-	// TODO: remove this function call after invoke raft
-	if err := c.applyCreateSpace(ctx, data); err != nil {
 		return err
 	}
 
@@ -236,16 +235,15 @@ func (c *catalog) DeleteSpace(ctx context.Context, sid uint64) error {
 	if err != nil {
 		return errors.Info(err, "marshal delete space argument failed")
 	}
-	if _, err = c.raftGroup.Propose(ctx, &raft.ProposeRequest{
-		Module: module,
+	if _, err = c.raftGroup.Propose(ctx, &raft.ProposalData{
+		Module: []byte(Module),
 		Op:     RaftOpDeleteSpace,
 		Data:   data,
 	}); err != nil {
 		return err
 	}
 
-	// TODO: remove this function call after invoke raft
-	return c.applyDeleteSpace(ctx, data)
+	return nil
 }
 
 func (c *catalog) DeleteSpaceByName(ctx context.Context, name string) error {
@@ -268,18 +266,18 @@ func (c *catalog) GetSpace(ctx context.Context, sid uint64) (*proto.SpaceMeta, e
 	}
 
 	shards := space.GetAllShards()
-	meta.Shards = make([]*proto.Shard, len(shards))
+	meta.Shards = make([]proto.Shard, len(shards))
 	for i := range shards {
 		shardInfo := shards[i].GetInfo()
-		shard := &proto.Shard{
-			Id:       shardInfo.ShardId,
+		shard := proto.Shard{
+			ShardID:  shardInfo.ShardId,
 			Epoch:    shardInfo.Epoch,
 			InoLimit: shardInfo.InoLimit,
 			InoUsed:  shardInfo.InoUsed,
-			LeaderId: shardInfo.Leader,
+			LeaderID: shardInfo.Leader,
 		}
 		for _, node := range shardInfo.Nodes {
-			shard.Nodes = append(shard.Nodes, &proto.ShardNode{Id: node.ID, Learner: node.Learner})
+			shard.Nodes = append(shard.Nodes, proto.ShardNode{DiskID: node.ID, Learner: node.Learner})
 		}
 		meta.Shards[i] = shard
 	}
@@ -308,21 +306,16 @@ func (c *catalog) Report(ctx context.Context, nodeId uint32, infos []*proto.Shar
 		return nil, errors.Info(err, "json marshal data failed")
 	}
 
-	if _, err = c.raftGroup.Propose(ctx, &raft.ProposeRequest{
-		Module:     module,
-		Op:         RaftOpShardReport,
-		Data:       data,
-		WithResult: true,
+	resp := raft.ProposalResponse{}
+	if resp, err = c.raftGroup.Propose(ctx, &raft.ProposalData{
+		Module: []byte(Module),
+		Op:     RaftOpShardReport,
+		Data:   data,
 	}); err != nil {
 		return nil, err
 	}
 
-	// TODO: remove this function call after invoke raft
-	ret, err := c.applyShardReport(ctx, data)
-	if err != nil {
-		return nil, err
-	}
-
+	ret := resp.Data.(*shardReportsResult)
 	if len(ret.maybeExpandingSpaces) > 0 {
 		for _, space := range ret.maybeExpandingSpaces {
 			c.taskMgr.Send(ctx, &task{
@@ -356,7 +349,7 @@ func (c *catalog) GetCatalogChanges(ctx context.Context, fromRouterVersion uint6
 			}
 
 			items = append(items, &routeItemInfo{
-				Type:       proto.CatalogChangeType_AddSpace,
+				Type:       proto.CatalogChangeItem_AddSpace,
 				ItemDetail: &routeItemSpaceAdd{Sid: space.id},
 			})
 			span.Infof("space: %+v", space.GetInfo())
@@ -364,7 +357,7 @@ func (c *catalog) GetCatalogChanges(ctx context.Context, fromRouterVersion uint6
 			span.Infof("space shards: %d", len(shards))
 			for _, shard := range shards {
 				items = append(items, &routeItemInfo{
-					Type: proto.CatalogChangeType_AddShard,
+					Type: proto.CatalogChangeItem_AddShard,
 					ItemDetail: &routeItemShardAdd{
 						Sid:     space.id,
 						ShardId: shard.id,
@@ -379,42 +372,47 @@ func (c *catalog) GetCatalogChanges(ctx context.Context, fromRouterVersion uint6
 		ret[i] = &proto.CatalogChangeItem{
 			RouteVersion: items[i].RouteVersion,
 			Type:         items[i].Type,
-			Item:         &anypb.Any{},
 		}
 
 		switch items[i].Type {
-		case proto.CatalogChangeType_AddSpace:
+		case proto.CatalogChangeItem_AddSpace:
 			itemDetail := items[i].ItemDetail.(*routeItemSpaceAdd)
 			space := c.spaces.Get(itemDetail.Sid)
 			spaceInfo := space.GetInfo()
-			err = ret[i].Item.MarshalFrom(&proto.CatalogChangeSpaceAdd{
+
+			spaceItem := &proto.CatalogChangeSpaceAdd{
 				Sid:         itemDetail.Sid,
 				Name:        spaceInfo.Name,
 				Type:        spaceInfo.Type,
 				FixedFields: internalFieldMetasToProtoFieldMetas(spaceInfo.FixedFields),
-			})
-		case proto.CatalogChangeType_DeleteSpace:
+			}
+			ret[i].Item, err = types.MarshalAny(spaceItem)
+		case proto.CatalogChangeItem_DeleteSpace:
 			itemDetail := items[i].ItemDetail.(*routeItemSpaceDelete)
 			space := c.spaces.Get(itemDetail.Sid)
 			spaceInfo := space.GetInfo()
-			err = ret[i].Item.MarshalFrom(&proto.CatalogChangeSpaceDelete{
+
+			spaceItem := &proto.CatalogChangeSpaceDelete{
 				Sid:  itemDetail.Sid,
 				Name: spaceInfo.Name,
-			})
-		case proto.CatalogChangeType_AddShard:
+			}
+			ret[i].Item, err = types.MarshalAny(spaceItem)
+		case proto.CatalogChangeItem_AddShard:
 			itemDetail := items[i].ItemDetail.(*routeItemShardAdd)
 			space := c.spaces.Get(itemDetail.Sid)
 			shard := space.GetShard(itemDetail.ShardId)
 			shardInfo := shard.GetInfo()
-			err = ret[i].Item.MarshalFrom(&proto.CatalogChangeShardAdd{
+
+			spaceItem := &proto.CatalogChangeShardAdd{
 				Sid:      itemDetail.Sid,
 				Name:     space.GetInfo().Name,
-				ShardId:  itemDetail.ShardId,
+				ShardID:  itemDetail.ShardId,
 				Epoch:    shardInfo.Epoch,
 				InoLimit: shardInfo.InoLimit,
 				Leader:   shardInfo.Leader,
 				Nodes:    internalShardNodesToProtoShardNodes(shardInfo.Nodes),
-			})
+			}
+			ret[i].Item, err = types.MarshalAny(spaceItem)
 		default:
 
 		}
@@ -489,7 +487,7 @@ func (c *catalog) maybeExpandSpaceTask(ctx context.Context, sid uint64, _ []byte
 	return c.createSpaceShards(ctx, space, space.GetCurrentShardId(), c.cfg.ExpandShardsNumPerSpace, RaftOpExpandSpaceCreateShards)
 }
 
-func (c *catalog) createSpaceShards(ctx context.Context, space *space, startShardId uint32, desiredShardsNum uint32, op raft.Op) error {
+func (c *catalog) createSpaceShards(ctx context.Context, space *space, startShardId uint32, desiredShardsNum uint32, op uint32) error {
 	span := trace.SpanFromContext(ctx)
 	shardInfos := make([]*shardInfo, 0, desiredShardsNum)
 
@@ -506,15 +504,15 @@ func (c *catalog) createSpaceShards(ctx context.Context, space *space, startShar
 			return errors.Info(err, "alloc shard server nodes failed")
 		}
 
-		protoShardNodes := make([]*proto.ShardNode, len(nodeInfos))
+		protoShardNodes := make([]proto.ShardNode, len(nodeInfos))
 		internalShardNodes := make([]shardNode, len(nodeInfos))
 		for i := range nodeInfos {
-			protoShardNodes[i] = &proto.ShardNode{
-				Id:      nodeInfos[i].Id,
+			protoShardNodes[i] = proto.ShardNode{
+				DiskID:  nodeInfos[i].ID,
 				Learner: false,
 			}
 			internalShardNodes[i] = shardNode{
-				ID:      nodeInfos[i].Id,
+				ID:      nodeInfos[i].ID,
 				Learner: false,
 			}
 		}
@@ -524,18 +522,18 @@ func (c *catalog) createSpaceShards(ctx context.Context, space *space, startShar
 		// create shards
 		for i := range protoShardNodes {
 			span.Info("start get client")
-			client, err := c.cluster.GetClient(ctx, protoShardNodes[i].Id)
+			client, err := c.cluster.GetClient(ctx, protoShardNodes[i].DiskID)
 			if err != nil {
 				return errors.Info(err, "get client failed")
 			}
 			span.Info("get client success")
 
 			if _, err := client.AddShard(ctx, &proto.AddShardRequest{
-				Sid:       space.id,
-				SpaceName: space.info.Name,
-				ShardId:   shardId,
-				InoLimit:  c.cfg.InoLimitPerShard,
-				Nodes:     protoShardNodes,
+				Sid: space.id,
+				// SpaceName: space.info.Name,
+				ShardID:  shardId,
+				InoLimit: c.cfg.InoLimitPerShard,
+				Nodes:    protoShardNodes,
 			}); err != nil {
 				return errors.Info(err, fmt.Sprintf("add shard to node[%d] failed", protoShardNodes[i]))
 			}
@@ -559,25 +557,12 @@ func (c *catalog) createSpaceShards(ctx context.Context, space *space, startShar
 		return errors.Info(err, "json marshal data failed")
 	}
 
-	if _, err := c.raftGroup.Propose(ctx, &raft.ProposeRequest{
-		Module: module,
+	if _, err := c.raftGroup.Propose(ctx, &raft.ProposalData{
+		Module: []byte(Module),
 		Op:     op,
 		Data:   data,
 	}); err != nil {
 		return errors.Info(err, "propose initial space shards failed")
-	}
-
-	// TODO: remove this function call after invoke raft
-	switch op {
-	case RaftOpInitSpaceShards:
-		if err := c.applyInitSpaceShards(ctx, data); err != nil {
-			return err
-		}
-	case RaftOpExpandSpaceCreateShards:
-		if err := c.applyExpandSpaceShards(ctx, data); err != nil {
-			return err
-		}
-	default:
 	}
 
 	return nil
@@ -604,9 +589,10 @@ func (c *catalog) updateSpaceRoute(ctx context.Context, space *space) error {
 			}
 
 			if _, err := client.UpdateShard(ctx, &proto.UpdateShardRequest{
-				SpaceName: space.GetInfo().Name,
-				ShardId:   shardInfo.ShardId,
-				Epoch:     shardInfo.Epoch,
+				// SpaceName: space.GetInfo().Name,
+				Sid:     space.GetInfo().Sid,
+				ShardID: shardInfo.ShardId,
+				// Epoch:     shardInfo.Epoch,
 			}); err != nil {
 				return errors.Info(err, fmt.Sprintf("update shard to node[%d] failed", node.ID))
 			}
@@ -626,17 +612,12 @@ func (c *catalog) updateSpaceRoute(ctx context.Context, space *space) error {
 		return errors.Info(err, "json marshal data failed")
 	}
 
-	if _, err := c.raftGroup.Propose(ctx, &raft.ProposeRequest{
-		Module: module,
+	if _, err := c.raftGroup.Propose(ctx, &raft.ProposalData{
+		Module: []byte(Module),
 		Op:     RaftOpUpdateSpaceRoute,
 		Data:   data,
 	}); err != nil {
 		return errors.Info(err, "propose update space route failed")
-	}
-
-	// TODO: remove this function call after invoke raft
-	if err := c.applyUpdateSpaceRoute(ctx, data); err != nil {
-		return err
 	}
 
 	return nil
@@ -663,9 +644,10 @@ func (c *catalog) expandSpaceUpdateRoute(ctx context.Context, space *space) erro
 			}
 
 			if _, err := client.UpdateShard(ctx, &proto.UpdateShardRequest{
-				SpaceName: space.GetInfo().Name,
-				ShardId:   shardInfo.ShardId,
-				Epoch:     shardInfo.Epoch,
+				// SpaceName: space.GetInfo().Name,
+				Sid:     space.GetInfo().Sid,
+				ShardID: shardInfo.ShardId,
+				// Epoch:     shardInfo.Epoch,
 			}); err != nil {
 				return errors.Info(err, fmt.Sprintf("update shard to node[%d] failed", node.ID))
 			}
@@ -684,17 +666,12 @@ func (c *catalog) expandSpaceUpdateRoute(ctx context.Context, space *space) erro
 		return errors.Info(err, "json marshal data failed")
 	}
 
-	if _, err := c.raftGroup.Propose(ctx, &raft.ProposeRequest{
-		Module: module,
+	if _, err := c.raftGroup.Propose(ctx, &raft.ProposalData{
+		Module: []byte(Module),
 		Op:     RaftOpExpandSpaceUpdateRoute,
 		Data:   data,
 	}); err != nil {
 		return errors.Info(err, "propose update space route failed")
-	}
-
-	// TODO: remove this function call after invoke raft
-	if err := c.applyExpandSpaceUpdateRoute(ctx, data); err != nil {
-		return err
 	}
 
 	return nil

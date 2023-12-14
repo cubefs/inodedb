@@ -20,7 +20,7 @@ import (
 
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
-	"github.com/cubefs/inodedb/common/raft"
+	"github.com/cubefs/inodedb/raft"
 )
 
 const (
@@ -28,7 +28,7 @@ const (
 )
 
 const (
-	module = "idGenerator"
+	Module = "idGenerator"
 )
 
 func (s *idGenerator) LoadData(ctx context.Context) error {
@@ -43,27 +43,25 @@ func (s *idGenerator) LoadData(ctx context.Context) error {
 }
 
 func (s *idGenerator) GetModuleName() string {
-	return module
+	return Module
 }
 
-func (s *idGenerator) Apply(ctx context.Context, op raft.Op, data []byte) error {
-	switch op {
+func (s *idGenerator) Apply(cxt context.Context, pd raft.ProposalData, index uint64) (rets interface{}, err error) {
+	data := pd.Data
+	_, ctx := trace.StartSpanFromContextWithTraceID(context.Background(), "", string(pd.Context))
+	switch pd.Op {
 	case RaftOpAlloc:
-		err := s.applyCommit(ctx, data)
-		if err != nil {
-			return errors.Info(err, "apply commit failed").Detail(err)
-		}
+		return rets, s.applyCommit(ctx, data)
 	default:
-		return errors.New(fmt.Sprintf("unsupported operation type: %d", op))
+		return rets, errors.New(fmt.Sprintf("unsupported operation type: %d", pd.Op))
 	}
+}
 
+// TODO:
+func (s *idGenerator) LeaderChange(peerID uint64) error {
 	return nil
 }
 
 func (s *idGenerator) Flush(ctx context.Context) error {
 	return nil
-}
-
-func (s *idGenerator) NotifyLeaderChange(ctx context.Context, leader uint64, host string) {
-	return
 }

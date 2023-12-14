@@ -2,7 +2,6 @@ package catalog
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/cubefs/inodedb/proto"
@@ -24,9 +23,9 @@ const (
 type SpaceStatus uint8
 
 type routeItemInfo struct {
-	RouteVersion uint64                  `json:"route_version"`
-	Type         proto.CatalogChangeType `json:"type"`
-	ItemDetail   interface{}             `json:"item"`
+	RouteVersion uint64                       `json:"route_version"`
+	Type         proto.CatalogChangeItem_Type `json:"type"`
+	ItemDetail   interface{}                  `json:"item"`
 }
 
 func (r *routeItemInfo) Marshal() ([]byte, error) {
@@ -38,19 +37,18 @@ func (r *routeItemInfo) Unmarshal(data []byte) error {
 		return err
 	}
 	switch r.Type {
-	case proto.CatalogChangeType_AddSpace:
+	case proto.CatalogChangeItem_AddSpace:
 		r.ItemDetail = &routeItemSpaceAdd{}
 		return json.Unmarshal(data, r)
-	case proto.CatalogChangeType_DeleteSpace:
+	case proto.CatalogChangeItem_DeleteSpace:
 		r.ItemDetail = &routeItemSpaceDelete{}
 		return json.Unmarshal(data, r)
-	case proto.CatalogChangeType_AddShard:
+	case proto.CatalogChangeItem_AddShard:
 		r.ItemDetail = &routeItemShardAdd{}
 		return json.Unmarshal(data, r)
 	default:
 		panic(fmt.Sprintf("unsupported route item type: %d", r.Type))
 	}
-	return errors.New("unsupported route item type")
 }
 
 type routeItemShardAdd struct {
@@ -67,9 +65,9 @@ type routeItemSpaceAdd struct {
 }
 
 type FieldMeta struct {
-	Name    string            `json:"name"`
-	Type    proto.FieldType   `json:"type"`
-	Indexed proto.IndexOption `json:"indexed"`
+	Name    string                      `json:"name"`
+	Type    proto.FieldMeta_Type        `json:"type"`
+	Indexed proto.FieldMeta_IndexOption `json:"indexed"`
 }
 
 type spaceInfo struct {
@@ -126,10 +124,10 @@ func protoFieldMetasToInternalFieldMetas(fields []proto.FieldMeta) []FieldMeta {
 	return ret
 }
 
-func internalFieldMetasToProtoFieldMetas(fields []FieldMeta) []*proto.FieldMeta {
-	ret := make([]*proto.FieldMeta, len(fields))
+func internalFieldMetasToProtoFieldMetas(fields []FieldMeta) []proto.FieldMeta {
+	ret := make([]proto.FieldMeta, len(fields))
 	for i := range fields {
-		ret[i] = &proto.FieldMeta{
+		ret[i] = proto.FieldMeta{
 			Name:    fields[i].Name,
 			Type:    fields[i].Type,
 			Indexed: fields[i].Indexed,
@@ -138,11 +136,11 @@ func internalFieldMetasToProtoFieldMetas(fields []FieldMeta) []*proto.FieldMeta 
 	return ret
 }
 
-func internalShardNodesToProtoShardNodes(nodes []shardNode) []*proto.ShardNode {
-	ret := make([]*proto.ShardNode, len(nodes))
+func internalShardNodesToProtoShardNodes(nodes []shardNode) []proto.ShardNode {
+	ret := make([]proto.ShardNode, len(nodes))
 	for i := range nodes {
-		ret[i] = &proto.ShardNode{
-			Id:      nodes[i].ID,
+		ret[i] = proto.ShardNode{
+			DiskID:  nodes[i].ID,
 			Learner: nodes[i].Learner,
 		}
 	}

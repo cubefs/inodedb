@@ -25,6 +25,7 @@ service InodeDBMaster {
 	rpc AddDisk (AddDiskRequest) returns (AddDiskResponse) {}
 	rpc ListDisks (ListDiskRequest) returns (ListDiskResponse) {}
 	rpc GetDisk (GetDiskRequest) returns (GetDiskResponse) {}
+	rpc DiskSetBroken (SetBrokenRequest) returns (SetBrokenResponse) {}
 }
 
 service InodeDBRouter {
@@ -95,6 +96,14 @@ message GetDiskRequest {
 
 message GetDiskResponse {
 	Disk disk = 1 [(gogoproto.nullable) = false];
+}
+
+message SetBrokenRequest {
+	uint32 disk_id = 1 [(gogoproto.customname) = "DiskID", (gogoproto.casttype) = "DiskID"];
+}
+
+message SetBrokenResponse {
+
 }
 
 message CreateSpaceRequest {

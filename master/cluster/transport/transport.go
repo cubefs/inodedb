@@ -13,9 +13,16 @@ import (
 
 type ShardServerClient interface {
 	AddShard(ctx context.Context, in *proto.AddShardRequest, opts ...grpc.CallOption) (*proto.AddShardResponse, error)
-	ShardList(ctx context.Context, in *proto.ListRequest, opts ...grpc.CallOption) (*proto.ListResponse, error)
-	GetShard(ctx context.Context, in *proto.GetShardRequest, opts ...grpc.CallOption) (*proto.GetShardResponse, error)
 	UpdateShard(ctx context.Context, in *proto.UpdateShardRequest, opts ...grpc.CallOption) (*proto.UpdateShardResponse, error)
+	GetShard(ctx context.Context, in *proto.GetShardRequest, opts ...grpc.CallOption) (*proto.GetShardResponse, error)
+	ShardInsertItem(ctx context.Context, in *proto.ShardInsertItemRequest, opts ...grpc.CallOption) (*proto.ShardInsertItemResponse, error)
+	ShardUpdateItem(ctx context.Context, in *proto.ShardUpdateItemRequest, opts ...grpc.CallOption) (*proto.ShardUpdateItemResponse, error)
+	ShardDeleteItem(ctx context.Context, in *proto.ShardDeleteItemRequest, opts ...grpc.CallOption) (*proto.ShardDeleteItemResponse, error)
+	ShardGetItem(ctx context.Context, in *proto.ShardGetItemRequest, opts ...grpc.CallOption) (*proto.ShardGetItemResponse, error)
+	ShardLink(ctx context.Context, in *proto.ShardLinkRequest, opts ...grpc.CallOption) (*proto.ShardLinkResponse, error)
+	ShardUnlink(ctx context.Context, in *proto.ShardUnlinkRequest, opts ...grpc.CallOption) (*proto.ShardUnlinkResponse, error)
+	ShardList(ctx context.Context, in *proto.ShardListRequest, opts ...grpc.CallOption) (*proto.ShardListResponse, error)
+	ShardSearch(ctx context.Context, in *proto.ShardSearchRequest, opts ...grpc.CallOption) (*proto.ShardSearchResponse, error)
 }
 
 type Transport interface {

@@ -22,8 +22,8 @@ import (
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
 	"github.com/cubefs/inodedb/common/kvstore"
-	"github.com/cubefs/inodedb/common/raft"
 	"github.com/cubefs/inodedb/master/store"
+	"github.com/cubefs/inodedb/raft"
 )
 
 var (
@@ -36,6 +36,7 @@ var (
 
 type IDGenerator interface {
 	Alloc(ctx context.Context, name string, count int) (base, new uint64, err error)
+	GetSM() raft.Applier
 }
 
 type idGenerator struct {
@@ -44,6 +45,7 @@ type idGenerator struct {
 
 	storage *storage
 	lock    sync.RWMutex
+	raft.StateMachine
 }
 
 func NewIDGenerator(store *store.Store, raftGroup raft.Group) (IDGenerator, error) {
@@ -56,6 +58,10 @@ func NewIDGenerator(store *store.Store, raftGroup raft.Group) (IDGenerator, erro
 		return nil, err
 	}
 	return s, nil
+}
+
+func (s *idGenerator) GetSM() raft.Applier {
+	return s
 }
 
 func (s *idGenerator) SetRaftGroup(raftGroup raft.Group) {
@@ -83,17 +89,11 @@ func (s *idGenerator) Alloc(ctx context.Context, name string, count int) (base, 
 		return
 	}
 
-	if _, err = s.raftGroup.Propose(ctx, &raft.ProposeRequest{
-		Module:     module,
-		Op:         RaftOpAlloc,
-		Data:       data,
-		WithResult: false,
+	if _, err = s.raftGroup.Propose(ctx, &raft.ProposalData{
+		Module: []byte(Module),
+		Op:     RaftOpAlloc,
+		Data:   data,
 	}); err != nil {
-		return
-	}
-
-	// TODO: remove this function call after invoke raft
-	if err = s.applyCommit(ctx, data); err != nil {
 		return
 	}
 

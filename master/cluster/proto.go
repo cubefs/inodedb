@@ -49,7 +49,7 @@ func (s *nodeInfo) ToProtoNode() *proto.Node {
 	copy(roles, s.Roles)
 
 	return &proto.Node{
-		Id:       s.Id,
+		ID:       s.Id,
 		Addr:     s.Addr,
 		GrpcPort: s.GrpcPort,
 		HttpPort: s.HttpPort,
@@ -64,7 +64,7 @@ func (s *nodeInfo) ToDBNode(node *proto.Node) {
 	roles := make([]proto.NodeRole, len(node.Roles))
 	copy(roles, node.Roles)
 
-	s.Id = node.Id
+	s.Id = node.ID
 	s.Addr = node.Addr
 	s.GrpcPort = node.GrpcPort
 	s.HttpPort = node.HttpPort

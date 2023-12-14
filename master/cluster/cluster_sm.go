@@ -3,57 +3,48 @@ package cluster
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"time"
 
-	"github.com/cubefs/cubefs/blobstore/clustermgr/base"
 	"github.com/cubefs/cubefs/blobstore/common/trace"
-	"github.com/cubefs/inodedb/common/raft"
 	apierrors "github.com/cubefs/inodedb/errors"
+	"github.com/cubefs/inodedb/raft"
 )
 
 const (
-	RaftOpRegisterNode raft.Op = iota + 1
+	RaftOpRegisterNode uint32 = iota + 1
 	RaftOpUnregisterNode
 	RaftOpUpdateNode
 	RaftOpHeartbeat
 )
 
 const (
-	module = "cluster"
+	Module = "cluster"
 )
 
-func (c *cluster) Apply(ctx context.Context, ops []raft.Op, datas [][]byte, contexts []base.ProposeContext) error {
-	for i := range ops {
-		op := ops[i]
-		_, newCtx := trace.StartSpanFromContextWithTraceID(ctx, "", contexts[i].ReqID)
-		switch op {
-		case RaftOpRegisterNode:
-			return c.applyRegister(newCtx, datas[i])
-		case RaftOpUnregisterNode:
-			return c.applyUnregister(newCtx, datas[i])
-		case RaftOpHeartbeat:
-			return c.applyHeartbeat(newCtx, datas[i])
-		case RaftOpUpdateNode:
-			return c.applyUpdate(ctx, datas[i])
-		default:
-			return errors.New(fmt.Sprintf("unsupported operation type: %d", op))
-		}
+func (c *cluster) Apply(cxt context.Context, pd raft.ProposalData, index uint64) (ret interface{}, err error) {
+	data := pd.Data
+	_, newCtx := trace.StartSpanFromContextWithTraceID(context.Background(), "", string(pd.Context))
+	op := pd.Op
+	switch op {
+	case RaftOpRegisterNode:
+		return nil, c.applyRegister(newCtx, data)
+	case RaftOpUnregisterNode:
+		return nil, c.applyUnregister(newCtx, data)
+	case RaftOpHeartbeat:
+		return nil, c.applyHeartbeat(newCtx, data)
+	case RaftOpUpdateNode:
+		return nil, c.applyUpdate(newCtx, data)
+	default:
+		return nil, err
 	}
-	return nil
 }
 
 func (c *cluster) Flush(ctx context.Context) error {
 	return nil
 }
 
-func (c *cluster) NotifyLeaderChange(ctx context.Context, leader uint64, host string) {
-	return
-}
-
-func (c *cluster) GetModuleName() string {
-	return module
+func (c *cluster) LeaderChange(peerID uint64) error {
+	return nil
 }
 
 func (c *cluster) applyRegister(ctx context.Context, data []byte) error {
