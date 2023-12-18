@@ -38,7 +38,7 @@ func newSpace(spaceInfo *spaceInfo) *space {
 
 func (s *space) GetInfo() *spaceInfo {
 	s.lock.RLock()
-	s.lock.RUnlock()
+	defer s.lock.RUnlock()
 
 	return &(*s.info)
 }

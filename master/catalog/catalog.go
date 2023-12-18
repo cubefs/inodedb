@@ -40,8 +40,8 @@ type Catalog interface {
 	DeleteSpaceByName(ctx context.Context, name string) error
 	GetSpace(ctx context.Context, sid uint64) (*proto.SpaceMeta, error)
 	GetSpaceByName(ctx context.Context, name string) (*proto.SpaceMeta, error)
-	Report(ctx context.Context, nodeId uint32, infos []*proto.ShardReport) ([]*proto.ShardTask, error)
-	GetCatalogChanges(ctx context.Context, routerVersion uint64, nodeId uint32) (uint64, []*proto.CatalogChangeItem, error)
+	Report(ctx context.Context, nodeId uint32, infos []proto.ShardReport) ([]proto.ShardTask, error)
+	GetCatalogChanges(ctx context.Context, routerVersion uint64, nodeId uint32) (uint64, []proto.CatalogChangeItem, error)
 	GetSM() raft.Applier
 	Close()
 }
@@ -88,10 +88,10 @@ type (
 	}
 	shardReportsArgs struct {
 		nodeId uint32
-		infos  []*proto.ShardReport
+		infos  []proto.ShardReport
 	}
 	shardReportsResult struct {
-		tasks                []*proto.ShardTask
+		tasks                []proto.ShardTask
 		maybeExpandingSpaces []*space
 	}
 )
@@ -290,7 +290,7 @@ func (c *catalog) GetSpaceByName(ctx context.Context, name string) (*proto.Space
 	return c.GetSpace(ctx, space.id)
 }
 
-func (c *catalog) Report(ctx context.Context, nodeId uint32, infos []*proto.ShardReport) ([]*proto.ShardTask, error) {
+func (c *catalog) Report(ctx context.Context, nodeId uint32, infos []proto.ShardReport) ([]proto.ShardTask, error) {
 	for _, reportInfo := range infos {
 		if c.spaces.Get(reportInfo.Sid) == nil {
 			return nil, apierrors.ErrSpaceNotExist
@@ -328,7 +328,7 @@ func (c *catalog) Report(ctx context.Context, nodeId uint32, infos []*proto.Shar
 	return ret.tasks, nil
 }
 
-func (c *catalog) GetCatalogChanges(ctx context.Context, fromRouterVersion uint64, nodeId uint32) (routeVersion uint64, ret []*proto.CatalogChangeItem, err error) {
+func (c *catalog) GetCatalogChanges(ctx context.Context, fromRouterVersion uint64, nodeId uint32) (routeVersion uint64, ret []proto.CatalogChangeItem, err error) {
 	span := trace.SpanFromContext(ctx)
 	span.Infof("get catalog changes from %d", fromRouterVersion)
 	var (
@@ -367,9 +367,9 @@ func (c *catalog) GetCatalogChanges(ctx context.Context, fromRouterVersion uint6
 		}
 	}
 
-	ret = make([]*proto.CatalogChangeItem, len(items))
+	ret = make([]proto.CatalogChangeItem, len(items))
 	for i := range items {
-		ret[i] = &proto.CatalogChangeItem{
+		ret[i] = proto.CatalogChangeItem{
 			RouteVersion: items[i].RouteVersion,
 			Type:         items[i].Type,
 		}
@@ -379,7 +379,6 @@ func (c *catalog) GetCatalogChanges(ctx context.Context, fromRouterVersion uint6
 			itemDetail := items[i].ItemDetail.(*routeItemSpaceAdd)
 			space := c.spaces.Get(itemDetail.Sid)
 			spaceInfo := space.GetInfo()
-
 			spaceItem := &proto.CatalogChangeSpaceAdd{
 				Sid:         itemDetail.Sid,
 				Name:        spaceInfo.Name,
@@ -508,11 +507,11 @@ func (c *catalog) createSpaceShards(ctx context.Context, space *space, startShar
 		internalShardNodes := make([]shardNode, len(nodeInfos))
 		for i := range nodeInfos {
 			protoShardNodes[i] = proto.ShardNode{
-				DiskID:  nodeInfos[i].ID,
+				DiskID:  nodeInfos[i].DiskID,
 				Learner: false,
 			}
 			internalShardNodes[i] = shardNode{
-				ID:      nodeInfos[i].ID,
+				ID:      nodeInfos[i].DiskID,
 				Learner: false,
 			}
 		}
@@ -530,7 +529,6 @@ func (c *catalog) createSpaceShards(ctx context.Context, space *space, startShar
 
 			if _, err := client.AddShard(ctx, &proto.AddShardRequest{
 				Sid: space.id,
-				// SpaceName: space.info.Name,
 				ShardID:  shardId,
 				InoLimit: c.cfg.InoLimitPerShard,
 				Nodes:    protoShardNodes,

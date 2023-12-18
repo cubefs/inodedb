@@ -76,7 +76,7 @@ func NewCatalog(ctx context.Context, cfg *Config) *Catalog {
 	return catalog
 }
 
-func (c *Catalog) AddShard(ctx context.Context, diskID proto.DiskID, sid proto.Sid, shardID proto.ShardID, epoch uint64, inoLimit uint64, nodes []*proto.ShardNode) error {
+func (c *Catalog) AddShard(ctx context.Context, diskID proto.DiskID, sid proto.Sid, shardID proto.ShardID, epoch uint64, inoLimit uint64, nodes []proto.ShardNode) error {
 	span := trace.SpanFromContext(ctx)
 	_, ok := c.spaces.Load(sid)
 	if !ok {

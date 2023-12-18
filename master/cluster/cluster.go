@@ -26,12 +26,17 @@ const (
 
 type Cluster interface {
 	GetNode(ctx context.Context, nodeId uint32) (*proto.Node, error)
-	Alloc(ctx context.Context, args *AllocArgs) ([]*proto.Node, error)
+	Alloc(ctx context.Context, args *AllocArgs) ([]*proto.Disk, error)
 	GetClient(ctx context.Context, nodeId uint32) (transport.ShardServerClient, error)
 	Register(ctx context.Context, args *proto.Node) (uint32, error)
 	Unregister(ctx context.Context, nodeID uint32) error
-	ListNodeInfo(ctx context.Context, roles []proto.NodeRole) ([]*proto.Node, error)
+	ListNodeInfo(ctx context.Context, roles []proto.NodeRole) ([]proto.Node, error)
 	HandleHeartbeat(ctx context.Context, args *HeartbeatArgs) error
+	AllocDiskID(ctx context.Context) (uint32, error)
+	AddDisk(ctx context.Context, args *proto.Disk) error
+	ListDisk(ctx context.Context, args *proto.ListDiskRequest) ([]proto.Disk, uint32, error)
+	GetDisk(ctx context.Context, id uint32) (proto.Disk, error)
+	SetBroken(ctx context.Context, diskId uint32) error
 	Load(ctx context.Context)
 	GetSM() raft.Applier
 	Close()
@@ -58,6 +63,7 @@ type cluster struct {
 
 	allocators sync.Map
 	allNodes   *concurrentNodes
+	disks      *diskMgr
 
 	cfg         *Config
 	transporter transport.Transport
@@ -137,14 +143,14 @@ func (c *cluster) GetClient(ctx context.Context, nodeId uint32) (transport.Shard
 		}
 		c.lock.Unlock()
 	}
-	n := c.allNodes.Get(nodeId)
-	if n == nil {
-		return nil, apierrors.ErrNotFound
-	}
+	// n := c.allNodes.Get(nodeId)
+	// if n == nil {
+	// 	return nil, apierrors.ErrNotFound
+	// }
 	return c.transporter.GetShardServerClient(ctx, nodeId)
 }
 
-func (c *cluster) Alloc(ctx context.Context, args *AllocArgs) ([]*proto.Node, error) {
+func (c *cluster) Alloc(ctx context.Context, args *AllocArgs) ([]*proto.Disk, error) {
 	span := trace.SpanFromContextSafe(ctx)
 
 	if !c.isValidAz(args.AZ) {
@@ -165,14 +171,29 @@ func (c *cluster) Alloc(ctx context.Context, args *AllocArgs) ([]*proto.Node, er
 	allocRet, err := mgr.Alloc(ctx, args)
 	if err != nil {
 		span.Warnf("alloc failed, err: %s", err)
+		return nil, err
 	}
 
-	ret := make([]*proto.Node, len(allocRet))
-	for i := range allocRet {
-		ret[i] = allocRet[i].ToProtoNode()
+	if len(allocRet) < args.Count {
+		span.Warnf("alloc result count[%d] less than requested count[%d]", len(allocRet), args.Count)
+		return nil, apierrors.ErrNoAvailableNode
 	}
 
-	return ret, err
+	return allocRet, err
+}
+
+func (c *cluster) AllocDiskID(ctx context.Context) (uint32, error) {
+	span := trace.SpanFromContext(ctx)
+	span.Debugf("alloc disk id")
+
+	_, id, err := c.idGenerator.Alloc(ctx, diskIdName, 1)
+	if err != nil {
+		span.Errorf("all diskId failed, err: %s", err.Error())
+		return 0, err
+	}
+
+	span.Debugf("alloc disk id success, disk id: %d", id)
+	return uint32(id), nil
 }
 
 func (c *cluster) Register(ctx context.Context, args *proto.Node) (uint32, error) {
@@ -195,12 +216,13 @@ func (c *cluster) Register(ctx context.Context, args *proto.Node) (uint32, error
 	}
 
 	get := c.allNodes.GetByName(args.Addr)
-	if get != nil && get.GetInfo().CompareRoles(args.Roles) {
-		span.Warnf("the node[%s] already exist in cluster", args.Addr)
-		return get.nodeId, nil
-	}
-
 	if get != nil {
+		if get.GetInfo().Compare(args) {
+			span.Warnf("the node[%s] already exist in cluster", args.Addr)
+			return get.nodeId, nil
+		}
+
+		// only support update roles
 		info := get.GetInfo()
 		info.UpdateRoles(args.Roles)
 		data, err := info.Marshal()
@@ -215,7 +237,7 @@ func (c *cluster) Register(ctx context.Context, args *proto.Node) (uint32, error
 		if err != nil {
 			return 0, err
 		}
-		return info.Id, c.applyUpdate(ctx, data)
+		return info.Id, nil
 	}
 
 	_, id, err := c.idGenerator.Alloc(ctx, nodeIdName, 1)
@@ -241,7 +263,7 @@ func (c *cluster) Register(ctx context.Context, args *proto.Node) (uint32, error
 	if err != nil {
 		return 0, err
 	}
-	return nodeID, c.applyRegister(ctx, data)
+	return nodeID, nil
 }
 
 func (c *cluster) Unregister(ctx context.Context, nodeId uint32) error {
@@ -263,13 +285,13 @@ func (c *cluster) Unregister(ctx context.Context, nodeId uint32) error {
 	if err != nil {
 		return err
 	}
-	return c.applyUnregister(ctx, data)
+	return nil
 }
 
-func (c *cluster) ListNodeInfo(ctx context.Context, roles []proto.NodeRole) ([]*proto.Node, error) {
+func (c *cluster) ListNodeInfo(ctx context.Context, roles []proto.NodeRole) ([]proto.Node, error) {
 	span := trace.SpanFromContextSafe(ctx)
 	span.Debugf("receive ListNodeInfo request, args: %v", roles)
-	var res []*proto.Node
+	var res []proto.Node
 	for _, role := range roles {
 		if !c.isValidRole(role) {
 			span.Warnf("list node role[%d] invalid", role)
@@ -280,7 +302,7 @@ func (c *cluster) ListNodeInfo(ctx context.Context, roles []proto.NodeRole) ([]*
 				n.lock.RLock()
 				info := n.info.ToProtoNode()
 				n.lock.RUnlock()
-				res = append(res, info)
+				res = append(res, *info)
 			}
 			return nil
 		})
@@ -308,8 +330,97 @@ func (c *cluster) HandleHeartbeat(ctx context.Context, args *HeartbeatArgs) erro
 	if err != nil {
 		return err
 	}
-	// todo raft propose
-	return c.applyHeartbeat(ctx, data)
+	return nil
+}
+
+func (c *cluster) AddDisk(ctx context.Context, args *proto.Disk) error {
+	span := trace.SpanFromContextSafe(ctx)
+	span.Debugf("receive AddDisk, args: %v", args)
+	data, err := json.Marshal(args)
+	if err != nil {
+		return err
+	}
+	_, err = c.raftGroup.Propose(ctx, &raft.ProposalData{
+		Module: []byte(Module),
+		Op:     RaftOpAddDisk,
+		Data:   data,
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *cluster) SetBroken(ctx context.Context, diskId uint32) error {
+	span := trace.SpanFromContextSafe(ctx)
+	span.Debugf("receive AddDisk, args: %d", diskId)
+	data := c.encodeDiskId(diskId)
+	_, err := c.raftGroup.Propose(ctx, &raft.ProposalData{
+		Module: []byte(Module),
+		Op:     RaftOpSetBroken,
+		Data:   data,
+	})
+	if err != nil {
+		return err
+	}
+	span.Debugf("set disk[%d] broken success", diskId)
+	return nil
+}
+func (c *cluster) ListDisk(ctx context.Context, args *proto.ListDiskRequest) ([]proto.Disk, uint32, error) {
+	span := trace.SpanFromContextSafe(ctx)
+	span.Debugf("receive ListDisk, args: %v", args)
+
+	rets := make([]proto.Disk, 0)
+	disks := c.disks.getSortedDisks()
+	cnt := 0
+
+	match := func(disk *DiskInfo) bool {
+		ifo := disk.node.info
+		if args.Az != "" && ifo.Az != args.Az {
+			return false
+		}
+		if args.NodeID != 0 && ifo.Id != args.NodeID {
+			return false
+		}
+		if args.Rack != "" && ifo.Rack != args.Rack {
+			return false
+		}
+		if args.Status != proto.DiskStatus_DiskStatusUnknown && disk.disk.Status != args.Status {
+			return false
+		}
+		return true
+	}
+
+	newMarker := args.Marker
+	for _, d := range disks {
+		if d.disk.DiskID <= args.Marker {
+			continue
+		}
+
+		if !match(d) {
+			continue
+		}
+
+		rets = append(rets, *d.disk)
+		cnt++
+		newMarker = d.disk.DiskID
+		if cnt >= int(args.Count) {
+			break
+		}
+	}
+
+	span.Debugf("ListDisk return disks: %v, marker: %v", rets, newMarker)
+	return rets, newMarker, nil
+}
+
+func (c *cluster) GetDisk(ctx context.Context, id uint32) (proto.Disk, error) {
+	span := trace.SpanFromContextSafe(ctx)
+	span.Debugf("receive GetDisk, id: %v", id)
+	disk := c.disks.get(id)
+	if disk == nil {
+		return proto.Disk{}, apierrors.ErrDiskNotExist
+	}
+	return *disk.disk, nil
 }
 
 func (c *cluster) Load(ctx context.Context) {
@@ -327,6 +438,24 @@ func (c *cluster) Load(ctx context.Context) {
 		c.allNodes.PutNoLock(newNode)
 	}
 
+	disks, err := c.storage.LoadDisk(ctx)
+	if err != nil {
+		span.Fatalf("read disk data from rocksdb failed, err: %s", err)
+	}
+
+	for _, d := range disks {
+		node := c.allNodes.GetNoLock(d.NodeID)
+		if node == nil {
+			span.Fatalf("node[%d] not found, disk %v", d.NodeID, d)
+		}
+
+		ifo := &DiskInfo{
+			node: node,
+			disk: d,
+		}
+		c.disks.addDiskNoLock(d.DiskID, ifo)
+	}
+
 	c.refresh(ctx)
 }
 
@@ -335,14 +464,9 @@ func (c *cluster) Close() {
 }
 
 func (c *cluster) refresh(ctx context.Context) {
-	var allNodes []*node
-	c.allNodes.Range(func(n *node) error {
-		allNodes = append(allNodes, n)
-		return nil
-	})
-
+	var allNodes = c.disks.getSortedDisks()
 	span := trace.SpanFromContextSafe(ctx)
-	span.Infof("refresh allocator nodes: %+v", allNodes)
+	span.Infof("refresh allocator nodes: %+v", len(allNodes))
 
 	mgrs := make(map[proto.NodeRole]Allocator, len(c.allocatorFuncMap))
 	for role, f := range c.allocatorFuncMap {
@@ -350,12 +474,11 @@ func (c *cluster) refresh(ctx context.Context) {
 	}
 
 	for _, n := range allNodes {
-		if !n.IsAvailable() {
-			span.Debugf("node not available, node: %#v, time: %s", n.info, n.expires.String())
+		if !n.CanAlloc() {
 			continue
 		}
 
-		info := n.GetInfo()
+		info := n.node.info
 		for _, role := range info.Roles {
 			if _, ok := c.allocatorFuncMap[role]; ok {
 				mgrs[role].Put(ctx, n)
@@ -366,6 +489,7 @@ func (c *cluster) refresh(ctx context.Context) {
 	for role, mgr := range mgrs {
 		c.allocators.Store(role, mgr)
 	}
+	span.Infof("refresh allocator done")
 }
 
 func (c *cluster) loop() {
@@ -393,6 +517,16 @@ func (c *cluster) encodeNodeId(nodeId uint32) []byte {
 }
 
 func (c *cluster) decodeNodeId(data []byte) uint32 {
+	return binary.BigEndian.Uint32(data)
+}
+
+func (c *cluster) encodeDiskId(diskId uint32) []byte {
+	key := make([]byte, 4)
+	binary.BigEndian.PutUint32(key, diskId)
+	return key
+}
+
+func (c *cluster) decodeDiskId(data []byte) uint32 {
 	return binary.BigEndian.Uint32(data)
 }
 

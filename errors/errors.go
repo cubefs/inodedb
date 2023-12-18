@@ -66,6 +66,7 @@ var (
 	ErrSpaceNotExist            = errors.New("space not exist")
 	ErrShardNotExist            = errors.New("space not exist")
 	ErrInvalidNodeRole          = errors.New("invalid node role")
+	ErrInvalidNodeInfo          = errors.New("invalid node info")
 	ErrInvalidAz                = errors.New("invalid az")
 	ErrNodeRoleNotExist         = errors.New("node role not exist")
 	ErrSpaceCreating            = errors.New("space is creating")

@@ -56,8 +56,8 @@ func NewTransport(ctx context.Context, cfg *Config) (Transport, error) {
 	}, nil
 }
 
-func (c *transport) GetShardServerClient(ctx context.Context, nodeId uint32) (ShardServerClient, error) {
-	return c.shardServerClient.GetShardServerClient(ctx, nodeId)
+func (c *transport) GetShardServerClient(ctx context.Context, diskId uint32) (ShardServerClient, error) {
+	return c.shardServerClient.GetShardServerClient(ctx, diskId)
 }
 
 func (c *transport) Close() {

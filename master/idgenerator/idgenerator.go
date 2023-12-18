@@ -69,6 +69,7 @@ func (s *idGenerator) SetRaftGroup(raftGroup raft.Group) {
 }
 
 func (s *idGenerator) Alloc(ctx context.Context, name string, count int) (base, new uint64, err error) {
+	span := trace.SpanFromContext(ctx)
 	if count <= 0 {
 		return 0, 0, ErrInvalidCount
 	}
@@ -77,58 +78,54 @@ func (s *idGenerator) Alloc(ctx context.Context, name string, count int) (base, 
 		count = MaxCount
 	}
 
-	// TODO: move scope increase in raft apply progress and return new scope by result
-	s.lock.Lock()
-	s.scopeItems[name] += uint64(count)
-	new = s.scopeItems[name]
-	s.lock.Unlock()
-
-	args := &allocArgs{Name: name, Current: new}
+	args := &allocArgs{Name: name, Current: new, Count: count}
 	data, err := json.Marshal(args)
 	if err != nil {
 		return
 	}
 
-	if _, err = s.raftGroup.Propose(ctx, &raft.ProposalData{
+	ret, err := s.raftGroup.Propose(ctx, &raft.ProposalData{
 		Module: []byte(Module),
 		Op:     RaftOpAlloc,
 		Data:   data,
-	}); err != nil {
+	})
+
+	if err != nil {
+		span.Errorf("propose failed, name %s, err %v", name, err)
 		return
 	}
 
-	base = new - uint64(count) + 1
+	base = ret.Data.(uint64)
+	new = base + uint64(count)
+	span.Debugf("alloc success, name %s, base %d, new %d", name, base, new)
 	return
 }
 
-func (s *idGenerator) applyCommit(ctx context.Context, data []byte) error {
+func (s *idGenerator) applyCommit(ctx context.Context, data []byte) (uint64, error) {
+	span := trace.SpanFromContext(ctx)
 	args := &allocArgs{}
 	err := json.Unmarshal(data, args)
 	if err != nil {
-		return errors.Info(err, "json unmarshal failed")
+		return 0, errors.Info(err, "json unmarshal failed")
 	}
 
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	if s.scopeItems[args.Name] < args.Current {
-		s.scopeItems[args.Name] = args.Current
-	}
-
 	current, err := s.storage.Get(ctx, args.Name)
 	if err != nil && err != kvstore.ErrNotFound {
-		return err
-	}
-	if current > args.Current {
-		return nil
+		return 0, err
 	}
 
-	err = s.storage.Put(ctx, args.Name, args.Current)
+	newCurrent := current + uint64(args.Count)
+	err = s.storage.Put(ctx, args.Name, newCurrent)
 	if err != nil {
-		return err
+		span.Errorf("put id failed, name %s, err: %v", args.Name, err)
+		return 0, err
 	}
 
-	return nil
+	span.Debugf("put id success, name %s, current %d, new current %d", args.Name, current, newCurrent)
+	return newCurrent, nil
 }
 
 type allocArgs struct {

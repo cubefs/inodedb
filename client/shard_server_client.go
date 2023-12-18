@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/cubefs/cubefs/blobstore/util/errors"
+	apierrors "github.com/cubefs/inodedb/errors"
 
 	"github.com/cubefs/inodedb/proto"
 	"golang.org/x/sync/singleflight"
@@ -87,6 +88,10 @@ func (s *ShardServerClient) GetShardServerClient(ctx context.Context, diskID pro
 		}); err != nil {
 			return nil, err
 		}
+		v, ok = s.diskNodes.Load(diskID)
+		if !ok {
+			return nil, apierrors.ErrDiskNotExist
+		}
 	}
 
 	nodeID := v.(proto.NodeID)
@@ -129,11 +134,7 @@ func (s *ShardServerClient) refreshShardServerClients(ctx context.Context) error
 	}
 
 	for _, node := range resp.Nodes {
-		if _, ok := s.shardServerClients.Load(node.ID); ok {
-			if _, ok := s.shardServerClients.Load(node.ID); ok {
-				continue
-			}
-
+		if _, ok := s.shardServerClients.Load(node.ID); !ok {
 			address := node.Addr + ":" + strconv.Itoa(int(node.GrpcPort))
 			conn, err := grpc.Dial(address, s.dialOpts...)
 			if err != nil {

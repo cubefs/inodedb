@@ -51,7 +51,7 @@ func (s *idGenerator) Apply(cxt context.Context, pd raft.ProposalData, index uin
 	_, ctx := trace.StartSpanFromContextWithTraceID(context.Background(), "", string(pd.Context))
 	switch pd.Op {
 	case RaftOpAlloc:
-		return rets, s.applyCommit(ctx, data)
+		return s.applyCommit(ctx, data)
 	default:
 		return rets, errors.New(fmt.Sprintf("unsupported operation type: %d", pd.Op))
 	}

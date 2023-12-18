@@ -33,6 +33,7 @@ type Config struct {
 
 	CatalogConfig catalog.Config `json:"catalog_config"`
 	ClusterConfig cluster.Config `json:"cluster_config"`
+	MasterRaftCfg master.RaftNodeCfg `json:"master_raft_cfg"`
 }
 
 type StoreConfig struct {
@@ -86,6 +87,7 @@ func NewServer(cfg *Config) *Server {
 			},
 			CatalogConfig: cfg.CatalogConfig,
 			ClusterConfig: cfg.ClusterConfig,
+			RaftConfig: cfg.MasterRaftCfg,
 		})
 	}
 

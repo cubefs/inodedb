@@ -10,10 +10,12 @@ import (
 
 const (
 	nodeIdName = "node"
+	diskIdName = "disk"
 )
 
 type nodeInfo struct {
 	Id          uint32           `json:"id"`
+	SetId       uint32           `json:"set_id"`
 	Addr        string           `json:"addr"`
 	GrpcPort    uint32           `json:"grpc_port"`
 	HttpPort    uint32           `json:"http_port"`
@@ -40,6 +42,26 @@ func (s *nodeInfo) CompareRoles(roles []proto.NodeRole) bool {
 	return true
 }
 
+func (s *nodeInfo) Compare(node *proto.Node) bool {
+	if !s.CompareRoles(node.Roles) {
+		return false
+	}
+
+	if node.GrpcPort != s.GrpcPort || node.HttpPort != s.HttpPort || node.RaftPort != s.ReplicaPort {
+		return false
+	}
+
+	if node.Az == "" && s.Az != defaultAz || node.Az != s.Az {
+		return false
+	}
+
+	if node.Rack == "" && s.Rack != defaultRack || node.Rack != s.Rack {
+		return false
+	}
+
+	return true
+}
+
 func (s *nodeInfo) UpdateRoles(roles []proto.NodeRole) {
 	s.Roles = roles
 }
@@ -50,6 +72,7 @@ func (s *nodeInfo) ToProtoNode() *proto.Node {
 
 	return &proto.Node{
 		ID:       s.Id,
+		SetID:    s.SetId,
 		Addr:     s.Addr,
 		GrpcPort: s.GrpcPort,
 		HttpPort: s.HttpPort,
@@ -65,6 +88,7 @@ func (s *nodeInfo) ToDBNode(node *proto.Node) {
 	copy(roles, node.Roles)
 
 	s.Id = node.ID
+	s.SetId = node.SetID
 	s.Addr = node.Addr
 	s.GrpcPort = node.GrpcPort
 	s.HttpPort = node.HttpPort
@@ -105,10 +129,11 @@ type AllocArgs struct {
 	AZ             string         `json:"az"`
 	Role           proto.NodeRole `json:"role"`
 	RackWare       bool           `json:"rack_ware"`
+	HostWare       bool           `json:"host_ware"`
 	ExcludeNodeIds []uint32       `json:"exclude_node_ids"`
 }
 
 type HeartbeatArgs struct {
-	NodeID     uint32 `json:"node_id"`
-	ShardCount int32  `json:"shard_count"`
+	NodeID uint32             `json:"node_id"`
+	Disks  []proto.DiskReport `json:"disks"`
 }

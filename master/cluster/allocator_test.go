@@ -27,7 +27,14 @@ func TestAllocMgr_Alloc(t *testing.T) {
 			},
 			expires: time.Now().Add(30 * time.Second),
 		}
-		mgr.Put(ctx, n)
+		ifo := &DiskInfo{
+			disk: &proto.Disk{
+				DiskID: uint32(i),
+				Status: proto.DiskStatus_DiskStatusNormal,
+			},
+			node: n,
+		}
+		mgr.Put(ctx, ifo)
 	}
 
 	alloc, err := mgr.Alloc(ctx, &AllocArgs{

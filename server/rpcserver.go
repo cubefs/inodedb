@@ -107,7 +107,7 @@ func (r *RPCServer) CreateSpace(ctx context.Context, req *proto.CreateSpaceReque
 		return nil, err
 	}
 
-	ret := &proto.CreateSpaceResponse{Info: spaceMeta}
+	ret := &proto.CreateSpaceResponse{Info: *spaceMeta}
 	return ret, nil
 }
 
@@ -126,15 +126,15 @@ func (r *RPCServer) GetSpace(ctx context.Context, req *proto.GetSpaceRequest) (*
 		return nil, err
 	}
 
-	ret := &proto.GetSpaceResponse{Info: spaceMeta}
+	ret := &proto.GetSpaceResponse{Info: *spaceMeta}
 	return ret, nil
 }
 
 func (r *RPCServer) Heartbeat(ctx context.Context, req *proto.HeartbeatRequest) (*proto.HeartbeatResponse, error) {
 	span := trace.SpanFromContext(ctx)
 	err := r.master.HandleHeartbeat(ctx, &cluster.HeartbeatArgs{
-		NodeID:     req.Id,
-		ShardCount: int32(req.ShardCount),
+		NodeID:     req.NodeID,
+		Disks: req.Disks,
 	})
 	if err != nil {
 		span.Errorf("handle heartbeat failed: %s", err)
@@ -144,7 +144,7 @@ func (r *RPCServer) Heartbeat(ctx context.Context, req *proto.HeartbeatRequest) 
 
 func (r *RPCServer) Report(ctx context.Context, req *proto.ReportRequest) (*proto.ReportResponse, error) {
 	span := trace.SpanFromContext(ctx)
-	tasks, err := r.master.Report(ctx, req.Id, req.Infos)
+	tasks, err := r.master.Report(ctx, req.NodeID, req.Infos)
 	if err != nil {
 		span.Errorf("report failed: %s", errors.Detail(err))
 		return nil, err
@@ -154,17 +154,17 @@ func (r *RPCServer) Report(ctx context.Context, req *proto.ReportRequest) (*prot
 }
 
 func (r *RPCServer) GetNode(ctx context.Context, req *proto.GetNodeRequest) (*proto.GetNodeResponse, error) {
-	node, err := r.master.GetNode(ctx, req.Id)
+	node, err := r.master.GetNode(ctx, req.ID)
 	if err != nil {
 		return nil, err
 	}
 
-	return &proto.GetNodeResponse{NodeInfo: node}, nil
+	return &proto.GetNodeResponse{NodeInfo: *node}, nil
 }
 
 func (r *RPCServer) GetCatalogChanges(ctx context.Context, req *proto.GetCatalogChangesRequest) (*proto.GetCatalogChangesResponse, error) {
 	span := trace.SpanFromContext(ctx)
-	routeVersion, items, err := r.master.GetCatalogChanges(ctx, req.RouteVersion, req.NodeId)
+	routeVersion, items, err := r.master.GetCatalogChanges(ctx, req.RouteVersion, req.NodeID)
 	if err != nil {
 		span.Errorf("get catalog changes failed: %s", err)
 		return nil, err
@@ -183,6 +183,51 @@ func (r *RPCServer) GetRoleNodes(ctx context.Context, req *proto.GetRoleNodesReq
 	}
 
 	return &proto.GetRoleNodesResponse{Nodes: nodes}, nil
+}
+
+func (r *RPCServer)AllocDiskID(ctx  context.Context, req *proto.AllocDiskIDRequest) (*proto.AllocDiskIDResponse, error) {
+	id, err := r.master.AllocDiskID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &proto.AllocDiskIDResponse{DiskID: id}, nil
+}
+
+func (r *RPCServer)	AddDisk(ctx context.Context, req *proto.AddDiskRequest) (*proto.AddDiskResponse, error) {
+	disk := req.Disk
+	err := r.master.AddDisk(ctx, &disk)
+	if err != nil {
+		return nil, err
+	}
+	return &proto.AddDiskResponse{}, nil
+}
+
+func (r *RPCServer)	ListDisks(ctx context.Context, req *proto.ListDiskRequest) (*proto.ListDiskResponse, error) {
+	disks, marker, err := r.master.ListDisk(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	resp := &proto.ListDiskResponse{
+		Disks:  disks,
+		Marker: marker,
+	}
+	return resp, nil
+}
+
+func (r *RPCServer)	GetDisk(ctx context.Context, req *proto.GetDiskRequest) (*proto.GetDiskResponse, error) {
+	disk, err := r.master.GetDisk(ctx, req.DiskID)
+	if err != nil {
+		return nil, err
+	}
+	return &proto.GetDiskResponse{Disk: disk}, nil
+}
+
+func (r *RPCServer)	DiskSetBroken(ctx context.Context, req *proto.SetBrokenRequest) (*proto.SetBrokenResponse, error) {
+	err := r.master.SetBroken(ctx, req.DiskID)
+	if err != nil {
+		return nil, err
+	}
+	return &proto.SetBrokenResponse{}, nil
 }
 
 // Shard Server API

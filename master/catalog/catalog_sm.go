@@ -216,7 +216,7 @@ func (c *catalog) applyShardReport(ctx context.Context, data []byte) (ret *shard
 		shard.lock.Lock()
 		info := shard.info
 		if reportInfo.Shard.Epoch < info.Epoch && !isReplicateMember(reportInfo.DiskID, info.Nodes) {
-			ret.tasks = append(ret.tasks, &proto.ShardTask{
+			ret.tasks = append(ret.tasks, proto.ShardTask{
 				Type:    proto.ShardTask_ClearShard,
 				Sid:     space.GetInfo().Sid,
 				ShardID: reportInfo.Shard.ShardID,

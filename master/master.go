@@ -15,7 +15,7 @@ type Config struct {
 	StoreConfig   store.Config   `json:"store_config"`
 	CatalogConfig catalog.Config `json:"catalog_config"`
 	ClusterConfig cluster.Config `json:"cluster_config"`
-	RaftConfig    raftNodeCfg    `json:"raft_config"`
+	RaftConfig    RaftNodeCfg    `json:"raft_config"`
 }
 
 type Master struct {
@@ -26,14 +26,16 @@ type Master struct {
 func NewMaster(cfg *Config) *Master {
 	span, ctx := trace.StartSpanFromContext(context.Background(), "")
 
+	cfg.StoreConfig.RaftOption.CreateIfMissing = true
+	cfg.StoreConfig.RaftOption.ColumnFamily = append(cfg.StoreConfig.RaftOption.ColumnFamily, raftWalCF)
 	cfg.StoreConfig.KVOption.CreateIfMissing = true
-	cfg.StoreConfig.KVOption.ColumnFamily = append(cfg.StoreConfig.KVOption.ColumnFamily, catalog.CF, cluster.CF, idgenerator.CF)
+	cfg.StoreConfig.KVOption.ColumnFamily = append(cfg.StoreConfig.KVOption.ColumnFamily, catalog.CF, cluster.CF, idgenerator.CF, LocalCF)
 	store, err := store.NewStore(ctx, &cfg.StoreConfig)
 	if err != nil {
 		span.Fatalf("new store failed: %s", err)
 	}
 
-	raftNode, err := newRaftNode(&cfg.RaftConfig, store)
+	raftNode := newRaftNode(ctx, &cfg.RaftConfig, store)
 	if err != nil {
 		span.Fatalf("new raft node failed, err %s", err.Error())
 	}
@@ -77,6 +79,10 @@ func NewMaster(cfg *Config) *Master {
 	raftNode.addApplier(catalog.Module, newCatalog.GetSM())
 	raftNode.addApplier(cluster.Module, newCluster.GetSM())
 
+	if len(cfg.RaftConfig.Members) == 1 {
+		raftNode.waitForRaftStart(ctx)
+	}
+	
 	return &Master{
 		Catalog: newCatalog,
 		Cluster: newCluster,

@@ -3,7 +3,6 @@ package cluster
 import (
 	"context"
 	"math/rand"
-	"sync/atomic"
 
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 
@@ -11,210 +10,260 @@ import (
 )
 
 type Allocator interface {
-	Put(ctx context.Context, n *node)
-	Alloc(ctx context.Context, args *AllocArgs) ([]*nodeInfo, error)
+	Put(ctx context.Context, d *DiskInfo)
+	Alloc(ctx context.Context, args *AllocArgs) ([]*diskNode, error)
+}
+
+type weightSet struct {
+	s *setAlloctor
+	w int
 }
 
 type allocator struct {
-	azAllocators map[string]*azAllocator
+	setAlloctors map[uint32]*setAlloctor
 }
 
 func NewShardServerAllocator(ctx context.Context) Allocator {
 	return &allocator{
-		azAllocators: make(map[string]*azAllocator),
+		setAlloctors: map[uint32]*setAlloctor{},
 	}
 }
 
-func (a *allocator) Put(ctx context.Context, n *node) {
-	az := n.GetInfo().Az
-	if _, hit := a.azAllocators[az]; !hit {
-		a.azAllocators[az] = &azAllocator{
-			allNodes:     &nodeSet{},
-			rackNodeSets: make(map[string]*nodeSet),
+func (a *allocator) Put(ctx context.Context, n *DiskInfo) {
+
+	setId := n.node.info.SetId
+	allocator, ok := a.setAlloctors[setId]
+	if !ok {
+		allocator = &setAlloctor{
+			setId:        setId,
+			azAllocators: map[string]*azAllocator{},
 		}
+		a.setAlloctors[setId] = allocator
 	}
-	a.azAllocators[az].put(n)
+
+	allocator.put(n)
 }
 
-func (a *allocator) Alloc(ctx context.Context, args *AllocArgs) ([]*nodeInfo, error) {
+func (a *allocator) Alloc(ctx context.Context, args *AllocArgs) ([]*diskNode, error) {
 	span := trace.SpanFromContextSafe(ctx)
 
-	if value, ok := a.azAllocators[args.AZ]; !ok {
-		span.Warnf("current az has no nodes to alloc, az: %s, value: %v", args.AZ, value)
-		return nil, errors.ErrNoAvailableNode
+	totalWeight := 0
+	sets := make([]*weightSet, 0, len(a.setAlloctors))
+	for _, set := range a.setAlloctors {
+		w := set.getWeight()
+		sets = append(sets, &weightSet{
+			s: set,
+			w: w,
+		})
+		totalWeight += w
 	}
 
-	if args.RackWare {
-		return a.allocFromRack(ctx, args)
+	_totalWeight := totalWeight
+	total := len(a.setAlloctors)
+
+Retry:
+	randNum := 0
+	if _totalWeight > 0 {
+		randNum = rand.Intn(_totalWeight)
 	}
 
-	allocNodes := make([]*nodeInfo, 0, args.Count)
-	azAllocator := a.azAllocators[args.AZ]
+	for idx := 0; idx < total; idx++ {
+		s := sets[idx]
+		if s.w < randNum {
+			randNum -= s.w
+		}
+
+		_totalWeight -= s.w
+		total -= 1
+		sets[idx] = sets[total]
+
+		allocNodes, err := s.s.alloc(ctx, args)
+		if err != nil {
+			span.Warnf("alloc from set %d failed, err %s", s.s.setId, err.Error())
+			goto Retry
+		}
+		if len(allocNodes) < args.Count {
+			span.Warnf("alloc from set %d not enough, got cnt %d, need %d",
+				s.s.setId, len(allocNodes), args.Count)
+			goto Retry
+		}
+		return allocNodes, nil
+	}
+
+	span.Warnf("no set can alloc after retry all set, need %d", args.Count)
+	return nil, errors.ErrNoAvailableNode
+}
+
+func (a *azAllocator) alloc(ctx context.Context, args *AllocArgs) ([]*DiskInfo, error) {
+	span := trace.SpanFromContextSafe(ctx)
+
+	allocNodes := make([]*DiskInfo, 0, args.Count)
 	excludes := make(map[uint32]bool)
 	for _, id := range args.ExcludeNodeIds {
 		excludes[id] = true
 	}
 
-	nodes := azAllocator.allNodes.alloc(args.Count, excludes)
+	nodes := a.allNodes.alloc(ctx, args.Count, excludes, args.HostWare, args.RackWare)
+	if len(nodes) < args.Count {
+		span.Warnf("current az has no enough nodes to alloc, az: %s, count: %d, got %d",
+			args.AZ, args.Count, len(nodes))
+		return nil, errors.ErrNoAvailableNode
+	}
+
 	for _, newNode := range nodes {
-		info := newNode.GetInfo()
-		allocNodes = append(allocNodes, info)
-		azAllocator.rackNodeSets[info.Rack].updateTotalShardCount(1)
+		allocNodes = append(allocNodes, newNode)
 	}
 
-	// update total shard count of az
-	azAllocator.allNodes.updateTotalShardCount(int32(len(allocNodes)))
-
-	if len(allocNodes) < args.Count {
-		span.Warnf("alloc nodes failed from az[%s], need: %d, get: %d", args.AZ, args.Count, len(allocNodes))
-		return allocNodes, errors.ErrNoAvailableNode
-	}
 	return allocNodes, nil
 }
 
-type weightedNodeSet struct {
-	weight int32
-	rack   string
-	num    int
+
+type setAlloctor struct {
+	setId        uint32
+	azAllocators map[string]*azAllocator
+	// nodes        *nodeSet
+	selIdx int
+
+	totalShardCnt int
+	allocShardCnt int
+	totalCap      int
+	usedCap       int
 }
 
-func (a *allocator) allocFromRack(ctx context.Context, args *AllocArgs) ([]*nodeInfo, error) {
+func (s *setAlloctor) updateStat(totalShardCnt, allocShardCnt, totalCap, usedCap int) {
+	s.totalShardCnt = totalShardCnt
+	s.allocShardCnt = allocShardCnt
+	s.totalCap = totalCap
+	s.usedCap = usedCap
+}
+
+func (s *setAlloctor) addShardCnt(cnt int) {
+	s.allocShardCnt += cnt
+}
+
+func (s *setAlloctor) put(d *DiskInfo) {
+	// s.nodes
+	az := d.node.info.Az
+	allocator, ok := s.azAllocators[az]
+	if !ok {
+		s.azAllocators[az] = &azAllocator{
+			az:       az,
+			allNodes: &nodeSet{},
+			// rackNodeSets: make(map[string]*nodeSet),
+		}
+	}
+	allocator.put(d)
+
+	s.totalCap += d.disk.Info.Size()
+	s.usedCap += int(d.disk.Info.Used)
+	s.allocShardCnt += int(d.disk.Info.ShardCnt)
+	s.totalShardCnt += defaultMaxShardOneDisk
+}
+
+func (s *setAlloctor) getWeight() int {
+	var w1, w2 int
+	if s.totalShardCnt > s.allocShardCnt {
+		w1 = (s.totalShardCnt - s.allocShardCnt) * defaultFactor / s.totalShardCnt
+	}
+
+	if s.usedCap < s.totalCap {
+		w2 = (s.totalCap - s.usedCap) * defaultFactor / s.totalCap
+	}
+
+	if w1+w2 == 0 {
+		return 1
+	}
+
+	return w1 + w2
+}
+
+func (s *setAlloctor) alloc(ctx context.Context, args *AllocArgs) ([]*diskNode, error) {
 	span := trace.SpanFromContextSafe(ctx)
 
-	if len(a.azAllocators[args.AZ].allNodes.nodes) < args.Count {
-		span.Errorf("can't find enough nodes, need: %d, get: %d",
-			args.Count, len(a.azAllocators[args.AZ].allNodes.nodes))
-		return nil, errors.ErrNoAvailableNode
+	azCntMap := map[string]int{}
+
+	azs := make([]*azAllocator, 0, len(s.azAllocators))
+	for _, az := range s.azAllocators {
+		azs = append(azs, az)
 	}
 
-	allocNodes := make([]*nodeInfo, 0, args.Count)
-	azAllocator := a.azAllocators[args.AZ]
-	rackMap := make(map[string]int, len(a.azAllocators))
-	totalWeight := int32(0)
-
-	excludes := make(map[uint32]bool)
-	for _, id := range args.ExcludeNodeIds {
-		excludes[id] = true
+	for idx := 0; idx < args.Count; idx++ {
+		azIdx := (idx + s.selIdx) % len(s.azAllocators)
+		az := azs[azIdx]
+		azCntMap[az.az]++
 	}
 
-	weightedRackNodeSets := make([]*weightedNodeSet, 0, len(azAllocator.rackNodeSets))
-	for rack, set := range azAllocator.rackNodeSets {
-		wn := &weightedNodeSet{
-			rack:   rack,
-			num:    len(set.nodes),
-			weight: azAllocator.getFactor(set),
+	s.selIdx++
+
+	nodeInfos := make([]*DiskInfo, 0, args.Count)
+
+	for name, cnt := range azCntMap {
+		az := s.azAllocators[name]
+		args.Count = cnt
+		azNodes, err := az.alloc(ctx, args)
+		if err != nil || len(azNodes) < cnt {
+			span.Warnf("alloc from az %s failed, err %v", name, err)
+			return nil, errors.ErrNoAvailableNode
 		}
-		rackMap[rack] = 0
-		weightedRackNodeSets = append(weightedRackNodeSets, wn)
-		totalWeight += wn.weight
+		nodeInfos = append(nodeInfos, azNodes...)
 	}
 
-	chosenIdx := 0
-	need := args.Count
-	_totalWeight := totalWeight
-	rackNum := len(weightedRackNodeSets)
-
-RETRY:
-	randNum := int32(0)
-	if _totalWeight > 0 {
-		randNum = rand.Int31n(_totalWeight)
-	}
-	for i := chosenIdx; i < rackNum; i++ {
-		if randNum <= weightedRackNodeSets[i].weight {
-			if rackMap[weightedRackNodeSets[i].rack] >= weightedRackNodeSets[i].num {
-				continue
-			}
-			rackMap[weightedRackNodeSets[i].rack]++
-			_totalWeight -= weightedRackNodeSets[i].weight
-			if weightedRackNodeSets[i].weight > 0 {
-				weightedRackNodeSets[i].weight--
-			}
-			weightedRackNodeSets[chosenIdx], weightedRackNodeSets[i] = weightedRackNodeSets[i], weightedRackNodeSets[chosenIdx]
-			chosenIdx++
-			need--
-			if need == 0 {
-				break
-			}
-			goto RETRY
-		}
-		randNum -= weightedRackNodeSets[i].weight
+	for _, d := range nodeInfos {
+		d.AddShardCnt(1)
 	}
 
-	if need > 0 {
-		span.Info("can't find enough rack, try duplicated rack")
-		chosenIdx = 0
-		_totalWeight = totalWeight
-		goto RETRY
-	}
+	s.addShardCnt(args.Count)
 
-	for rack, num := range rackMap {
-		nodes := azAllocator.rackNodeSets[rack].alloc(num, excludes)
-		// update total shard count of each rack
-		azAllocator.rackNodeSets[rack].updateTotalShardCount(int32(num))
-		for _, node := range nodes {
-			allocNodes = append(allocNodes, node.GetInfo())
-		}
+	allocNodes := make([]*diskNode, 0, len(nodeInfos))
+	for _, info := range nodeInfos {
+		allocNodes = append(allocNodes, info.disk)
 	}
-	// update total shard count of az
-	azAllocator.allNodes.updateTotalShardCount(int32(len(allocNodes)))
-
 	return allocNodes, nil
 }
 
 type azAllocator struct {
-	rackNodeSets map[string]*nodeSet
-
+	az string
 	allNodes *nodeSet
 }
 
-func (a *azAllocator) put(n *node) {
+func (a *azAllocator) put(n *DiskInfo) {
 	a.allNodes.put(n)
-
-	n.lock.RLock()
-	rack := n.info.Rack
-	n.lock.RUnlock()
-	if _, ok := a.rackNodeSets[rack]; !ok {
-		a.rackNodeSets[rack] = &nodeSet{}
-	}
-	a.rackNodeSets[rack].put(n)
-}
-
-func (a *azAllocator) getFactor(set *nodeSet) int32 {
-	total := a.allNodes.getShardCount()
-	rackShardCount := set.getShardCount()
-
-	return total - rackShardCount
 }
 
 type nodeSet struct {
 	shardCount int32
 
-	nodes []*node
+	nodes []*DiskInfo
 }
 
 type weightedNode struct {
-	nodeId uint32
+	diskId uint32
 	weight int32
-	n      *node
+	n      *DiskInfo
 }
 
-func (s *nodeSet) alloc(count int, excludes map[uint32]bool) []*node {
-	if count >= len(s.nodes) {
+func (s *nodeSet) alloc(ctx context.Context, count int, excludes map[uint32]bool, hostWare, rackWare bool) []*DiskInfo {
+	if count > len(s.nodes) {
 		return s.nodes
 	}
-	weightedNodes := make([]*weightedNode, 0, len(s.nodes))
-	need := count
-	totalWeight := int32(0)
-	res := make([]*node, 0, count)
 
+	span := trace.SpanFromContext(ctx)
+
+	need := count
+	res := make([]*DiskInfo, 0, count)
+	excludesDiskId := make(map[uint32]bool)
+
+RackRetry:
+	weightedNodes := make([]*weightedNode, 0, len(s.nodes))
+	totalWeight := int32(0)
 	for _, n := range s.nodes {
-		if !n.IsAvailable() || excludes[n.nodeId] {
+		if !n.CanAlloc() || excludes[n.GetNodeId()] || excludesDiskId[n.GetDiskId()] {
 			continue
 		}
 		wn := &weightedNode{
-			nodeId: n.nodeId,
+			diskId: n.GetDiskId(),
 			n:      n,
-			weight: s.getFactor(n),
+			weight: n.getWeight(),
 		}
 		weightedNodes = append(weightedNodes, wn)
 		totalWeight += wn.weight
@@ -224,51 +273,63 @@ func (s *nodeSet) alloc(count int, excludes map[uint32]bool) []*node {
 		return res
 	}
 
-	chosenIdx := 0
-	_totalWeight := totalWeight
 	total := len(weightedNodes)
+	_totalWeight := totalWeight
 
 RETRY:
-	for need > 0 {
+	for need > 0 && total > 0 {
 		randNum := int32(0)
-		if _totalWeight > 0 {
+		if totalWeight > 0 {
 			randNum = rand.Int31n(_totalWeight)
 		}
-		for i := chosenIdx; i < total; i++ {
+
+		for i := 0; i < total; i++ {
 			wn := weightedNodes[i]
-			if wn.weight >= randNum {
-				_totalWeight = _totalWeight - wn.weight
-				res = append(res, wn.n)
-				weightedNodes[chosenIdx], wn = wn, weightedNodes[chosenIdx]
-				need -= 1
-				chosenIdx += 1
-				goto RETRY
+			if wn.weight <= randNum {
+				randNum -= wn.weight
+				continue
 			}
-			randNum -= wn.weight
+
+			res = append(res, wn.n)
+			need -= 1
+			total -= 1
+			_totalWeight -= wn.weight
+			weightedNodes[i] = weightedNodes[total]
+			excludesDiskId[wn.n.GetDiskId()] = true
+
+			nodeId := wn.n.GetNodeId()
+			rack := wn.n.GetRack()
+
+			if hostWare || rackWare {
+				for idx := 0; idx < total; idx++ {
+					w1 := weightedNodes[idx]
+
+					if hostWare && w1.n.GetNodeId() != nodeId {
+						continue
+					}
+
+					if rackWare && w1.n.GetRack() != rack {
+						continue
+					}
+
+					total -= 1
+					_totalWeight -= w1.weight
+					weightedNodes[idx] = weightedNodes[total]
+				}
+			}
+
+			goto RETRY
 		}
 	}
-	for _, node := range res {
-		node.UpdateShardCount(1)
+
+	if need > 0 && rackWare {
+		span.Info("can't find enough rack, try duplicated rack")
+		goto RackRetry
 	}
+
 	return res
 }
 
-func (s *nodeSet) put(n *node) {
+func (s *nodeSet) put(n *DiskInfo) {
 	s.nodes = append(s.nodes, n)
-	s.updateTotalShardCount(n.GetShardCount())
-}
-
-func (s *nodeSet) updateTotalShardCount(delta int32) {
-	atomic.AddInt32(&s.shardCount, delta)
-}
-
-func (s *nodeSet) getShardCount() int32 {
-	return atomic.LoadInt32(&s.shardCount)
-}
-
-func (s *nodeSet) getFactor(n *node) int32 {
-	shardCount := n.GetShardCount()
-	total := atomic.LoadInt32(&s.shardCount)
-
-	return total - shardCount
 }

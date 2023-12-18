@@ -29,11 +29,11 @@ var (
 	RaftMemberKey = []byte("#raft_members")
 )
 
-type raftNodeCfg struct {
+type RaftNodeCfg struct {
 	Members             []raft.Member `json:"members"`
 	RaftConfig          raft.Config   `json:"raft_config"`
 	TruncateNumInterval uint64        `json:"truncate_num_interval"`
-	RaftPort            uint64        `json:"raft_port"`
+	RaftPort            uint32        `json:"raft_port"`
 }
 
 type RaftMembers struct {
@@ -47,12 +47,13 @@ type raftNode struct {
 	lastTruncIdx uint64
 	nodes        *nodeManager
 	raftGroup    raft.Group
-	cfg          *raftNodeCfg
+	cfg          *RaftNodeCfg
 }
 
-func newRaftNode(cfg *raftNodeCfg, kv *store.Store) (*raftNode, error) {
+func newRaftNode(ctx context.Context, cfg *RaftNodeCfg, kv *store.Store) *raftNode {
 	r := &raftNode{}
-	ctx := context.Background()
+	r.sms = make(map[string]raft.Applier)
+	span := trace.SpanFromContextSafe(ctx)
 
 	r.store = kv
 	if cfg.TruncateNumInterval == 0 {
@@ -65,11 +66,11 @@ func newRaftNode(cfg *raftNodeCfg, kv *store.Store) (*raftNode, error) {
 
 	members, err := r.GetRaftMembers(ctx)
 	if err != nil {
-		return nil, err
+		span.Fatalf("get raft members failed, err: %v", err)
 	}
 
 	if cfg.RaftConfig.NodeID == 0 {
-		return nil, fmt.Errorf("node id can't be zero")
+		span.Fatalf("node id can't be zero")
 	}
 
 	needWrite := false
@@ -80,6 +81,7 @@ func newRaftNode(cfg *raftNodeCfg, kv *store.Store) (*raftNode, error) {
 
 	r.nodes = &nodeManager{
 		raftPort: string(cfg.RaftPort),
+		nodes: map[uint64]string{},
 	}
 	for _, m := range members {
 		r.nodes.addNode(m.NodeID, m.Host)
@@ -88,12 +90,12 @@ func newRaftNode(cfg *raftNodeCfg, kv *store.Store) (*raftNode, error) {
 	if needWrite {
 		err = r.persistMembers(ctx, members)
 		if err != nil {
-			return nil, err
+			span.Fatalf("persist raft members failed, err: %v", err)
 		}
 	}
 
 	if err = r.loadApplyIdx(ctx); err != nil {
-		return nil, err
+		span.Fatalf("load apply index failed, err: %v", err)
 	}
 	r.lastTruncIdx = r.AppliedIndex
 
@@ -101,7 +103,25 @@ func newRaftNode(cfg *raftNodeCfg, kv *store.Store) (*raftNode, error) {
 
 	r.cfg = cfg
 	go r.truncJob()
-	return r, nil
+
+	span.Infof("new raftNode success")
+	return r
+}
+
+func (r *raftNode) waitForRaftStart(ctx context.Context) {
+	span := trace.SpanFromContextSafe(ctx)
+	// wait for election
+	span.Info("receive leader change success")
+
+	for {
+		err := r.raftGroup.ReadIndex(ctx)
+		if err == nil {
+			break
+		}
+		span.Error("raftNode read index failed: ", err)
+	}
+
+	span.Info("raft start success")
 }
 
 func (r *raftNode) truncJob() {
@@ -136,6 +156,10 @@ func (r *raftNode) truncJob() {
 
 func (r *raftNode) loadApplyIdx(ctx context.Context) error {
 	val, err := r.store.KVStore().GetRaw(ctx, LocalCF, ApplyIndexKey, nil)
+	if err == kvstore.ErrNotFound {
+		return nil
+	}
+
 	if err != nil {
 		return err
 	}
@@ -163,6 +187,11 @@ func (r *raftNode) persistApplyIdx(ctx context.Context) error {
 
 func (r *raftNode) GetRaftMembers(ctx context.Context) ([]raft.Member, error) {
 	val, err := r.store.KVStore().GetRaw(ctx, LocalCF, RaftMemberKey, nil)
+
+	if err == kvstore.ErrNotFound {
+		return []raft.Member{}, nil
+	}
+
 	if err != nil {
 		return nil, err
 	}

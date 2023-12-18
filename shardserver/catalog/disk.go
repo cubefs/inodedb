@@ -156,7 +156,7 @@ func (d *disk) Load(ctx context.Context) error {
 	return nil
 }
 
-func (d *disk) AddShard(ctx context.Context, sid proto.Sid, shardID proto.ShardID, epoch uint64, inoLimit uint64, nodes []*proto.ShardNode) error {
+func (d *disk) AddShard(ctx context.Context, sid proto.Sid, shardID proto.ShardID, epoch uint64, inoLimit uint64, nodes []proto.ShardNode) error {
 	span := trace.SpanFromContext(ctx)
 
 	d.shardsMu.Lock()

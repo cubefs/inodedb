@@ -5,12 +5,14 @@ import (
 	"encoding/binary"
 
 	"github.com/cubefs/inodedb/common/kvstore"
+	"github.com/cubefs/inodedb/proto"
 )
 
 const CF = "node"
 
 var (
 	nodeKeyPrefix = []byte("n")
+	diskKeyPrefix = []byte("d")
 	keyInfix      = []byte("/")
 )
 
@@ -19,7 +21,7 @@ type storage struct {
 }
 
 func (s *storage) Load(ctx context.Context) ([]*nodeInfo, error) {
-	lr := s.kvStore.List(ctx, CF, nil, nil, nil)
+	lr := s.kvStore.List(ctx, CF, encodeNodeKeyPrefix(), nil, nil)
 	defer lr.Close()
 
 	var res []*nodeInfo
@@ -46,9 +48,44 @@ func (s *storage) Load(ctx context.Context) ([]*nodeInfo, error) {
 	return res, nil
 }
 
+func (s *storage) LoadDisk(ctx context.Context) ([]*proto.Disk, error) {
+	lr := s.kvStore.List(ctx, CF, encodeDiskKeyPrefix(), nil, nil)
+	defer lr.Close()
+	res := make([]*proto.Disk, 0)
+	for {
+		kg, vg, err := lr.ReadNext()
+		if err != nil {
+			return nil, err
+		}
+		if kg == nil || vg == nil {
+			break
+		}
+		newDisk := &proto.Disk{}
+		err = newDisk.Unmarshal(vg.Value())
+		if err != nil {
+			kg.Close()
+			vg.Close()
+			return nil, err
+		}
+		res = append(res, newDisk)
+		kg.Close()
+		vg.Close()
+	}
+	return res, nil
+}
+
 func (s *storage) Put(ctx context.Context, info *nodeInfo) error {
 	key := encodeNodeKey(info.Id)
 	marshal, err := info.Marshal()
+	if err != nil {
+		return err
+	}
+	return s.kvStore.SetRaw(ctx, CF, key, marshal, nil)
+}
+
+func (s *storage) PutDisk(ctx context.Context, disk *proto.Disk) error {
+	key := encodeDiskKey(disk.DiskID)
+	marshal, err := disk.Marshal()
 	if err != nil {
 		return err
 	}
@@ -76,10 +113,37 @@ func (s *storage) Delete(ctx context.Context, nodeId uint32) error {
 	return s.kvStore.Delete(ctx, CF, key, nil)
 }
 
+func (s *storage) DeleteDisk(ctx context.Context, nodeId uint32) error {
+	key := encodeDiskKey(nodeId)
+	return s.kvStore.Delete(ctx, CF, key, nil)
+}
+
 func encodeNodeKey(nodeId uint32) []byte {
 	ret := make([]byte, len(nodeKeyPrefix)+len(keyInfix)+4)
 	ret = append(ret, nodeKeyPrefix...)
 	ret = append(ret, keyInfix...)
 	binary.BigEndian.PutUint32(ret[len(ret)-4:], nodeId)
+	return ret
+}
+
+func encodeDiskKey(diskId uint32) []byte {
+	ret := make([]byte, len(diskKeyPrefix)+len(keyInfix)+4)
+	ret = append(ret, diskKeyPrefix...)
+	ret = append(ret, keyInfix...)
+	binary.BigEndian.PutUint32(ret[len(ret)-4:], diskId)
+	return ret
+}
+
+func encodeNodeKeyPrefix() []byte {
+	ret := make([]byte, len(nodeKeyPrefix)+len(keyInfix))
+	ret = append(ret, nodeKeyPrefix...)
+	ret = append(ret, keyInfix...)
+	return ret
+}
+
+func encodeDiskKeyPrefix() []byte {
+	ret := make([]byte, len(diskKeyPrefix)+len(keyInfix))
+	ret = append(ret, diskKeyPrefix...)
+	ret = append(ret, keyInfix...)
 	return ret
 }
