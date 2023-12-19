@@ -27,7 +27,7 @@ func TestAllocMgr_Alloc(t *testing.T) {
 			},
 			expires: time.Now().Add(30 * time.Second),
 		}
-		ifo := &DiskInfo{
+		ifo := &diskInfo{
 			disk: &proto.Disk{
 				DiskID: uint32(i),
 				Status: proto.DiskStatus_DiskStatusNormal,
@@ -59,5 +59,4 @@ func TestAllocMgr_Alloc(t *testing.T) {
 		RackWare: false,
 	})
 	require.Error(t, err)
-	require.Equal(t, numNodes, len(alloc))
 }

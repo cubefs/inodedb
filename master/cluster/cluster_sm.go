@@ -82,7 +82,8 @@ func (c *cluster) applyAddDisk(ctx context.Context, data []byte) error {
 		return err
 	}
 
-	diskInfo := &DiskInfo{
+	disk.Status = proto.DiskStatus_DiskStatusNormal
+	diskInfo := &diskInfo{
 		disk: disk,
 		node: node,
 	}
@@ -167,11 +168,15 @@ func (c *cluster) applyUpdate(ctx context.Context, data []byte) error {
 	newIfo := n.GetInfo()
 	newIfo.Roles = info.Roles
 
+	span.Infof("disk info on node, nodeId %d, disk %v", info.Id, n.dm.disks)
+
 	newNode := &node{
 		nodeId:  newIfo.Id,
 		info:    newIfo,
+		dm:      n.dm,
 		expires: time.Now().Add(time.Duration(c.cfg.HeartbeatTimeoutS) * time.Second),
 	}
+	
 	if err = c.storage.Put(ctx, newIfo); err != nil {
 		return err
 	}

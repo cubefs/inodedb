@@ -95,8 +95,8 @@ func (s *idGenerator) Alloc(ctx context.Context, name string, count int) (base, 
 		return
 	}
 
-	base = ret.Data.(uint64)
-	new = base + uint64(count)
+	new = ret.Data.(uint64)
+	base = new - uint64(count) + 1
 	span.Debugf("alloc success, name %s, base %d, new %d", name, base, new)
 	return
 }
@@ -124,7 +124,7 @@ func (s *idGenerator) applyCommit(ctx context.Context, data []byte) (uint64, err
 		return 0, err
 	}
 
-	span.Debugf("put id success, name %s, current %d, new current %d", args.Name, current, newCurrent)
+	span.Debugf("alloc id success, name %s, current %d, new current %d", args.Name, current, newCurrent)
 	return newCurrent, nil
 }
 

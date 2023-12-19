@@ -96,7 +96,7 @@ func NewCluster(ctx context.Context, cfg *Config) Cluster {
 		done:             make(chan struct{}),
 		azs:              make(map[string]struct{}),
 		allocatorFuncMap: make(map[proto.NodeRole]allocatorFunc),
-		disks:            &diskMgr{disks: map[uint32]*DiskInfo{}},
+		disks:            &diskMgr{disks: map[uint32]*diskInfo{}},
 	}
 	for _, az := range cfg.Azs {
 		c.azs[az] = struct{}{}
@@ -379,7 +379,7 @@ func (c *cluster) ListDisk(ctx context.Context, args *proto.ListDiskRequest) ([]
 	disks := c.disks.getSortedDisks()
 	cnt := 0
 
-	match := func(disk *DiskInfo) bool {
+	match := func(disk *diskInfo) bool {
 		ifo := disk.node.info
 		if args.Az != "" && ifo.Az != args.Az {
 			return false
@@ -454,7 +454,7 @@ func (c *cluster) Load(ctx context.Context) {
 			span.Fatalf("node[%d] not found, disk %v", d.NodeID, d)
 		}
 
-		ifo := &DiskInfo{
+		ifo := &diskInfo{
 			node: node,
 			disk: d,
 		}
@@ -480,6 +480,7 @@ func (c *cluster) refresh(ctx context.Context) {
 
 	for _, n := range allNodes {
 		if !n.CanAlloc() {
+			span.Infof("disk node can't used to alloc shard, disk %+v", n.disk)
 			continue
 		}
 

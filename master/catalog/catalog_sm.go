@@ -90,6 +90,8 @@ func (c *catalog) applyCreateSpace(ctx context.Context, data []byte) error {
 	space := newSpace(spaceInfo)
 	c.spaces.PutNoLock(space)
 	c.creatingSpaces.Store(spaceInfo.Name, nil)
+
+	span.Infof("create space success, space %+v", spaceInfo)
 	return nil
 }
 

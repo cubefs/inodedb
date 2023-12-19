@@ -10,7 +10,7 @@ import (
 )
 
 type Allocator interface {
-	Put(ctx context.Context, d *DiskInfo)
+	Put(ctx context.Context, d *diskInfo)
 	Alloc(ctx context.Context, args *AllocArgs) ([]*diskNode, error)
 }
 
@@ -29,7 +29,8 @@ func NewShardServerAllocator(ctx context.Context) Allocator {
 	}
 }
 
-func (a *allocator) Put(ctx context.Context, n *DiskInfo) {
+func (a *allocator) Put(ctx context.Context, n *diskInfo) {
+
 	setId := n.node.info.SetId
 	allocator, ok := a.setAlloctors[setId]
 	if !ok {
@@ -45,6 +46,8 @@ func (a *allocator) Put(ctx context.Context, n *DiskInfo) {
 
 func (a *allocator) Alloc(ctx context.Context, args *AllocArgs) ([]*diskNode, error) {
 	span := trace.SpanFromContextSafe(ctx)
+
+	span.Infof("set allocator cnt %d", len(a.setAlloctors))
 
 	totalWeight := 0
 	sets := make([]*weightSet, 0, len(a.setAlloctors))
@@ -93,10 +96,10 @@ Retry:
 	return nil, errors.ErrNoAvailableNode
 }
 
-func (a *azAllocator) alloc(ctx context.Context, args *AllocArgs) ([]*DiskInfo, error) {
+func (a *azAllocator) alloc(ctx context.Context, args *AllocArgs) ([]*diskInfo, error) {
 	span := trace.SpanFromContextSafe(ctx)
 
-	allocNodes := make([]*DiskInfo, 0, args.Count)
+	allocNodes := make([]*diskInfo, 0, args.Count)
 	excludes := make(map[uint32]bool)
 	for _, id := range args.ExcludeNodeIds {
 		excludes[id] = true
@@ -139,16 +142,17 @@ func (s *setAlloctor) addShardCnt(cnt int) {
 	s.allocShardCnt += cnt
 }
 
-func (s *setAlloctor) put(d *DiskInfo) {
+func (s *setAlloctor) put(d *diskInfo) {
 	// s.nodes
 	az := d.node.info.Az
 	allocator, ok := s.azAllocators[az]
 	if !ok {
-		s.azAllocators[az] = &azAllocator{
+		allocator = &azAllocator{
 			az:       az,
 			allNodes: &nodeSet{},
 			// rackNodeSets: make(map[string]*nodeSet),
 		}
+		s.azAllocators[az] = allocator
 	}
 	allocator.put(d)
 
@@ -193,7 +197,7 @@ func (s *setAlloctor) alloc(ctx context.Context, args *AllocArgs) ([]*diskNode, 
 
 	s.selIdx++
 
-	nodeInfos := make([]*DiskInfo, 0, args.Count)
+	nodeInfos := make([]*diskInfo, 0, args.Count)
 
 	for name, cnt := range azCntMap {
 		az := s.azAllocators[name]
@@ -224,23 +228,23 @@ type azAllocator struct {
 	allNodes *nodeSet
 }
 
-func (a *azAllocator) put(n *DiskInfo) {
+func (a *azAllocator) put(n *diskInfo) {
 	a.allNodes.put(n)
 }
 
 type nodeSet struct {
 	shardCount int32
 
-	nodes []*DiskInfo
+	nodes []*diskInfo
 }
 
 type weightedNode struct {
 	diskId uint32
 	weight int32
-	n      *DiskInfo
+	n      *diskInfo
 }
 
-func (s *nodeSet) alloc(ctx context.Context, count int, excludes map[uint32]bool, hostWare, rackWare bool) []*DiskInfo {
+func (s *nodeSet) alloc(ctx context.Context, count int, excludes map[uint32]bool, hostWare, rackWare bool) []*diskInfo {
 	if count > len(s.nodes) {
 		return s.nodes
 	}
@@ -248,7 +252,7 @@ func (s *nodeSet) alloc(ctx context.Context, count int, excludes map[uint32]bool
 	span := trace.SpanFromContext(ctx)
 
 	need := count
-	res := make([]*DiskInfo, 0, count)
+	res := make([]*diskInfo, 0, count)
 	excludesDiskId := make(map[uint32]bool)
 
 RackRetry:
@@ -328,6 +332,6 @@ RETRY:
 	return res
 }
 
-func (s *nodeSet) put(n *DiskInfo) {
+func (s *nodeSet) put(n *diskInfo) {
 	s.nodes = append(s.nodes, n)
 }

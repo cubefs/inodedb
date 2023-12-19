@@ -15,7 +15,7 @@ const (
 	defaultMaxShardOneDisk = 20000
 )
 
-type DiskInfo struct {
+type diskInfo struct {
 	disk *diskNode
 	node *node
 
@@ -23,7 +23,8 @@ type DiskInfo struct {
 	lock       sync.RWMutex
 }
 
-func (d *DiskInfo) getWeight() int32 {
+func (d *diskInfo) getWeight() int32 {
+
 	maxCnt := defaultMaxShardOneDisk
 	var w1, w2 int
 	if d.shardCount < defaultMaxShardOneDisk {
@@ -42,7 +43,7 @@ func (d *DiskInfo) getWeight() int32 {
 	return int32(w1 + w2)
 }
 
-func (d *DiskInfo) updateReport(report proto.DiskReport) {
+func (d *diskInfo) updateReport(report proto.DiskReport) {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
@@ -50,32 +51,32 @@ func (d *DiskInfo) updateReport(report proto.DiskReport) {
 	d.disk.Info = report
 }
 
-func (d *DiskInfo) GetDiskId() uint32 {
+func (d *diskInfo) GetDiskId() uint32 {
 	return d.disk.GetDiskID()
 }
 
-func (d *DiskInfo) GetNodeId() uint32 {
+func (d *diskInfo) GetNodeId() uint32 {
 	return d.disk.GetNodeID()
 }
 
-func (d *DiskInfo) GetRack() string {
+func (d *diskInfo) GetRack() string {
 	return d.node.info.Rack
 }
 
-func (d *DiskInfo) AddShardCnt(delta int) {
+func (d *diskInfo) AddShardCnt(delta int) {
 	atomic.AddInt32(&d.shardCount, int32(delta))
 }
 
-func (d *DiskInfo) CanAlloc() bool {
+func (d *diskInfo) CanAlloc() bool {
 	return d.disk.Status == proto.DiskStatus_DiskStatusNormal
 }
 
-func (d *DiskInfo) GetShardCount() int32 {
+func (d *diskInfo) GetShardCount() int32 {
 	return d.shardCount
 }
 
-func (d *DiskInfo) Clone() *DiskInfo {
-	return &DiskInfo{
+func (d *diskInfo) Clone() *diskInfo {
+	return &diskInfo{
 		disk: &(*d.disk),
 		node: d.node,
 	}
@@ -83,10 +84,10 @@ func (d *DiskInfo) Clone() *DiskInfo {
 
 type diskMgr struct {
 	lock  sync.RWMutex
-	disks map[uint32]*DiskInfo
+	disks map[uint32]*diskInfo
 }
 
-func (dm *diskMgr) get(id uint32) *DiskInfo {
+func (dm *diskMgr) get(id uint32) *diskInfo {
 	dm.lock.RLock()
 	defer dm.lock.RUnlock()
 	disk, ok := dm.disks[id]
@@ -96,41 +97,41 @@ func (dm *diskMgr) get(id uint32) *DiskInfo {
 	return disk
 }
 
-func (dm *diskMgr) addDisk(id uint32, ifo *DiskInfo) {
+func (dm *diskMgr) addDisk(id uint32, ifo *diskInfo) {
 	dm.lock.Lock()
 	defer dm.lock.Unlock()
 	dm.addDiskNoLock(id, ifo)
 }
 
-func (dm *diskMgr) addDiskNoLock(id uint32, ifo *DiskInfo) {
+func (dm *diskMgr) addDiskNoLock(id uint32, ifo *diskInfo) {
 	if dm.disks == nil {
-		dm.disks = make(map[uint32]*DiskInfo)
+		dm.disks = make(map[uint32]*diskInfo)
 	}
 	dm.disks[id] = ifo
-	ifo.node.disks.disks[id] = ifo
+	ifo.node.dm.disks[id] = ifo
 }
 
-type ById []*DiskInfo
+type Disks []*diskInfo
 
-func (a ById) Len() int      { return len(a) }
-func (a ById) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a ById) Less(i, j int) bool {
+func (a Disks) Len() int      { return len(a) }
+func (a Disks) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a Disks) Less(i, j int) bool {
 	return a[i].disk.DiskID < a[j].disk.DiskID
 }
 
-func (dm *diskMgr) getSortedDisks() []*DiskInfo {
+func (dm *diskMgr) getSortedDisks() []*diskInfo {
 	if dm == nil {
-		return make([]*DiskInfo, 0)
+		return make([]*diskInfo, 0)
 	}
 
 	dm.lock.RLock()
 	defer dm.lock.RUnlock()
-	disks := make([]*DiskInfo, 0, len(dm.disks))
+	disks := make([]*diskInfo, 0, len(dm.disks))
 	for _, disk := range dm.disks {
 		disks = append(disks, disk)
 	}
 
 	// sort by diskId
-	sort.Sort(ById(disks))
+	sort.Sort(Disks(disks))
 	return disks
 }

@@ -107,7 +107,14 @@ func (r *RPCServer) DeleteSpace(ctx context.Context, req *proto.DeleteSpaceReque
 }
 
 func (r *RPCServer) GetSpace(ctx context.Context, req *proto.GetSpaceRequest) (*proto.GetSpaceResponse, error) {
-	spaceMeta, err := r.master.GetSpaceByName(ctx, req.Name)
+	var spaceMeta *proto.SpaceMeta
+	var err error
+	if req.Name != "" {
+		spaceMeta, err = r.master.GetSpaceByName(ctx, req.Name)
+	} else {
+		spaceMeta, err = r.master.GetSpace(ctx, req.Sid)
+	}
+	
 	if err != nil {
 		return nil, err
 	}

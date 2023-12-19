@@ -161,8 +161,8 @@ InitRoles:
 			cfg.ClusterConfig.ClusterId = 1
 
 			cfg.MasterRaftCfg.Members = []raft.Member{{NodeID: 1, Host: "127.0.0.1"}}
-			cfg.MasterRaftCfg.RaftPort = uint32(1234)
 			cfg.MasterRaftCfg.RaftConfig.NodeID = 1
+			
 			break InitRoles
 		case proto.NodeRole_Master.String():
 			cfg.NodeConfig.Roles = append(cfg.NodeConfig.Roles, proto.NodeRole_Master)

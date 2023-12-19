@@ -287,7 +287,12 @@ func (c *catalog) GetSpace(ctx context.Context, sid uint64) (*proto.SpaceMeta, e
 }
 
 func (c *catalog) GetSpaceByName(ctx context.Context, name string) (*proto.SpaceMeta, error) {
+	span := trace.SpanFromContext(ctx)
 	space := c.spaces.GetByName(name)
+	if space == nil {
+		span.Errorf("space %s is not exist", name)
+		return nil, apierrors.ErrSpaceDoesNotExist
+	}
 	return c.GetSpace(ctx, space.id)
 }
 
@@ -538,7 +543,7 @@ func (c *catalog) createSpaceShards(ctx context.Context, space *space, startShar
 				InoLimit: c.cfg.InoLimitPerShard,
 				Nodes:    protoShardNodes,
 			}); err != nil {
-				return errors.Info(err, fmt.Sprintf("add shard to node[%d] failed", protoShardNodes[i]))
+				return errors.Info(err, fmt.Sprintf("add shard to node[%v] failed", protoShardNodes[i]))
 			}
 			span.Info("add shard success")
 		}

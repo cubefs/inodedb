@@ -72,19 +72,13 @@ func NewMaster(cfg *Config) *Master {
 	if err != nil {
 		span.Fatalf("create raft group failed, err %s", err.Error())
 	}
+	
 	raftNode.raftGroup = raftGroup
-
-	cfg.CatalogConfig.RaftGroup = raftGroup
-	cfg.ClusterConfig.RaftGroup = raftGroup
-
 	idGenerator.SetRaftGroup(raftGroup)
 	newCluster.SetRaftGroup(raftGroup)
 	newCatalog.SetRaftGroup(raftGroup)
 
-	if len(cfg.RaftConfig.Members) == 1 {
-		// raftNode.waitForRaftStart(ctx)
-		raftGroup.Campaign(ctx)
-	}
+	raftNode.waitForRaftStart(ctx)
 
 	return &Master{
 		Catalog: newCatalog,

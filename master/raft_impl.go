@@ -110,18 +110,16 @@ func newRaftNode(ctx context.Context, cfg *RaftNodeCfg, kv *store.Store) *raftNo
 
 func (r *raftNode) waitForRaftStart(ctx context.Context) {
 	span := trace.SpanFromContextSafe(ctx)
-	// wait for election
-	span.Info("receive leader change success")
-
+	start := time.Now()
+	span.Info("wait for raft start")
 	for {
 		err := r.raftGroup.ReadIndex(ctx)
 		if err == nil {
 			break
 		}
-		span.Error("raftNode read index failed: ", err)
+		span.Errorf("raftNode read index failed: err %v, cost %d ms", err, time.Since(start).Milliseconds())
 	}
-
-	span.Info("raft start success")
+	span.Infof("raft start success after %d ms", time.Since(start).Microseconds())
 }
 
 func (r *raftNode) truncJob() {
@@ -132,7 +130,7 @@ func (r *raftNode) truncJob() {
 			return
 		}
 
-		if r.AppliedIndex%r.cfg.TruncateNumInterval == 0 {
+		if r.AppliedIndex%r.cfg.TruncateNumInterval != 0 {
 			return
 		}
 
@@ -232,22 +230,23 @@ func (r *raftNode) Apply(cxt context.Context, pd []raft.ProposalData, index uint
 
 	for i := range pd {
 		pdi := pd[i]
-		span, _ := trace.StartSpanFromContextWithTraceID(cxt, "", string(pdi.Context))
-		span.Infof("receive raft op %d, mod %s, notify id: %d", pdi.Op, string(pdi.Module), pdi.NotifyID)
 		mod := pdi.Module
+		span, _ := trace.StartSpanFromContextWithTraceID(cxt, "apply", string(pdi.Context))
+		span.Infof("recive apply req, module %s, op %d, data %s", string(pdi.Module), pdi.Op, string(pdi.Data))
 		sm := r.sms[string(mod)]
 		if sm == nil {
 			panic(fmt.Errorf("target mode not exist, mod %s, op %d", mod, pdi.Op))
 		}
 
 		newRet, err := sm.Apply(cxt, pdi, 0)
+		span.Infof("finish apply op, module %s, op %d", string(pdi.Module), pdi.Op)
 		if err != nil {
 			return nil, err
 		}
 
 		rets[i] = newRet
 
-		span.Infof("finish raft op %d, mod %s, notify id: %d", pdi.Op, string(pdi.Module), pdi.NotifyID)
+		span.Infof("finish raft op %d, mod %s", pdi.Op, string(pdi.Module))
 	}
 
 	r.AppliedIndex = index

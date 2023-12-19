@@ -42,7 +42,7 @@ var (
 var (
 	ErrInodeLimitExceed      = errors.New("inode limit exceed")
 	ErrInoOutOfRange         = errors.New("ino out of range")
-	ErrSpaceDoesNotExist     = errors.New("space does do Exist")
+	ErrSpaceDoesNotExist     = errors.New("space does not Exist")
 	ErrShardDoesNotExist     = errors.New("shard does not exist")
 	ErrInoRangeNotFound      = errors.New("ino range not found")
 	ErrInoMismatchShardRange = errors.New("ino mismatch shard range")

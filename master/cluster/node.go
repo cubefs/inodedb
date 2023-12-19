@@ -22,7 +22,7 @@ type node struct {
 	info       *nodeInfo
 	shardCount int32
 	expires    time.Time
-	disks      *diskMgr
+	dm         *diskMgr
 	lock       sync.RWMutex
 }
 
@@ -38,7 +38,7 @@ func (n *node) HandleHeartbeat(ctx context.Context, disks []proto.DiskReport, ti
 	}
 
 	for _, r := range disks {
-		d := n.disks.get(r.DiskID)
+		d := n.dm.get(r.DiskID)
 		if d == nil {
 			span.Warnf("disk not found in node disk list, diskId %d, nodeId %d", r.DiskID, n.nodeId)
 			continue
@@ -127,7 +127,9 @@ func (s *concurrentNodes) GetByNameNoLock(addr string) *node {
 
 // PutNoLock new space into shardedSpace with no lock
 func (s *concurrentNodes) PutNoLock(v *node) {
-	v.disks = &diskMgr{disks: map[uint32]*DiskInfo{}}
+	if v.dm == nil {
+		v.dm = &diskMgr{disks: map[uint32]*diskInfo{}}
+	}
 	id := v.nodeId
 	s.idMap[id] = v
 	s.addrMap[v.info.Addr] = v
