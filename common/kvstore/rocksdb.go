@@ -29,14 +29,16 @@ import (
 
 type (
 	rocksdb struct {
-		path      string
-		db        *rdb.DB
+		path        string
+		db          *rdb.DB
+		cfHandles   map[CF]*rdb.ColumnFamilyHandle
+		handleError HandleError
+
 		optHelper *optHelper
 		opt       *rdb.Options
 		readOpt   *rdb.ReadOptions
 		writeOpt  *rdb.WriteOptions
 		flushOpt  *rdb.FlushOptions
-		cfHandles map[CF]*rdb.ColumnFamilyHandle
 		lock      sync.RWMutex
 	}
 	lruCache struct {
@@ -72,6 +74,7 @@ type (
 		filterKeys    [][]byte
 		filterKeysTmp [][]byte
 		isFirst       bool
+		handleError   HandleError
 	}
 	keyGetter struct {
 		key *rdb.Slice
@@ -133,14 +136,15 @@ func newRocksdb(ctx context.Context, path string, option *Option) (Store, error)
 	ro := rdb.NewDefaultReadOptions()
 
 	ins := &rocksdb{
-		db:        db,
-		path:      path,
-		optHelper: &optHelper{db: db, opt: option},
-		opt:       dbOpt,
-		readOpt:   ro,
-		writeOpt:  wo,
-		flushOpt:  rdb.NewDefaultFlushOptions(),
-		cfHandles: cfhMap,
+		db:          db,
+		path:        path,
+		optHelper:   &optHelper{db: db, opt: option},
+		opt:         dbOpt,
+		readOpt:     ro,
+		writeOpt:    wo,
+		flushOpt:    rdb.NewDefaultFlushOptions(),
+		cfHandles:   cfhMap,
+		handleError: option.HandleError,
 	}
 	return ins, nil
 }
@@ -265,6 +269,7 @@ func (vg *valueGetter) Close() {
 func (lr *listReader) ReadNext() (key KeyGetter, val ValueGetter, err error) {
 	if lr.isFirst {
 		if err = lr.iterator.Err(); err != nil {
+			lr.handleError(err)
 			return nil, nil, err
 		}
 		if !lr.iterator.Valid() {
@@ -285,6 +290,7 @@ func (lr *listReader) ReadNext() (key KeyGetter, val ValueGetter, err error) {
 	// move into next kv
 	lr.iterator.Next()
 	if err = lr.iterator.Err(); err != nil {
+		lr.handleError(err)
 		return nil, nil, err
 	}
 	if !lr.iterator.Valid() {
@@ -305,6 +311,7 @@ func (lr *listReader) ReadNext() (key KeyGetter, val ValueGetter, err error) {
 func (lr *listReader) ReadNextCopy() (key []byte, value []byte, err error) {
 	kg, vg, err := lr.ReadNext()
 	if err != nil {
+		lr.handleError(err)
 		return nil, nil, err
 	}
 	if kg != nil && vg != nil {
@@ -322,6 +329,7 @@ func (lr *listReader) ReadNextCopy() (key []byte, value []byte, err error) {
 func (lr *listReader) ReadPrev() (key KeyGetter, val ValueGetter, err error) {
 	if lr.isFirst {
 		if err = lr.iterator.Err(); err != nil {
+			lr.handleError(err)
 			return nil, nil, err
 		}
 		if !lr.iterator.Valid() {
@@ -342,6 +350,7 @@ func (lr *listReader) ReadPrev() (key KeyGetter, val ValueGetter, err error) {
 	// move into prev kv
 	lr.iterator.Prev()
 	if err = lr.iterator.Err(); err != nil {
+		lr.handleError(err)
 		return nil, nil, err
 	}
 	if !lr.iterator.Valid() {
@@ -362,6 +371,7 @@ func (lr *listReader) ReadPrev() (key KeyGetter, val ValueGetter, err error) {
 func (lr *listReader) ReadPrevCopy() (key []byte, value []byte, err error) {
 	kg, vg, err := lr.ReadPrev()
 	if err != nil {
+		lr.handleError(err)
 		return nil, nil, err
 	}
 	if kg != nil && vg != nil {
@@ -380,6 +390,7 @@ func (lr *listReader) ReadLast() (key KeyGetter, val ValueGetter, err error) {
 	if lr.prefix == nil {
 		lr.iterator.SeekToLast()
 		if err = lr.iterator.Err(); err != nil {
+			lr.handleError(err)
 			return
 		}
 		if !lr.iterator.Valid() {
@@ -391,6 +402,7 @@ func (lr *listReader) ReadLast() (key KeyGetter, val ValueGetter, err error) {
 	}
 	for {
 		if err = lr.iterator.Err(); err != nil {
+			lr.handleError(err)
 			return
 		}
 		if !lr.iterator.Valid() {
@@ -418,6 +430,7 @@ func (lr *listReader) SeekForPrev(key []byte) (err error) {
 	}
 	for {
 		if err = lr.iterator.Err(); err != nil {
+			lr.handleError(err)
 			return
 		}
 		if !lr.iterator.Valid() {
@@ -553,6 +566,7 @@ func (s *rocksdb) Get(ctx context.Context, col CF, key []byte, readOpt ReadOptio
 		ro = readOpt.(*readOption).opt
 	}
 	if v, err = s.db.GetCF(ro, cf, key); err != nil {
+		s.handleError(err)
 		return nil, err
 	}
 	if !v.Exists() {
@@ -570,6 +584,7 @@ func (s *rocksdb) GetRaw(ctx context.Context, col CF, key []byte, readOpt ReadOp
 		ro = readOpt.(*readOption).opt
 	}
 	if v, err = s.db.GetCF(ro, cf, key); err != nil {
+		s.handleError(err)
 		return nil, err
 	}
 	if !v.Exists() {
@@ -589,6 +604,7 @@ func (s *rocksdb) MultiGet(ctx context.Context, col CF, keys [][]byte, readOpt R
 	cfh := s.getColumnFamily(col)
 	_values, err := s.db.MultiGetCF(ro, cfh, keys...)
 	if err != nil {
+		s.handleError(err)
 		return nil, err
 	}
 	values = make([]ValueGetter, len(_values))
@@ -609,6 +625,7 @@ func (s *rocksdb) SetRaw(ctx context.Context, col CF, key []byte, value []byte, 
 		wo = writeOpt.(*writeOption).opt
 	}
 	if err := s.db.PutCF(wo, cf, key, value); err != nil {
+		s.handleError(err)
 		return err
 	}
 	return nil
@@ -621,6 +638,7 @@ func (s *rocksdb) Delete(ctx context.Context, col CF, key []byte, writeOpt Write
 		wo = writeOpt.(*writeOption).opt
 	}
 	if err := s.db.DeleteCF(wo, cf, key); err != nil {
+		s.handleError(err)
 		return err
 	}
 	return nil
@@ -659,7 +677,11 @@ func (s *rocksdb) Write(ctx context.Context, batch WriteBatch, writeOpt WriteOpt
 		wo = writeOpt.(*writeOption).opt
 	}
 	_batch := batch.(*writeBatch)
-	return s.db.Write(wo, _batch.batch)
+	if err := s.db.Write(wo, _batch.batch); err != nil {
+		s.handleError(err)
+		return err
+	}
+	return nil
 }
 
 func (s *rocksdb) Read(ctx context.Context, cols []CF, keys [][]byte, readOpt ReadOption) (values []ValueGetter, err error) {
@@ -673,6 +695,7 @@ func (s *rocksdb) Read(ctx context.Context, cols []CF, keys [][]byte, readOpt Re
 	}
 	_values, err := s.db.MultiGetCFMultiCF(ro, cfhs, keys)
 	if err != nil {
+		s.handleError(err)
 		return nil, err
 	}
 	values = make([]ValueGetter, len(_values))
@@ -688,7 +711,11 @@ func (s *rocksdb) Read(ctx context.Context, cols []CF, keys [][]byte, readOpt Re
 
 func (s *rocksdb) FlushCF(ctx context.Context, col CF) error {
 	cf := s.getColumnFamily(col)
-	return s.db.FlushCF(s.flushOpt, cf)
+	if err := s.db.FlushCF(s.flushOpt, cf); err != nil {
+		s.handleError(err)
+		return err
+	}
+	return nil
 }
 
 func (s *rocksdb) Stats(ctx context.Context) (stats Stats, err error) {

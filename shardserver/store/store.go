@@ -10,20 +10,32 @@ type Config struct {
 	Path       string         `json:"path"`
 	KVOption   kvstore.Option `json:"kv_option"`
 	RaftOption kvstore.Option `json:"raft_option"`
+	HandleEIO  func(err error)
 }
 
 type Store struct {
 	kvStore      kvstore.Store
 	raftStore    kvstore.Store
 	defaultRawFS RawFS
+	handleError  func(err error)
 
 	cfg *Config
 }
 
 func NewStore(ctx context.Context, cfg *Config) (*Store, error) {
+	handleError := func(err error) {
+		if err == nil {
+			return
+		}
+		if isEIO(err) && cfg.HandleEIO != nil {
+			cfg.HandleEIO(err)
+		}
+	}
+
 	kvStorePath := cfg.Path + "/kv"
 	// disable kv wal to optimized latency
 	cfg.KVOption.DisableWal = true
+	cfg.KVOption.HandleError = handleError
 	// todo: add blobDB support for vector data
 	kvStore, err := kvstore.NewKVStore(ctx, kvStorePath, kvstore.RocksdbLsmKVType, &cfg.KVOption)
 	if err != nil {
@@ -31,6 +43,7 @@ func NewStore(ctx context.Context, cfg *Config) (*Store, error) {
 	}
 
 	raftStorePath := cfg.Path + "/raft"
+	cfg.RaftOption.HandleError = handleError
 	raftStore, err := kvstore.NewKVStore(ctx, raftStorePath, kvstore.RocksdbLsmKVType, &cfg.RaftOption)
 	if err != nil {
 		return nil, err
@@ -39,7 +52,8 @@ func NewStore(ctx context.Context, cfg *Config) (*Store, error) {
 	return &Store{
 		kvStore:      kvStore,
 		raftStore:    raftStore,
-		defaultRawFS: &posixRawFS{path: cfg.Path + "/raw"},
+		defaultRawFS: &posixRawFS{path: cfg.Path + "/raw", handleError: handleError},
+		handleError:  handleError,
 		cfg:          cfg,
 	}, nil
 }
@@ -53,7 +67,7 @@ func (s *Store) RaftStore() kvstore.Store {
 }
 
 func (s *Store) NewRawFS(path string) RawFS {
-	return &posixRawFS{path: s.cfg.Path + "/" + path}
+	return &posixRawFS{path: s.cfg.Path + "/" + path, handleError: s.handleError}
 }
 
 func (s *Store) DefaultRawFS() RawFS {

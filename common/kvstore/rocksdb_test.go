@@ -380,7 +380,7 @@ func TestInstance_List(t *testing.T) {
 		kg.Close()
 		vg.Close()
 	}
-	ls.SeekToPrefix([]byte("word"))
+	// ls.SeekToPrefix([]byte("word"))
 	for {
 		i++
 		kg, vg, err := ls.ReadNext()

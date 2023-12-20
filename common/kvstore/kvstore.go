@@ -190,11 +190,13 @@ type (
 		WriteBufferManager               WriteBufferManager
 		Env                              Env
 		SstFileManager                   SstFileManager
+		HandleError                      HandleError
 	}
 	CompactionOptionFIFO struct {
 		MaxTableFileSize int
 		AllowCompaction  bool
 	}
+	HandleError func(err error)
 )
 
 func NewKVStore(ctx context.Context, path string, lsmType LsmKVType, option *Option) (Store, error) {
