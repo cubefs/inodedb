@@ -13,8 +13,10 @@ import (
 	"github.com/cubefs/inodedb/master/cluster"
 	masterStore "github.com/cubefs/inodedb/master/store"
 	"github.com/cubefs/inodedb/proto"
+	"github.com/cubefs/inodedb/raft"
 	"github.com/cubefs/inodedb/router"
 	"github.com/cubefs/inodedb/shardserver"
+	sc "github.com/cubefs/inodedb/shardserver/catalog"
 	shardServerStore "github.com/cubefs/inodedb/shardserver/store"
 )
 
@@ -26,19 +28,27 @@ type Config struct {
 	AuditLog auditlog.Config `json:"audit_log"`
 	Roles    []string        `json:"roles"`
 
-	NodeConfig      proto.Node             `json:"node_config"`
-	StoreConfig     StoreConfig            `json:"store_config"`
-	MasterRpcConfig client.MasterConfig    `json:"master_rpc_config"`
-	ServerRpcConfig client.TransportConfig `json:"server_rpc_config"`
+	// public config
+	NodeConfig           proto.Node             `json:"node_config"`
+	StoreConfig          StoreConfig            `json:"store_config"`
+	MasterRpcConfig      client.MasterConfig    `json:"master_rpc_config"`
+	ShardServerRpcConfig client.TransportConfig `json:"shard_server_rpc_config"`
 
-	CatalogConfig catalog.Config `json:"catalog_config"`
-	ClusterConfig cluster.Config `json:"cluster_config"`
+	// shard server config
+	Disks           []string           `json:"disks_config"`
+	ShardRaftConfig raft.Config        `json:"shard_server_raft_config"`
+	ShardBaseConfig sc.ShardBaseConfig `json:"shard_base_config"`
+
+	// master config
+	CatalogConfig catalog.Config     `json:"catalog_config"`
+	ClusterConfig cluster.Config     `json:"cluster_config"`
 	MasterRaftCfg master.RaftNodeCfg `json:"master_raft_cfg"`
 }
 
 type StoreConfig struct {
-	Path     string         `json:"path"`
-	KVOption kvstore.Option `json:"kv_option"`
+	Path       string         `json:"path"`
+	KVOption   kvstore.Option `json:"kv_option"`
+	RaftOption kvstore.Option `json:"raft_option"`
 }
 
 type Server struct {
@@ -46,9 +56,10 @@ type Server struct {
 	router      *router.Router
 	shardServer *shardserver.ShardServer
 
-	auditRecorder auditlog.LogCloser
-	logHandler    rpc.ProgressHandler
-	cfg           *Config
+	initModuleHandler map[proto.NodeRole]func()
+	auditRecorder     auditlog.LogCloser
+	logHandler        rpc.ProgressHandler
+	cfg               *Config
 }
 
 func NewServer(cfg *Config) *Server {
@@ -63,52 +74,63 @@ func NewServer(cfg *Config) *Server {
 	}
 
 	server := &Server{
-		auditRecorder: auditRecorder,
-		logHandler:    logHandler,
-		cfg:           cfg,
+		initModuleHandler: map[proto.NodeRole]func(){},
+		auditRecorder:     auditRecorder,
+		logHandler:        logHandler,
+		cfg:               cfg,
 	}
 
-	newShardServer := func() *shardserver.ShardServer {
-		return shardserver.NewShardServer(&shardserver.Config{
-			StoreConfig: shardServerStore.Config{
-				Path:     cfg.StoreConfig.Path + "/shardserver/",
-				KVOption: cfg.StoreConfig.KVOption,
+	initShardServer := func() {
+		server.shardServer = shardserver.NewShardServer(&shardserver.Config{
+			CatalogConfig: sc.Config{
+				Disks: cfg.Disks,
+				StoreConfig: shardServerStore.Config{
+					KVOption:   cfg.StoreConfig.KVOption,
+					RaftOption: cfg.StoreConfig.RaftOption,
+				},
+				MasterConfig:    cfg.MasterRpcConfig,
+				NodeConfig:      cfg.NodeConfig,
+				RaftConfig:      cfg.ShardRaftConfig,
+				ShardBaseConfig: cfg.ShardBaseConfig,
 			},
-			MasterConfig: cfg.MasterRpcConfig,
-			NodeConfig:   cfg.NodeConfig,
 		})
 	}
-
-	newMaster := func() *master.Master {
-		return master.NewMaster(&master.Config{
+	initMaster := func() {
+		server.master = master.NewMaster(&master.Config{
 			StoreConfig: masterStore.Config{
-				Path:     cfg.StoreConfig.Path + "/master/",
-				KVOption: cfg.StoreConfig.KVOption,
+				Path:       cfg.StoreConfig.Path + "/master/",
+				KVOption:   cfg.StoreConfig.KVOption,
+				RaftOption: cfg.StoreConfig.RaftOption,
 			},
 			CatalogConfig: cfg.CatalogConfig,
 			ClusterConfig: cfg.ClusterConfig,
-			RaftConfig: cfg.MasterRaftCfg,
+			RaftConfig:    cfg.MasterRaftCfg,
 		})
 	}
-
-	newRouter := func() *router.Router {
-		return router.NewRouter(&router.Config{
-			ServerConfig: cfg.ServerRpcConfig,
+	initRouter := func() {
+		server.router = router.NewRouter(&router.Config{
+			ServerConfig: cfg.ShardServerRpcConfig,
 			MasterConfig: cfg.MasterRpcConfig,
 			NodeConfig:   cfg.NodeConfig,
 		})
+	}
+
+	server.initModuleHandler = map[proto.NodeRole]func(){
+		proto.NodeRole_ShardServer: initShardServer,
+		proto.NodeRole_Master:      initMaster,
+		proto.NodeRole_Router:      initRouter,
 	}
 
 	for _, role := range cfg.Roles {
 		switch role {
 		case proto.NodeRole_ShardServer.String():
-			server.shardServer = newShardServer()
+			initShardServer()
 		case proto.NodeRole_Master.String():
-			server.master = newMaster()
+			initMaster()
 		case proto.NodeRole_Router.String():
-			server.router = newRouter()
+			initRouter()
 		case proto.NodeRole_Single.String():
-			server.master = newMaster()
+			initMaster()
 			server.shardServer = &shardserver.ShardServer{}
 			server.router = &router.Router{}
 		default:

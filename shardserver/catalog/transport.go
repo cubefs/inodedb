@@ -4,11 +4,9 @@ import (
 	"context"
 	"strconv"
 	"sync"
-	"time"
 
 	"google.golang.org/grpc"
 
-	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/inodedb/proto"
 	"golang.org/x/sync/singleflight"
 )
@@ -159,24 +157,9 @@ func (t *transport) RegisterDisk(ctx context.Context, disk proto.Disk) error {
 	return err
 }
 
-func (t *transport) StartHeartbeat(ctx context.Context) {
-	heartbeatTicker := time.NewTicker(1 * time.Second)
-	span := trace.SpanFromContext(ctx)
-
-	go func() {
-		defer heartbeatTicker.Stop()
-		for {
-			select {
-			case <-heartbeatTicker.C:
-				// todo: add disk report infos
-				if _, err := t.masterClient.Heartbeat(ctx, &proto.HeartbeatRequest{NodeID: t.myself.ID}); err != nil {
-					span.Warnf("heartbeat to master failed: %s", err)
-				}
-			case <-t.done:
-				return
-			}
-		}
-	}()
+func (t *transport) HeartbeatDisks(ctx context.Context, disks []proto.DiskReport) error {
+	_, err := t.masterClient.Heartbeat(ctx, &proto.HeartbeatRequest{NodeID: t.myself.ID, Disks: disks})
+	return err
 }
 
 func (t *transport) Close() {

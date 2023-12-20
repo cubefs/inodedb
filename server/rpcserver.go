@@ -20,9 +20,6 @@ import (
 	apierrors "github.com/cubefs/inodedb/errors"
 	"github.com/cubefs/inodedb/master/cluster"
 	"github.com/cubefs/inodedb/proto"
-	"github.com/cubefs/inodedb/router"
-	"github.com/cubefs/inodedb/shardserver"
-	shardServerStore "github.com/cubefs/inodedb/shardserver/store"
 )
 
 var auditLogPool = sync.Pool{
@@ -65,20 +62,9 @@ func (r *RPCServer) Serve(addr string) {
 
 	if r.cfg.Roles[0] == proto.NodeRole_Single.String() {
 		time.Sleep(100 * time.Millisecond)
-		r.shardServer = shardserver.NewShardServer(&shardserver.Config{
-			StoreConfig: shardServerStore.Config{
-				Path:     r.cfg.StoreConfig.Path + "/shardserver/",
-				KVOption: r.cfg.StoreConfig.KVOption,
-			},
-			MasterConfig: r.cfg.MasterRpcConfig,
-			NodeConfig:   r.cfg.NodeConfig,
-		})
+		r.initModuleHandler[proto.NodeRole_ShardServer]()
 		time.Sleep(100 * time.Millisecond)
-		r.router = router.NewRouter(&router.Config{
-			ServerConfig: r.cfg.ServerRpcConfig,
-			MasterConfig: r.cfg.MasterRpcConfig,
-			NodeConfig:   r.cfg.NodeConfig,
-		})
+		r.initModuleHandler[proto.NodeRole_Router]()
 	}
 }
 
@@ -133,8 +119,8 @@ func (r *RPCServer) GetSpace(ctx context.Context, req *proto.GetSpaceRequest) (*
 func (r *RPCServer) Heartbeat(ctx context.Context, req *proto.HeartbeatRequest) (*proto.HeartbeatResponse, error) {
 	span := trace.SpanFromContext(ctx)
 	err := r.master.HandleHeartbeat(ctx, &cluster.HeartbeatArgs{
-		NodeID:     req.NodeID,
-		Disks: req.Disks,
+		NodeID: req.NodeID,
+		Disks:  req.Disks,
 	})
 	if err != nil {
 		span.Errorf("handle heartbeat failed: %s", err)
@@ -185,7 +171,7 @@ func (r *RPCServer) GetRoleNodes(ctx context.Context, req *proto.GetRoleNodesReq
 	return &proto.GetRoleNodesResponse{Nodes: nodes}, nil
 }
 
-func (r *RPCServer)AllocDiskID(ctx  context.Context, req *proto.AllocDiskIDRequest) (*proto.AllocDiskIDResponse, error) {
+func (r *RPCServer) AllocDiskID(ctx context.Context, req *proto.AllocDiskIDRequest) (*proto.AllocDiskIDResponse, error) {
 	id, err := r.master.AllocDiskID(ctx)
 	if err != nil {
 		return nil, err
@@ -193,7 +179,7 @@ func (r *RPCServer)AllocDiskID(ctx  context.Context, req *proto.AllocDiskIDReque
 	return &proto.AllocDiskIDResponse{DiskID: id}, nil
 }
 
-func (r *RPCServer)	AddDisk(ctx context.Context, req *proto.AddDiskRequest) (*proto.AddDiskResponse, error) {
+func (r *RPCServer) AddDisk(ctx context.Context, req *proto.AddDiskRequest) (*proto.AddDiskResponse, error) {
 	disk := req.Disk
 	err := r.master.AddDisk(ctx, &disk)
 	if err != nil {
@@ -202,7 +188,7 @@ func (r *RPCServer)	AddDisk(ctx context.Context, req *proto.AddDiskRequest) (*pr
 	return &proto.AddDiskResponse{}, nil
 }
 
-func (r *RPCServer)	ListDisks(ctx context.Context, req *proto.ListDiskRequest) (*proto.ListDiskResponse, error) {
+func (r *RPCServer) ListDisks(ctx context.Context, req *proto.ListDiskRequest) (*proto.ListDiskResponse, error) {
 	disks, marker, err := r.master.ListDisk(ctx, req)
 	if err != nil {
 		return nil, err
@@ -214,7 +200,7 @@ func (r *RPCServer)	ListDisks(ctx context.Context, req *proto.ListDiskRequest) (
 	return resp, nil
 }
 
-func (r *RPCServer)	GetDisk(ctx context.Context, req *proto.GetDiskRequest) (*proto.GetDiskResponse, error) {
+func (r *RPCServer) GetDisk(ctx context.Context, req *proto.GetDiskRequest) (*proto.GetDiskResponse, error) {
 	disk, err := r.master.GetDisk(ctx, req.DiskID)
 	if err != nil {
 		return nil, err
@@ -222,7 +208,7 @@ func (r *RPCServer)	GetDisk(ctx context.Context, req *proto.GetDiskRequest) (*pr
 	return &proto.GetDiskResponse{Disk: disk}, nil
 }
 
-func (r *RPCServer)	DiskSetBroken(ctx context.Context, req *proto.SetBrokenRequest) (*proto.SetBrokenResponse, error) {
+func (r *RPCServer) DiskSetBroken(ctx context.Context, req *proto.SetBrokenRequest) (*proto.SetBrokenResponse, error) {
 	err := r.master.SetBroken(ctx, req.DiskID)
 	if err != nil {
 		return nil, err

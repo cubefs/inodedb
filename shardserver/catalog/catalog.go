@@ -23,12 +23,12 @@ const defaultTaskPoolSize = 64
 
 type (
 	Config struct {
+		Disks           []string            `json:"disks_config"`
 		StoreConfig     store.Config        `json:"store_config"`
 		MasterConfig    client.MasterConfig `json:"master_config"`
 		NodeConfig      proto.Node          `json:"node_config"`
 		RaftConfig      raft.Config         `json:"raft_config"`
 		ShardBaseConfig ShardBaseConfig     `json:"shard_base_config"`
-		Disks           []string            `json:"disks_config"`
 	}
 )
 
@@ -66,12 +66,11 @@ func NewCatalog(ctx context.Context, cfg *Config) *Catalog {
 	}
 
 	catalog.initRaftConfig()
-	catalog.initDisk(ctx, nodeID)
+	catalog.initDisks(ctx, nodeID)
 	if err := catalog.initRoute(ctx); err != nil {
 		span.Fatalf("update route failed: %s", errors.Detail(err))
 	}
 
-	catalog.transport.StartHeartbeat(ctx)
 	go catalog.loop(ctx)
 	return catalog
 }
@@ -146,18 +145,39 @@ func (c *Catalog) GetShardBaseConfig() *ShardBaseConfig {
 }
 
 func (c *Catalog) loop(ctx context.Context) {
+	heartbeatTicker := time.NewTicker(1 * time.Second)
 	reportTicker := time.NewTicker(60 * time.Second)
 	routeUpdateTicker := time.NewTicker(5 * time.Second)
 	checkpointTicker := time.NewTicker(1 * time.Minute)
 
 	defer func() {
+		heartbeatTicker.Stop()
 		reportTicker.Stop()
 		routeUpdateTicker.Stop()
 		checkpointTicker.Stop()
 	}()
 
+	diskReports := make([]proto.DiskReport, 0)
+
 	for {
 		select {
+		case <-heartbeatTicker.C:
+			span, ctx := trace.StartSpanFromContext(ctx, "")
+			diskReports = diskReports[:0]
+
+			c.disks.Range(func(key, value interface{}) bool {
+				diskInfo := value.(*disk).GetDiskInfo()
+				diskReports = append(diskReports, proto.DiskReport{
+					DiskID:   diskInfo.DiskID,
+					Used:     diskInfo.Used,
+					Total:    diskInfo.Total,
+					ShardCnt: uint64(value.(*disk).GetShardCnt()),
+				})
+				return true
+			})
+			if err := c.transport.HeartbeatDisks(ctx, diskReports); err != nil {
+				span.Warnf("heartbeat to master failed: %s", err)
+			}
 		case <-reportTicker.C:
 			span, ctx := trace.StartSpanFromContext(ctx, "")
 			shardReports := c.getAlteredShardReports()
@@ -203,6 +223,10 @@ func (c *Catalog) getDisk(diskID proto.DiskID) (*disk, error) {
 
 	disk := v.(*disk)
 	return disk, nil
+}
+
+func (c *Catalog) addDisk(disk *disk) {
+	c.disks.Store(disk.DiskID, disk)
 }
 
 func (c *Catalog) getSpace(sid proto.Sid) (*Space, error) {
@@ -366,7 +390,7 @@ func (c *Catalog) updateRouteVersion(new uint64) {
 	}
 }
 
-func (c *Catalog) initDisk(ctx context.Context, nodeID proto.NodeID) {
+func (c *Catalog) initDisks(ctx context.Context, nodeID proto.NodeID) {
 	span := trace.SpanFromContext(ctx)
 
 	// load disk from master
@@ -386,7 +410,7 @@ func (c *Catalog) initDisk(ctx context.Context, nodeID proto.NodeID) {
 	}
 
 	// load disk from local
-	disks := make([]*disk, len(c.cfg.Disks))
+	disks := make([]*disk, 0, len(c.cfg.Disks))
 	for _, diskPath := range c.cfg.Disks {
 		disk := openDisk(ctx, diskConfig{
 			nodeID:       nodeID,
@@ -407,10 +431,12 @@ func (c *Catalog) initDisk(ctx context.Context, nodeID proto.NodeID) {
 				span.Fatalf("disk device has been replaced but old disk device[%+v] is not repaired", unrepairedDisk)
 			}
 			newDisks = append(newDisks, disk)
+			continue
 		}
 		// alloc disk id already but didn't register yet, add new disk
 		if _, ok := registeredDisksMap[disk.DiskID]; !ok {
 			newDisks = append(newDisks, disk)
+			continue
 		}
 	}
 
@@ -423,7 +449,9 @@ func (c *Catalog) initDisk(ctx context.Context, nodeID proto.NodeID) {
 			if err != nil {
 				span.Fatalf("alloc disk id failed: %s", err)
 			}
+			// save disk id
 			diskInfo.DiskID = diskID
+			disk.DiskID = diskID
 		}
 		// save disk meta
 		if err := disk.SaveDiskInfo(); err != nil {
@@ -457,6 +485,10 @@ func (c *Catalog) initDisk(ctx context.Context, nodeID proto.NodeID) {
 		}()
 	}
 	wg.Wait()
+
+	for _, disk := range disks {
+		c.addDisk(disk)
+	}
 }
 
 func (c *Catalog) initRaftConfig() {
@@ -466,6 +498,9 @@ func (c *Catalog) initRaftConfig() {
 }
 
 func initConfig(cfg *Config) {
+	cfg.StoreConfig.KVOption.CreateIfMissing = true
+	cfg.StoreConfig.RaftOption.CreateIfMissing = true
+
 	if cfg.ShardBaseConfig.TruncateWalLogInterval <= 0 {
 		cfg.ShardBaseConfig.TruncateWalLogInterval = 1 << 16
 	}

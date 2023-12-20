@@ -262,19 +262,26 @@ func (d *disk) GetDiskInfo() persistent.DiskInfo {
 	return ret
 }
 
+func (d *disk) GetShardCnt() int {
+	d.shardsMu.RLock()
+	ret := len(d.shardsMu.shards)
+	d.shardsMu.RUnlock()
+	return ret
+}
+
 func (d *disk) SaveDiskInfo() error {
 	rawFS := d.store.NewRawFS(sysRawFSPath)
-	f, err := rawFS.OpenRawFile(diskMetaFile)
+	f, err := rawFS.CreateRawFile(diskMetaFile)
 	if err != nil {
 		return err
 	}
 
-	d.lock.Lock()
+	d.lock.RLock()
 	b, err := d.DiskInfo.Marshal()
 	if err != nil {
 		return err
 	}
-	d.lock.Unlock()
+	d.lock.RUnlock()
 
 	n, err := f.Write(b)
 	if err != nil {
