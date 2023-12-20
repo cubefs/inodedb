@@ -70,7 +70,6 @@ func (t *taskMgr) Send(ctx context.Context, task *task) {
 	t.tasks[task.sid] = task
 	e := t.taskList.PushBack(task)
 	t.taskElementMap[task.sid] = e
-
 	span.Infof("send task[%+v] success", task)
 }
 
@@ -106,7 +105,7 @@ func (t *taskMgr) run() {
 
 					e := t.taskList.Front()
 					task := e.Value.(*task)
-					log.Info(task)
+					log.Infof("execute task %+v", task)
 					if time.Since(task.assignedAt) < 0 {
 						log.Info(task, 1)
 						return false

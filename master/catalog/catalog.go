@@ -44,6 +44,7 @@ type Catalog interface {
 	GetCatalogChanges(ctx context.Context, routerVersion uint64, nodeId uint32) (uint64, []proto.CatalogChangeItem, error)
 	GetSM() raft.Applier
 	SetRaftGroup(g raft.Group)
+	StartTask(ctx context.Context) error
 	Close()
 }
 
@@ -138,6 +139,8 @@ func (c *catalog) Load(ctx context.Context) error {
 		return errors.Info(err, "list spaces failed")
 	}
 
+	span.Infof("get space cnt %d after load", len(spaceInfos))
+
 	for _, spaceInfo := range spaceInfos {
 		space := newSpace(spaceInfo)
 		c.spaces.Put(space)
@@ -166,6 +169,22 @@ func (c *catalog) Load(ctx context.Context) error {
 		return errors.Info(err, "new route manager failed")
 	}
 
+	return nil
+}
+
+func (c *catalog) StartTask(ctx context.Context) error {
+	span := trace.SpanFromContext(ctx)
+	span.Infof("start space task after apply")
+	c.spaces.Range(func(v *space) error {
+		if v.IsInit(true) || v.IsUpdateRoute(true) {
+			c.taskMgr.Send(ctx, &task{
+				sid: v.id,
+				typ: taskTypeCreateSpace,
+			})
+		}
+		return nil
+	})
+	span.Infof("finish add space task")
 	return nil
 }
 
@@ -538,6 +557,7 @@ func (c *catalog) createSpaceShards(ctx context.Context, space *space, startShar
 			span.Info("get client success")
 
 			if _, err := client.AddShard(ctx, &proto.AddShardRequest{
+				DiskID:   protoShardNodes[i].DiskID,
 				Sid:      space.id,
 				ShardID:  shardId,
 				InoLimit: c.cfg.InoLimitPerShard,

@@ -340,6 +340,11 @@ func (c *cluster) HandleHeartbeat(ctx context.Context, args *HeartbeatArgs) erro
 func (c *cluster) AddDisk(ctx context.Context, args *proto.Disk) error {
 	span := trace.SpanFromContextSafe(ctx)
 	span.Debugf("receive AddDisk, args: %v", args)
+	if args.DiskID == 0 || args.NodeID == 0 {
+		span.Warnf("disk args is not valid, args %+v", args)
+		return apierrors.ErrInvalidData
+	}
+
 	data, err := json.Marshal(args)
 	if err != nil {
 		return err
