@@ -81,7 +81,7 @@ func newRaftNode(ctx context.Context, cfg *RaftNodeCfg, kv *store.Store) *raftNo
 
 	r.nodes = &nodeManager{
 		raftPort: string(cfg.RaftPort),
-		nodes: map[uint64]string{},
+		nodes:    map[uint64]string{},
 	}
 	for _, m := range members {
 		r.nodes.addNode(m.NodeID, m.Host)
@@ -227,10 +227,13 @@ func (r *raftNode) addApplier(module string, a raft.Applier) {
 }
 
 func (r *raftNode) Apply(cxt context.Context, pd []raft.ProposalData, index uint64) (rets []interface{}, err error) {
+	// span := trace.SpanFromContext(cxt)
 	rets = make([]interface{}, len(pd))
 
 	for i := range pd {
 		pdi := pd[i]
+		span, _ := trace.StartSpanFromContextWithTraceID(cxt, "", string(pdi.Context))
+		span.Infof("receive raft op %d, mod %s, notify id: %d", pdi.Op, string(pdi.Module), pdi.NotifyID)
 		mod := pdi.Module
 		sm := r.sms[string(mod)]
 		if sm == nil {
@@ -243,6 +246,8 @@ func (r *raftNode) Apply(cxt context.Context, pd []raft.ProposalData, index uint
 		}
 
 		rets[i] = newRet
+
+		span.Infof("finish raft op %d, mod %s, notify id: %d", pdi.Op, string(pdi.Module), pdi.NotifyID)
 	}
 
 	r.AppliedIndex = index
@@ -280,6 +285,7 @@ func (r *raftNode) ApplyMemberChange(cc *raft.Member, index uint64) error {
 
 	return nil
 }
+
 func (r *raftNode) Snapshot() raft.Snapshot {
 	kvStore := r.store.KVStore()
 	appliedIndex := r.AppliedIndex
@@ -301,6 +307,7 @@ func (r *raftNode) Snapshot() raft.Snapshot {
 		kvStore:      kvStore,
 	}
 }
+
 func (r *raftNode) ApplySnapshot(snap raft.Snapshot) error {
 	// todo: clear all data with shard prefix
 

@@ -30,7 +30,6 @@ func NewShardServerAllocator(ctx context.Context) Allocator {
 }
 
 func (a *allocator) Put(ctx context.Context, n *DiskInfo) {
-
 	setId := n.node.info.SetId
 	allocator, ok := a.setAlloctors[setId]
 	if !ok {
@@ -116,7 +115,6 @@ func (a *azAllocator) alloc(ctx context.Context, args *AllocArgs) ([]*DiskInfo, 
 
 	return allocNodes, nil
 }
-
 
 type setAlloctor struct {
 	setId        uint32
@@ -222,7 +220,7 @@ func (s *setAlloctor) alloc(ctx context.Context, args *AllocArgs) ([]*diskNode, 
 }
 
 type azAllocator struct {
-	az string
+	az       string
 	allNodes *nodeSet
 }
 

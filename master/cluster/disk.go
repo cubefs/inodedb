@@ -24,7 +24,6 @@ type DiskInfo struct {
 }
 
 func (d *DiskInfo) getWeight() int32 {
-
 	maxCnt := defaultMaxShardOneDisk
 	var w1, w2 int
 	if d.shardCount < defaultMaxShardOneDisk {
@@ -108,7 +107,7 @@ func (dm *diskMgr) addDiskNoLock(id uint32, ifo *DiskInfo) {
 		dm.disks = make(map[uint32]*DiskInfo)
 	}
 	dm.disks[id] = ifo
-	ifo.node.disks.addDiskNoLock(id, ifo)
+	ifo.node.disks.disks[id] = ifo
 }
 
 type ById []*DiskInfo
@@ -123,7 +122,7 @@ func (dm *diskMgr) getSortedDisks() []*DiskInfo {
 	if dm == nil {
 		return make([]*DiskInfo, 0)
 	}
-	
+
 	dm.lock.RLock()
 	defer dm.lock.RUnlock()
 	disks := make([]*DiskInfo, 0, len(dm.disks))

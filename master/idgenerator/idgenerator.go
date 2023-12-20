@@ -37,6 +37,7 @@ var (
 type IDGenerator interface {
 	Alloc(ctx context.Context, name string, count int) (base, new uint64, err error)
 	GetSM() raft.Applier
+	SetRaftGroup(raftGroup raft.Group)
 }
 
 type idGenerator struct {
@@ -89,7 +90,6 @@ func (s *idGenerator) Alloc(ctx context.Context, name string, count int) (base, 
 		Op:     RaftOpAlloc,
 		Data:   data,
 	})
-
 	if err != nil {
 		span.Errorf("propose failed, name %s, err %v", name, err)
 		return

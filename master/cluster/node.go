@@ -127,6 +127,7 @@ func (s *concurrentNodes) GetByNameNoLock(addr string) *node {
 
 // PutNoLock new space into shardedSpace with no lock
 func (s *concurrentNodes) PutNoLock(v *node) {
+	v.disks = &diskMgr{disks: map[uint32]*DiskInfo{}}
 	id := v.nodeId
 	s.idMap[id] = v
 	s.addrMap[v.info.Addr] = v

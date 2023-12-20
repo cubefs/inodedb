@@ -3,6 +3,18 @@
     "grpc_bind_port": 9021,
     "http_bind_port": 8080,
     "node_config": {
-        "raft_port": 10200
-    }
+        "raft_port": 10200,
+        "set_id": 1
+    },
+    "master_raft_cfg": {
+        "raft_port": 10600,
+        "raft_config": {
+            "propose_timeout_ms": 5000
+        }
+    },
+    "disks_config": [
+        "/home/project/inodedb/inodedb/cmd/run/store/shardserver/disk1",
+        "/home/project/inodedb/inodedb/cmd/run/store/shardserver/disk2",
+        "/home/project/inodedb/inodedb/cmd/run/store/shardserver/disk3"
+    ]
 }

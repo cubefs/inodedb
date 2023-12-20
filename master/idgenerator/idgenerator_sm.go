@@ -48,7 +48,8 @@ func (s *idGenerator) GetModuleName() string {
 
 func (s *idGenerator) Apply(cxt context.Context, pd raft.ProposalData, index uint64) (rets interface{}, err error) {
 	data := pd.Data
-	_, ctx := trace.StartSpanFromContextWithTraceID(context.Background(), "", string(pd.Context))
+	span, ctx := trace.StartSpanFromContextWithTraceID(cxt, "", string(pd.Context))
+	span.Infof("recive raft operation, op %d", pd.Op)
 	switch pd.Op {
 	case RaftOpAlloc:
 		return s.applyCommit(ctx, data)

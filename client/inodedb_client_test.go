@@ -12,7 +12,7 @@ import (
 
 var (
 	spaceID    = proto.Sid(0)
-	diskID     = proto.DiskID(1)
+	diskID     = proto.DiskID(2)
 	spaceName  = "space5"
 	fieldMetas = []proto.FieldMeta{
 		{Name: "f1", Type: proto.FieldMeta_Int},

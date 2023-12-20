@@ -43,6 +43,7 @@ type Catalog interface {
 	Report(ctx context.Context, nodeId uint32, infos []proto.ShardReport) ([]proto.ShardTask, error)
 	GetCatalogChanges(ctx context.Context, routerVersion uint64, nodeId uint32) (uint64, []proto.CatalogChangeItem, error)
 	GetSM() raft.Applier
+	SetRaftGroup(g raft.Group)
 	Close()
 }
 
@@ -428,6 +429,10 @@ func (c *catalog) GetCatalogChanges(ctx context.Context, fromRouterVersion uint6
 	return
 }
 
+func (c *catalog) SetRaftGroup(g raft.Group) {
+	c.raftGroup = g
+}
+
 func (c *catalog) Close() {
 	close(c.done)
 }
@@ -528,7 +533,7 @@ func (c *catalog) createSpaceShards(ctx context.Context, space *space, startShar
 			span.Info("get client success")
 
 			if _, err := client.AddShard(ctx, &proto.AddShardRequest{
-				Sid: space.id,
+				Sid:      space.id,
 				ShardID:  shardId,
 				InoLimit: c.cfg.InoLimitPerShard,
 				Nodes:    protoShardNodes,

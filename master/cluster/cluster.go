@@ -39,6 +39,7 @@ type Cluster interface {
 	SetBroken(ctx context.Context, diskId uint32) error
 	Load(ctx context.Context)
 	GetSM() raft.Applier
+	SetRaftGroup(raftGroup raft.Group)
 	Close()
 }
 
@@ -95,6 +96,7 @@ func NewCluster(ctx context.Context, cfg *Config) Cluster {
 		done:             make(chan struct{}),
 		azs:              make(map[string]struct{}),
 		allocatorFuncMap: make(map[proto.NodeRole]allocatorFunc),
+		disks:            &diskMgr{disks: map[uint32]*DiskInfo{}},
 	}
 	for _, az := range cfg.Azs {
 		c.azs[az] = struct{}{}
@@ -235,6 +237,7 @@ func (c *cluster) Register(ctx context.Context, args *proto.Node) (uint32, error
 			Data:   data,
 		})
 		if err != nil {
+			span.Errorf("update node info failed, err %v", err.Error())
 			return 0, err
 		}
 		return info.Id, nil
@@ -261,6 +264,7 @@ func (c *cluster) Register(ctx context.Context, args *proto.Node) (uint32, error
 		Data:   data,
 	})
 	if err != nil {
+		span.Errorf("register node failed, err %v", err)
 		return 0, err
 	}
 	return nodeID, nil
@@ -366,6 +370,7 @@ func (c *cluster) SetBroken(ctx context.Context, diskId uint32) error {
 	span.Debugf("set disk[%d] broken success", diskId)
 	return nil
 }
+
 func (c *cluster) ListDisk(ctx context.Context, args *proto.ListDiskRequest) ([]proto.Disk, uint32, error) {
 	span := trace.SpanFromContextSafe(ctx)
 	span.Debugf("receive ListDisk, args: %v", args)
@@ -464,7 +469,7 @@ func (c *cluster) Close() {
 }
 
 func (c *cluster) refresh(ctx context.Context) {
-	var allNodes = c.disks.getSortedDisks()
+	allNodes := c.disks.getSortedDisks()
 	span := trace.SpanFromContextSafe(ctx)
 	span.Infof("refresh allocator nodes: %+v", len(allNodes))
 
