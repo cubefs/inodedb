@@ -114,7 +114,7 @@ func (r *RPCServer) GetSpace(ctx context.Context, req *proto.GetSpaceRequest) (*
 	} else {
 		spaceMeta, err = r.master.GetSpace(ctx, req.Sid)
 	}
-	
+
 	if err != nil {
 		return nil, err
 	}
@@ -226,14 +226,20 @@ func (r *RPCServer) DiskSetBroken(ctx context.Context, req *proto.SetBrokenReque
 // Shard Server API
 
 func (r *RPCServer) AddShard(ctx context.Context, req *proto.AddShardRequest) (*proto.AddShardResponse, error) {
+	span := trace.SpanFromContextSafe(ctx)
+	span.Debugf("receive add shard request: %+v", req)
+
 	shardServer := r.shardServer
 	err := shardServer.AddShard(ctx, req.DiskID, req.Sid, req.ShardID, req.Epoch, req.InoLimit, req.Nodes)
 	return &proto.AddShardResponse{}, err
 }
 
 func (r *RPCServer) UpdateShard(ctx context.Context, req *proto.UpdateShardRequest) (*proto.UpdateShardResponse, error) {
+	span := trace.SpanFromContextSafe(ctx)
+	span.Debugf("receive update shard request: %+v", req)
+
 	shardServer := r.shardServer
-	err := shardServer.UpdateShard(ctx, req.DiskID, req.Sid, req.ShardID, 0)
+	err := shardServer.UpdateShard(ctx, req.DiskID, req.Sid, req.ShardID, 1)
 	return &proto.UpdateShardResponse{}, err
 }
 
@@ -248,6 +254,9 @@ func (r *RPCServer) GetShard(ctx context.Context, req *proto.GetShardRequest) (*
 }
 
 func (r *RPCServer) ShardInsertItem(ctx context.Context, req *proto.ShardInsertItemRequest) (*proto.ShardInsertItemResponse, error) {
+	span := trace.SpanFromContextSafe(ctx)
+	span.Debugf("receive shard insert item request: %+v", req)
+
 	shardServer := r.shardServer
 	space, err := shardServer.GetSpace(ctx, req.Header.Sid)
 	if err != nil {

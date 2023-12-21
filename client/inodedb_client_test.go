@@ -11,9 +11,11 @@ import (
 )
 
 var (
-	spaceID    = proto.Sid(0)
-	diskID     = proto.DiskID(2)
-	spaceName  = "space5"
+	spaceID   = proto.Sid(0)
+	shardID   = proto.ShardID(0)
+	diskID    = proto.DiskID(0)
+	spaceName = "space1"
+	// spaceName  = uuid.New().String()
 	fieldMetas = []proto.FieldMeta{
 		{Name: "f1", Type: proto.FieldMeta_Int},
 		{Name: "f2", Type: proto.FieldMeta_String},
@@ -54,7 +56,17 @@ func TestInodeDBClient(t *testing.T) {
 		spaceID = resp.Info.Sid
 	}()
 
-	time.Sleep(2 * time.Second)
+	time.Sleep(5 * time.Second)
+	spaceMeta, err := inodeDBClient.GetSpace(ctx, &proto.GetSpaceRequest{Sid: spaceID})
+	if err != nil {
+		span.Fatalf("get space meta failed: %s", err)
+	}
+	if len(spaceMeta.Info.Shards) == 0 {
+		span.Fatal("space shard is nil")
+	}
+	shardID = spaceMeta.Info.Shards[0].ShardID
+	diskID = spaceMeta.Info.Shards[0].Nodes[0].DiskID
+
 	func() {
 		shardServerClient, err := inodeDBClient.GetShardServerClient(ctx, diskID)
 		if err != nil {
@@ -64,7 +76,7 @@ func TestInodeDBClient(t *testing.T) {
 		resp, err := shardServerClient.ShardInsertItem(ctx, &proto.ShardInsertItemRequest{
 			Header: proto.ShardOpHeader{
 				DiskID:  diskID,
-				ShardID: 1,
+				ShardID: shardID,
 				Sid:     spaceID,
 			},
 			Item: proto.Item{
@@ -83,7 +95,7 @@ func TestInodeDBClient(t *testing.T) {
 		_, err = shardServerClient.ShardUpdateItem(ctx, &proto.ShardUpdateItemRequest{
 			Header: proto.ShardOpHeader{
 				DiskID:  diskID,
-				ShardID: 1,
+				ShardID: shardID,
 				Sid:     spaceID,
 			},
 			Item: proto.Item{
@@ -102,7 +114,7 @@ func TestInodeDBClient(t *testing.T) {
 		getResp, err := shardServerClient.ShardGetItem(ctx, &proto.ShardGetItemRequest{
 			Header: proto.ShardOpHeader{
 				DiskID:  diskID,
-				ShardID: 1,
+				ShardID: shardID,
 				Sid:     spaceID,
 			},
 			Ino: resp.Ino,
@@ -115,7 +127,7 @@ func TestInodeDBClient(t *testing.T) {
 		_, err = shardServerClient.ShardDeleteItem(ctx, &proto.ShardDeleteItemRequest{
 			Header: proto.ShardOpHeader{
 				DiskID:  diskID,
-				ShardID: 1,
+				ShardID: shardID,
 				Sid:     spaceID,
 			},
 			Ino: resp.Ino,
@@ -134,7 +146,7 @@ func TestInodeDBClient(t *testing.T) {
 		resp, err := shardServerClient.ShardInsertItem(ctx, &proto.ShardInsertItemRequest{
 			Header: proto.ShardOpHeader{
 				DiskID:  diskID,
-				ShardID: 1,
+				ShardID: shardID,
 				Sid:     spaceID,
 			},
 			Item: proto.Item{
@@ -155,7 +167,7 @@ func TestInodeDBClient(t *testing.T) {
 		resp, err = shardServerClient.ShardInsertItem(ctx, &proto.ShardInsertItemRequest{
 			Header: proto.ShardOpHeader{
 				DiskID:  diskID,
-				ShardID: 1,
+				ShardID: shardID,
 				Sid:     spaceID,
 			},
 			Item: proto.Item{
@@ -175,7 +187,7 @@ func TestInodeDBClient(t *testing.T) {
 		_, err = shardServerClient.ShardLink(ctx, &proto.ShardLinkRequest{
 			Header: proto.ShardOpHeader{
 				DiskID:  diskID,
-				ShardID: 1,
+				ShardID: shardID,
 				Sid:     spaceID,
 			},
 			Link: proto.Link{
@@ -191,7 +203,7 @@ func TestInodeDBClient(t *testing.T) {
 		listResp, err := shardServerClient.ShardList(ctx, &proto.ShardListRequest{
 			Header: proto.ShardOpHeader{
 				DiskID:  diskID,
-				ShardID: 1,
+				ShardID: shardID,
 				Sid:     spaceID,
 			},
 			Ino:   parentIno,
@@ -208,7 +220,7 @@ func TestInodeDBClient(t *testing.T) {
 		_, err = shardServerClient.ShardUnlink(ctx, &proto.ShardUnlinkRequest{
 			Header: proto.ShardOpHeader{
 				DiskID:  diskID,
-				ShardID: 1,
+				ShardID: shardID,
 				Sid:     spaceID,
 			},
 			Unlink: proto.Unlink{
@@ -223,7 +235,7 @@ func TestInodeDBClient(t *testing.T) {
 		listResp, err = shardServerClient.ShardList(ctx, &proto.ShardListRequest{
 			Header: proto.ShardOpHeader{
 				DiskID:  diskID,
-				ShardID: 1,
+				ShardID: shardID,
 				Sid:     spaceID,
 			},
 			Ino:   parentIno,
@@ -241,7 +253,7 @@ func TestInodeDBClient(t *testing.T) {
 			_, err = shardServerClient.ShardDeleteItem(ctx, &proto.ShardDeleteItemRequest{
 				Header: proto.ShardOpHeader{
 					DiskID:  diskID,
-					ShardID: 1,
+					ShardID: shardID,
 					Sid:     spaceID,
 				},
 				Ino: ino,
@@ -254,7 +266,7 @@ func TestInodeDBClient(t *testing.T) {
 	func() {
 		resp, err := inodeDBClient.InsertItem(ctx, &proto.InsertItemRequest{
 			SpaceName:      spaceName,
-			PreferredShard: 1,
+			PreferredShard: shardID,
 			Item: proto.Item{
 				Fields: []proto.Field{
 					{Name: fieldMetas[0].Name, Value: []byte("v1")},
@@ -272,7 +284,7 @@ func TestInodeDBClient(t *testing.T) {
 
 		resp, err = inodeDBClient.InsertItem(ctx, &proto.InsertItemRequest{
 			SpaceName:      spaceName,
-			PreferredShard: 1,
+			PreferredShard: shardID,
 			Item: proto.Item{
 				Fields: []proto.Field{
 					{Name: fieldMetas[0].Name, Value: []byte("v1")},
