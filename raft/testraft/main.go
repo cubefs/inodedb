@@ -25,10 +25,11 @@ import (
 )
 
 var (
-	concurrency  = flag.Int("c", 1, "input concurrency")
-	maxGroupNum  = flag.Uint64("n", 1, "input max raft group num")
+	concurrency  = flag.Int("c", 10, "input concurrency")
+	maxGroupNum  = flag.Uint64("n", 100, "input max raft group num")
 	nodeIndex    = flag.Int("i", 0, "input current node index, from 0 to 2")
 	tickInterval = flag.Int("t", 1000, "input tick interval(ms)")
+	action       = flag.String("a", "read", "input action, read or write")
 )
 
 var (
@@ -180,11 +181,29 @@ func main() {
 				// startGroupIdx := rand.Intn(len(leaderGroup))
 				for {
 					groupIndex := atomic.AddUint64(&globalGroupIndex, 1)
-					if err := leaderGroup[groupIndex%uint64(len(leaderGroup))].ReadIndex(ctx); err != nil {
-						span.Fatalf("g[%+v] read index failed: %s", err)
+
+					switch *action {
+					case "read":
+						if err := leaderGroup[groupIndex%uint64(len(leaderGroup))].ReadIndex(ctx); err != nil {
+							span.Fatalf("g[%+v] read index failed: %s", err)
+						}
+						countM[idx]++
+					case "write":
+						testKV := &testKV{
+							key:   "k" + strconv.FormatUint(groupIndex, 10),
+							value: "v" + strconv.FormatUint(groupIndex, 10),
+						}
+						resp, err := leaderGroup[groupIndex%uint64(len(leaderGroup))].Propose(ctx, &raft.ProposalData{
+							Data: testKV.Marshal(),
+						})
+						if err != nil {
+							span.Fatalf("g[%+v] propose failed: %s", err)
+						}
+						if resp.Data.(string) != testKV.key {
+							span.Fatalf("return result invalid")
+						}
+						countM[idx]++
 					}
-					countM[idx]++
-					// startGroupIdx = (startGroupIdx + 1) % len(leaderGroup)
 				}
 			}()
 		}
@@ -454,6 +473,8 @@ func (t *testStorage) Put(key, value []byte) error {
 type testIterator struct {
 	lr kvstore.ListReader
 }
+
+func (i *testIterator) SeekTo(key []byte) { i.lr.SeekTo(key) }
 
 func (i *testIterator) SeekForPrev(prev []byte) error { return i.lr.SeekForPrev(prev) }
 

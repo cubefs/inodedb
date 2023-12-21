@@ -22,9 +22,8 @@ const (
 
 var (
 	groupPrefix    = []byte("g")
-	logIndexInfix  = []byte("i")
-	confStateInfix = []byte("c")
 	hardStateInfix = []byte("h")
+	logIndexInfix  = []byte("i")
 )
 
 type storageConfig struct {
@@ -99,7 +98,10 @@ func (s *storage) InitialState() (hs raftpb.HardState, cs raftpb.ConfState, err 
 // MaxSize limits the total size of the log entries returned, but
 // Entries returns at least one entry if any.
 func (s *storage) Entries(lo, hi, maxSize uint64) ([]raftpb.Entry, error) {
-	iter := s.rawStg.Iter(encodeIndexLogKey(s.id, lo))
+	// iter := s.rawStg.Iter(encodeIndexLogKey(s.id, lo))
+	prefix := encodeIndexLogKeyPrefix(s.id)
+	iter := s.rawStg.Iter(prefix)
+	iter.SeekTo(encodeIndexLogKey(s.id, lo))
 	defer iter.Close()
 
 	ret := make([]raftpb.Entry, 0)
@@ -108,10 +110,13 @@ func (s *storage) Entries(lo, hi, maxSize uint64) ([]raftpb.Entry, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		if keyGetter == nil || valGetter == nil {
 			break
 		}
-
+		if !validForPrefix(keyGetter.Key(), prefix) {
+			break
+		}
 		if _, index := decodeIndexLogKey(keyGetter.Key()); index >= hi {
 			break
 		}
@@ -145,7 +150,11 @@ func (s *storage) Term(i uint64) (uint64, error) {
 	if s.hardState.Commit == i {
 		return s.hardState.Term, nil
 	}
-	if firstIndex := atomic.LoadUint64(&s.firstIndex); firstIndex > i {
+	firstIndex, err := s.FirstIndex()
+	if err != nil {
+		return 0, err
+	}
+	if firstIndex > i {
 		return 0, raft.ErrCompacted
 	}
 
@@ -208,7 +217,7 @@ func (s *storage) FirstIndex() (uint64, error) {
 		return firstIndex, nil
 	}
 
-	iterator := s.rawStg.Iter(encodeIndexLogKey(s.id, 0))
+	iterator := s.rawStg.Iter(encodeIndexLogKeyPrefix(s.id))
 	defer iterator.Close()
 
 	_, valGetter, err := iterator.ReadNext()
@@ -218,7 +227,7 @@ func (s *storage) FirstIndex() (uint64, error) {
 	// initial index log should return at least 1
 	if valGetter == nil {
 		// store the initialized value for first index when not found
-		// avoiding cgo call frequently
+		// avoiding iterator call frequently
 		atomic.CompareAndSwapUint64(&s.firstIndex, uninitializedIndex, 1)
 		return 1, nil
 	}
@@ -262,7 +271,10 @@ func (s *storage) Snapshot() (raftpb.Snapshot, error) {
 	if smSnapIndex > appliedIndex {
 		return raftpb.Snapshot{}, fmt.Errorf("state machine outgoingSnapshot index[%d] greater than applied index[%d]", smSnapIndex, appliedIndex)
 	}
-	firstIndex := atomic.LoadUint64(&s.firstIndex)
+	firstIndex, err := s.FirstIndex()
+	if err != nil {
+		return raftpb.Snapshot{}, err
+	}
 	if smSnapIndex < firstIndex {
 		return raftpb.Snapshot{}, fmt.Errorf("state machine outgoingSnapshot index[%d] less than first log index[%d]", smSnapIndex, firstIndex)
 	}
@@ -458,6 +470,13 @@ func encodeHardStateKey(id uint64) []byte {
 	copy(b[8+len(groupPrefix):], hardStateInfix)
 
 	return b
+}
+
+func decodeHardStateKey(b []byte) (uint64, []byte) {
+	id := binary.BigEndian.Uint64(b[len(groupPrefix):])
+	infix := b[len(groupPrefix)+8:]
+
+	return id, infix
 }
 
 func validForPrefix(key []byte, prefix []byte) bool {

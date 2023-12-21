@@ -193,6 +193,8 @@ type testIterator struct {
 	lr kvstore.ListReader
 }
 
+func (i *testIterator) SeekTo(key []byte) { i.lr.SeekTo(key) }
+
 func (i *testIterator) SeekForPrev(prev []byte) error { return i.lr.SeekForPrev(prev) }
 
 func (i *testIterator) ReadNext() (key KeyGetter, val ValGetter, err error) { return i.lr.ReadNext() }

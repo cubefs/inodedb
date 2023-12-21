@@ -66,7 +66,7 @@ func TestNewStorage_RaftStorage(t *testing.T) {
 		mockKeyGetter := NewMockKeyGetter(ctrl)
 		mockKeyGetter.EXPECT().Key().Return(encodeIndexLogKey(cfg.id, entry.Index))
 		// mockKeyGetter.EXPECT().Close().Return()
-
+		mockIter.EXPECT().SeekTo(gomock.Any()).Return()
 		mockIter.EXPECT().ReadNext().Times(1).Return(mockKeyGetter, mockValueGetter, nil)
 		mockIter.EXPECT().ReadNext().Times(1).Return(nil, nil, nil)
 		mockIter.EXPECT().Close().Return()
@@ -77,24 +77,6 @@ func TestNewStorage_RaftStorage(t *testing.T) {
 		require.Len(t, entris, 1)
 		require.Equal(t, entris[0].Term, entry.Term)
 		require.Equal(t, entris[0].Index, entry.Index)
-	}
-
-	// test Term
-	{
-		entry := &raftpb.Entry{
-			Term:  1,
-			Index: 2,
-		}
-		rawEntry, err := entry.Marshal()
-		require.NoError(t, err)
-		mockValueGetter := NewMockValGetter(ctrl)
-		mockValueGetter.EXPECT().Value().Return(rawEntry)
-
-		key := encodeIndexLogKey(cfg.id, entry.Index)
-		mockStorage.EXPECT().Get(key).Return(mockValueGetter, nil)
-		term, err := s.Term(entry.Index)
-		require.NoError(t, err)
-		require.Equal(t, entry.Term, term)
 	}
 
 	// test FirstIndex
@@ -120,18 +102,40 @@ func TestNewStorage_RaftStorage(t *testing.T) {
 		require.Equal(t, entry.Index, index)
 	}
 
-	// test lastIndex
+	// test Term
 	{
-		mockIter := NewMockIterator(ctrl)
-		entry := raftpb.Entry{Term: 1, Index: 1}
+		entry := &raftpb.Entry{
+			Term:  1,
+			Index: 2,
+		}
 		rawEntry, err := entry.Marshal()
 		require.NoError(t, err)
 		mockValueGetter := NewMockValGetter(ctrl)
 		mockValueGetter.EXPECT().Value().Return(rawEntry)
+
+		key := encodeIndexLogKey(cfg.id, entry.Index)
+		mockStorage.EXPECT().Get(key).Return(mockValueGetter, nil)
+		term, err := s.Term(entry.Index)
+		require.NoError(t, err)
+		require.Equal(t, entry.Term, term)
+	}
+
+	// test lastIndex
+	{
+		entry := raftpb.Entry{Term: 1, Index: 1}
+		rawEntry, err := entry.Marshal()
+		require.NoError(t, err)
+
+		mockIter := NewMockIterator(ctrl)
+		mockValueGetter := NewMockValGetter(ctrl)
+		mockValueGetter.EXPECT().Value().Return(rawEntry)
 		mockValueGetter.EXPECT().Close().Return()
+		mockKeyGetter := NewMockKeyGetter(ctrl)
+		mockKeyGetter.EXPECT().Key().Return(encodeIndexLogKey(s.id, entry.Index))
+		mockKeyGetter.EXPECT().Close().Return()
 
 		mockIter.EXPECT().Close().Return()
-		mockIter.EXPECT().ReadPrev().Times(1).Return(nil, mockValueGetter, nil)
+		mockIter.EXPECT().ReadPrev().Times(1).Return(mockKeyGetter, mockValueGetter, nil)
 
 		key := encodeIndexLogKey(cfg.id, math.MaxUint64)
 		mockIter.EXPECT().SeekForPrev(key).Times(1).Return(nil)
@@ -156,6 +160,7 @@ func TestNewStorage_RaftStorage(t *testing.T) {
 
 		mockSnap := NewMockSnapshot(ctrl)
 		mockSnap.EXPECT().Index().Return(entry.Index)
+		mockSnap.EXPECT().Close().AnyTimes().Return(nil)
 
 		rawEntry, err := entry.Marshal()
 		require.NoError(t, err)
@@ -205,6 +210,7 @@ func TestStorage_SaveHardStateAndEntries(t *testing.T) {
 	for i := range entries {
 		mockBatch.EXPECT().Put(encodeIndexLogKey(s.id, entries[i].Index), rawEntries[i]).Return()
 	}
+	mockBatch.EXPECT().Close().Return()
 
 	mockStorage := s.rawStg.(*MockStorage)
 	mockStorage.EXPECT().NewBatch().Return(mockBatch)
@@ -219,10 +225,12 @@ func TestStorage_Truncate(t *testing.T) {
 	defer ctrl.Finish()
 	s := initStorage(t, ctrl)
 
+	s.SetAppliedIndex(1002)
 	index := uint64(1001)
 
 	mockBatch := NewMockBatch(ctrl)
 	mockBatch.EXPECT().DeleteRange(encodeIndexLogKey(s.id, 0), encodeIndexLogKey(s.id, index)).Return()
+	mockBatch.EXPECT().Close().Return()
 
 	mockStorage := s.rawStg.(*MockStorage)
 	mockStorage.EXPECT().NewBatch().Return(mockBatch)
@@ -248,6 +256,17 @@ func TestStorage_MemberChange(t *testing.T) {
 		Host:   "127.0.0.1",
 		Type:   MemberChangeType_RemoveMember,
 	})
+}
+
+func TestStorage_DecodeHardState(t *testing.T) {
+	key := []byte{103, 0, 0, 0, 0, 0, 255, 255, 255, 104}
+	id, infix := decodeHardStateKey(key)
+	t.Log("id: ", id, "infix: ", string(infix))
+
+	value := []byte{8, 1, 16, 3, 24, 5}
+	hs := &raftpb.HardState{}
+	err := hs.Unmarshal(value)
+	t.Log("hs: ", hs, err)
 }
 
 func initStorage(t *testing.T, ctrl *gomock.Controller) *storage {

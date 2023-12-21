@@ -457,12 +457,7 @@ func (h *internalGroupHandler) processProposal(ctx context.Context, g groupProce
 	}
 	queue := v.(proposalQueue)
 
-	// todo: get entry slice by queue's length
-	entries := proposalEntriesPool.Get().([]raftpb.Entry)
-	defer func() {
-		entries = entries[:0]
-		proposalEntriesPool.Put(entries)
-	}()
+	entries := make([]raftpb.Entry, 0, queue.Len())
 	queue.Iter(func(p proposalRequest) bool {
 		entries = append(entries, raftpb.Entry{
 			Type: p.entryType,

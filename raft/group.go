@@ -81,7 +81,6 @@ func (g *group) Propose(ctx context.Context, pdata *ProposalData) (resp Proposal
 }
 
 func (g *group) LeaderTransfer(ctx context.Context, nodeID uint64) error {
-	span := trace.SpanFromContext(ctx)
 	stat, err := g.Stat()
 	if err != nil {
 		return err
@@ -101,7 +100,6 @@ func (g *group) LeaderTransfer(ctx context.Context, nodeID uint64) error {
 		rn.TransferLeader(nodeID)
 		return nil
 	})
-	span.Debug("do signal to worker")
 	g.handler.HandleSignalToWorker(ctx, g.id)
 	return nil
 }
@@ -399,12 +397,14 @@ func (g *internalGroupProcessor) ApplySnapshot(ctx context.Context, snap raftpb.
 	}, nil); err != nil {
 		return err
 	}
-	// truncate all raft log
-	if err := g.storage.Truncate(snap.Metadata.Index + 1); err != nil {
-		return err
-	}
 	// set applied index
 	g.storage.SetAppliedIndex(snap.Metadata.Index)
+
+	// no need to truncate the old raft log, as the Truncate function will remove
+	// all oldest raft log after state machine call the Truncate API
+	/*if err := g.storage.Truncate(snap.Metadata.Index + 1); err != nil {
+		return err
+	}*/
 	return nil
 }
 
@@ -427,7 +427,7 @@ func (g *internalGroupProcessor) ApplyCommittedEntries(ctx context.Context, entr
 						err:   nil,
 					})
 				}
-				allProposalData = allProposalData[0:0]
+				allProposalData = allProposalData[:0]
 			}
 			if err := g.applyConfChange(ctx, entries[i]); err != nil {
 				return errors.Info(err, "apply conf change to state machine failed")

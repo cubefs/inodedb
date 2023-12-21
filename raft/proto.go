@@ -48,6 +48,7 @@ type (
 		Close()
 	}
 	Iterator interface {
+		SeekTo(key []byte)
 		SeekForPrev(prev []byte) error
 		ReadNext() (key KeyGetter, val ValGetter, err error)
 		ReadPrev() (key KeyGetter, val ValGetter, err error)
