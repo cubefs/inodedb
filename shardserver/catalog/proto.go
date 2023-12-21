@@ -14,13 +14,18 @@ const (
 )
 
 var (
+	// top level prefix
 	spacePrefix     = []byte{'s'}
 	shardInfoPrefix = []byte{'n'}
 
-	shardSuffix  = []byte{'p'}
+	// shard and shard info suffix
+	shardSuffix = []byte{'p'}
+
+	// shard's internal suffix
 	inodeSuffix  = []byte{'i'}
 	linkSuffix   = []byte{'l'}
 	vectorSuffix = []byte{'v'}
+	maxSuffix    = []byte{'z'}
 )
 
 type Timestamp struct{}
@@ -45,7 +50,7 @@ func shardPrefixSize() int {
 }
 
 func shardInfoPrefixSize() int {
-	return 8 + len(shardInfoPrefix) + len(shardSuffix)
+	return 8 + len(shardInfoPrefix) + len(shardSuffix) + 4
 }
 
 func shardInodePrefixSize() int {
@@ -60,13 +65,17 @@ func shardVectorPrefixSize() int {
 	return shardPrefixSize() + len(vectorSuffix)
 }
 
+func shardMaxPrefixSize() int {
+	return shardPrefixSize() + len(maxSuffix)
+}
+
 func encodeSpacePrefix(sid proto.Sid, raw []byte) {
 	if raw == nil || cap(raw) == 0 {
 		panic("invalid raw input")
 	}
 	prefixSize := len(spacePrefix)
 	copy(raw, spacePrefix)
-	binary.BigEndian.PutUint64(raw[prefixSize:8], uint64(sid))
+	binary.BigEndian.PutUint64(raw[prefixSize:], uint64(sid))
 	copy(raw[8+prefixSize:], shardSuffix)
 }
 
@@ -83,7 +92,7 @@ func encodeShardInfoPrefix(sid proto.Sid, shardID proto.ShardID, raw []byte) {
 	}
 	prefixSize := len(shardInfoPrefix)
 	copy(raw, shardInfoPrefix)
-	binary.BigEndian.PutUint64(raw[prefixSize:8], sid)
+	binary.BigEndian.PutUint64(raw[prefixSize:], sid)
 	copy(raw[8+prefixSize:], shardSuffix)
 	binary.BigEndian.PutUint32(raw[8+prefixSize+len(shardSuffix):], shardID)
 }
@@ -110,6 +119,12 @@ func encodeShardVectorPrefix(sid proto.Sid, shardID proto.ShardID, raw []byte) {
 	shardPrefixSize := shardPrefixSize()
 	encodeShardPrefix(sid, shardID, raw[:shardPrefixSize])
 	copy(raw[shardPrefixSize:], vectorSuffix)
+}
+
+func encodeShardMaxPrefix(sid proto.Sid, shardID proto.ShardID, raw []byte) {
+	shardPrefixSize := shardPrefixSize()
+	encodeShardPrefix(sid, shardID, raw[:shardPrefixSize])
+	copy(raw[shardPrefixSize:], maxSuffix)
 }
 
 func encodeIno(ino uint64, raw []byte) {

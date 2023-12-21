@@ -2,7 +2,7 @@ package catalog
 
 import (
 	"context"
-	"encoding/binary"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -81,20 +81,15 @@ func openDisk(ctx context.Context, cfg diskConfig) *disk {
 		}
 	}
 
-	cfg.raftConfig.Storage = &raftStorage{kvStore: store.RaftStore()}
-	cfg.raftConfig.Logger = log.DefaultLogger
-	cfg.raftConfig.Resolver = &addressResolver{t: cfg.transport}
-	raftManager, err := raft.NewManager(&cfg.raftConfig)
-	if err != nil {
-		span.Fatalf("new raft manager failed: %s", err)
-	}
-
-	return &disk{
+	disk := &disk{
 		DiskInfo:     diskInfo,
 		shardHandler: cfg.shardHandler,
-		raftManager:  raftManager,
-		store:        store,
+		// raftManager:  raftManager,
+		store: store,
 	}
+	disk.shardsMu.shards = make(map[uint64]*shard)
+
+	return disk
 }
 
 type disk struct {
@@ -103,19 +98,32 @@ type disk struct {
 	shardsMu struct {
 		sync.RWMutex
 		// sid + shard id as the map key
-		shards map[[12]byte]*shard
+		shards map[uint64]*shard
 	}
 	shardHandler shardHandler
 	raftManager  raft.Manager
 	store        *store.Store
+	cfg          diskConfig
 	lock         sync.RWMutex
 }
 
 func (d *disk) Load(ctx context.Context) error {
+	// initial raft manager
+	raftConfig := d.cfg.raftConfig
+	raftConfig.NodeID = uint64(d.DiskID)
+	raftConfig.Storage = &raftStorage{kvStore: d.store.RaftStore()}
+	raftConfig.Logger = log.DefaultLogger
+	raftConfig.Resolver = &addressResolver{t: d.cfg.transport}
+	raftManager, err := raft.NewManager(&raftConfig)
+	if err != nil {
+		return err
+	}
+	d.raftManager = raftManager
+
+	// load all shard from disk store
+	kvStore := d.store.KVStore()
 	listKeyPrefix := make([]byte, len(shardInfoPrefix))
 	encodeShardInfoListPrefix(listKeyPrefix)
-
-	kvStore := d.store.KVStore()
 	lr := kvStore.List(ctx, dataCF, listKeyPrefix, nil, nil)
 	defer lr.Close()
 
@@ -145,7 +153,7 @@ func (d *disk) Load(ctx context.Context) error {
 			return errors.Info(err, "new shard failed")
 		}
 
-		shardKey := d.encodeShardKey(shardInfo.Sid, shardInfo.ShardID)
+		shardKey := encodeShardID(shardInfo.Sid, shardInfo.ShardID)
 		d.shardsMu.Lock()
 		d.shardsMu.shards[shardKey] = shard
 		d.shardsMu.Unlock()
@@ -162,7 +170,7 @@ func (d *disk) AddShard(ctx context.Context, sid proto.Sid, shardID proto.ShardI
 	d.shardsMu.Lock()
 	defer d.shardsMu.Unlock()
 
-	key := d.encodeShardKey(sid, shardID)
+	key := encodeShardID(sid, shardID)
 	if _, ok := d.shardsMu.shards[key]; ok {
 		span.Warnf("shard[%d-%d] already exist", sid, shardID)
 		return nil
@@ -217,7 +225,7 @@ func (d *disk) UpdateShard(ctx context.Context, sid proto.Sid, shardID proto.Sha
 }
 
 func (d *disk) GetShard(sid proto.Sid, shardID proto.ShardID) (*shard, error) {
-	key := d.encodeShardKey(sid, shardID)
+	key := encodeShardID(sid, shardID)
 	d.shardsMu.RLock()
 	s := d.shardsMu.shards[key]
 	d.shardsMu.RUnlock()
@@ -229,7 +237,7 @@ func (d *disk) GetShard(sid proto.Sid, shardID proto.ShardID) (*shard, error) {
 }
 
 func (d *disk) DeleteShard(ctx context.Context, sid proto.Sid, shardID proto.ShardID) error {
-	key := d.encodeShardKey(sid, shardID)
+	key := encodeShardID(sid, shardID)
 
 	d.shardsMu.Lock()
 	shard := d.shardsMu.shards[key]
@@ -294,10 +302,13 @@ func (d *disk) SaveDiskInfo() error {
 	return f.Close()
 }
 
-func (d *disk) encodeShardKey(sid proto.Sid, shardID proto.ShardID) [12]byte {
-	key := [12]byte{}
-	binary.BigEndian.PutUint64(key[:8], uint64(sid))
-	binary.BigEndian.PutUint32(key[8:], uint32(shardID))
+func encodeShardID(sid proto.Sid, shardID proto.ShardID) uint64 {
+	if sid > proto.MaxSpaceNum {
+		panic(fmt.Sprintf("sid[%d] exceed max space num: %d", sid, proto.MaxSpaceNum))
+	}
+	if shardID > uint32(proto.MaxShardNum) {
+		panic(fmt.Sprintf("shard id[%d] exceed max shard num: %d", shardID, proto.MaxShardNum))
+	}
 
-	return key
+	return sid*proto.MaxShardNum + uint64(shardID)
 }

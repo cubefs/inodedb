@@ -8,6 +8,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/cubefs/cubefs/blobstore/common/trace"
+
 	"golang.org/x/sync/singleflight"
 
 	"github.com/cubefs/cubefs/blobstore/util/errors"
@@ -59,6 +61,9 @@ func (i inodeRange) isEmpty() bool {
 }
 
 func newShard(ctx context.Context, cfg shardConfig) (s *shard, err error) {
+	span := trace.SpanFromContext(ctx)
+	span.Infof("new shard with config: %+v", cfg)
+
 	s = &shard{
 		sid:      cfg.shardInfo.Sid,
 		shardID:  cfg.shardInfo.ShardID,
@@ -67,8 +72,8 @@ func newShard(ctx context.Context, cfg shardConfig) (s *shard, err error) {
 
 		store: cfg.store,
 		shardKeys: &shardKeysGenerator{
-			shardId: cfg.shardInfo.ShardID,
-			spaceId: cfg.shardInfo.Sid,
+			shardID: cfg.shardInfo.ShardID,
+			spaceID: cfg.shardInfo.Sid,
 		},
 		cfg: cfg.ShardBaseConfig,
 	}
@@ -86,14 +91,15 @@ func newShard(ctx context.Context, cfg shardConfig) (s *shard, err error) {
 	for _, node := range cfg.shardInfo.Nodes {
 		members = append(members, raft.Member{
 			NodeID:  uint64(node.DiskID),
-			Host:    cfg.nodeInfo.Addr + strconv.Itoa(int(cfg.nodeInfo.RaftPort)),
+			Host:    cfg.nodeInfo.Addr + ":" + strconv.Itoa(int(cfg.nodeInfo.RaftPort)),
 			Type:    raft.MemberChangeType_AddMember,
 			Learner: learner,
 		})
 	}
+	span.Debugf("shard members: %+v", members)
 
 	s.raftGroup, err = cfg.raftManager.CreateRaftGroup(context.Background(), &raft.GroupConfig{
-		ID:      uint64(s.shardID),
+		ID:      encodeShardID(cfg.shardInfo.Sid, cfg.shardInfo.ShardID),
 		Applied: cfg.shardInfo.AppliedIndex,
 		Members: members,
 		SM:      (*shardSM)(s),
@@ -391,14 +397,18 @@ func (s *shard) SaveShardInfo(ctx context.Context, withLock bool) error {
 	}
 
 	kvStore := s.store.KVStore()
-	key := make([]byte, shardInfoPrefixSize())
-	encodeShardInfoPrefix(s.shardMu.Sid, s.shardID, key)
+	key := s.shardKeys.encodeShardInfoKey()
 	value, err := s.shardMu.shardInfo.Marshal()
 	if err != nil {
 		return err
 	}
 
-	return kvStore.SetRaw(ctx, dataCF, key, value, nil)
+	if err := kvStore.SetRaw(ctx, dataCF, key, value, nil); err != nil {
+		return err
+	}
+	// flush data column family after save shard kv info
+	// todo: use other solution?
+	return kvStore.FlushCF(ctx, dataCF)
 }
 
 func (s *shard) GetVector(ctx context.Context, id uint64) ([]float32, error) {
@@ -453,23 +463,25 @@ func (s *shard) nextIno(ctx context.Context) (uint64, error) {
 		return 0, apierrors.ErrInodeLimitExceed
 	}
 
-	inoRange := s.inoRange.Load().(*inodeRange)
+	inoRange, isInit := s.inoRange.Load().(*inodeRange)
 	for {
 	RETRY:
 		// try cas get inode
-		cur := atomic.LoadUint64(&inoRange.start)
-		if cur < inoRange.end {
-			newId := cur + 1
-			if atomic.CompareAndSwapUint64(&inoRange.start, cur, newId) {
-				return newId, nil
+		if isInit {
+			cur := atomic.LoadUint64(&inoRange.start)
+			if cur < inoRange.end {
+				newId := cur + 1
+				if atomic.CompareAndSwapUint64(&inoRange.start, cur, newId) {
+					return newId, nil
+				}
+				goto RETRY
 			}
-			goto RETRY
 		}
 
 		if _, err, _ := s.sf.Do("alloc-ino-range", func() (interface{}, error) {
 			// check inode range has been updated or not
 			tmp := inoRange
-			if inoRange := s.inoRange.Load().(*inodeRange); inoRange != tmp {
+			if inoRange, ok := s.inoRange.Load().(*inodeRange); ok && inoRange != tmp {
 				return nil, nil
 			}
 
@@ -484,6 +496,7 @@ func (s *shard) nextIno(ctx context.Context) (uint64, error) {
 
 			s.inoRange.Store(&newRange)
 			inoRange = &newRange
+			isInit = true
 			return nil, nil
 		}); err != nil {
 			return 0, err
@@ -530,13 +543,13 @@ func (s *shard) isLeader() bool {
 }
 
 type shardKeysGenerator struct {
-	shardId uint32
-	spaceId uint64
+	shardID uint32
+	spaceID uint64
 }
 
 func (s *shardKeysGenerator) encodeInoKey(ino uint64) []byte {
 	key := make([]byte, shardInodePrefixSize()+8)
-	encodeShardInodePrefix(s.spaceId, s.shardId, key)
+	encodeShardInodePrefix(s.spaceID, s.shardID, key)
 	encodeIno(ino, key[len(key)-8:])
 	return key
 }
@@ -544,7 +557,7 @@ func (s *shardKeysGenerator) encodeInoKey(ino uint64) []byte {
 func (s *shardKeysGenerator) encodeLinkKey(ino uint64, name string) []byte {
 	shardDataPrefixSize := shardLinkPrefixSize()
 	key := make([]byte, shardDataPrefixSize+8+len(shardSuffix)+len(name))
-	encodeShardLinkPrefix(s.spaceId, s.shardId, key)
+	encodeShardLinkPrefix(s.spaceID, s.shardID, key)
 	encodeIno(ino, key[shardDataPrefixSize:])
 	copy(key[shardDataPrefixSize+8:], shardSuffix)
 	copy(key[shardDataPrefixSize+8+len(shardSuffix):], util.StringsToBytes(name))
@@ -563,7 +576,7 @@ func (s *shardKeysGenerator) decodeLinkKey(key []byte) (ino uint64, name string)
 func (s *shardKeysGenerator) encodeLinkKeyPrefix(ino uint64) []byte {
 	shardDataPrefixSize := shardLinkPrefixSize()
 	keyPrefix := make([]byte, shardDataPrefixSize+8+len(shardSuffix))
-	encodeShardLinkPrefix(s.spaceId, s.shardId, keyPrefix)
+	encodeShardLinkPrefix(s.spaceID, s.shardID, keyPrefix)
 	encodeIno(ino, keyPrefix[shardDataPrefixSize:])
 	copy(keyPrefix[shardDataPrefixSize+8:], shardSuffix)
 	return keyPrefix
@@ -571,8 +584,26 @@ func (s *shardKeysGenerator) encodeLinkKeyPrefix(ino uint64) []byte {
 
 func (s *shardKeysGenerator) encodeVectorKey(vid uint64) []byte {
 	key := make([]byte, shardVectorPrefixSize()+8)
-	encodeShardVectorPrefix(s.spaceId, s.shardId, key)
+	encodeShardVectorPrefix(s.spaceID, s.shardID, key)
 	encodeIno(vid, key[len(key)-8:])
+	return key
+}
+
+func (s *shardKeysGenerator) encodeShardInfoKey() []byte {
+	key := make([]byte, shardInfoPrefixSize())
+	encodeShardInfoPrefix(s.spaceID, s.shardID, key)
+	return key
+}
+
+func (s *shardKeysGenerator) encodeShardPrefix() []byte {
+	key := make([]byte, shardPrefixSize())
+	encodeShardPrefix(s.spaceID, s.shardID, key)
+	return key
+}
+
+func (s *shardKeysGenerator) encodeShardMaxPrefix() []byte {
+	key := make([]byte, shardMaxPrefixSize())
+	encodeShardMaxPrefix(s.spaceID, s.shardID, key)
 	return key
 }
 

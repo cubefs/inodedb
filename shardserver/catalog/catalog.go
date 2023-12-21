@@ -323,6 +323,8 @@ func (c *Catalog) updateSpace(ctx context.Context, sid proto.Sid) error {
 }
 
 func (c *Catalog) initRoute(ctx context.Context) error {
+	span := trace.SpanFromContext(ctx)
+
 	routeVersion, changes, err := c.transport.GetRouteUpdate(ctx, c.getRouteVersion())
 	if err != nil {
 		return errors.Info(err, "get route update failed")
@@ -348,7 +350,9 @@ func (c *Catalog) initRoute(ctx context.Context) error {
 				fixedFields: fixedFields,
 				locateShard: c.getShard,
 			}
-			if _, loaded := c.spaces.LoadOrStore(spaceItem.Name, space); loaded {
+
+			span.Debugf("load space[%+v] from catalog change", space)
+			if _, loaded := c.spaces.LoadOrStore(spaceItem.Sid, space); loaded {
 				continue
 			}
 
@@ -492,7 +496,6 @@ func (c *Catalog) initDisks(ctx context.Context, nodeID proto.NodeID) {
 }
 
 func (c *Catalog) initRaftConfig() {
-	c.cfg.RaftConfig.NodeID = uint64(c.transport.GetMyself().ID)
 	c.cfg.RaftConfig.Logger = log.DefaultLogger
 	c.cfg.RaftConfig.Resolver = &addressResolver{t: c.transport}
 }

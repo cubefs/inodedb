@@ -25,7 +25,7 @@ type Space struct {
 
 func (s *Space) InsertItem(ctx context.Context, h proto.ShardOpHeader, item proto.Item) (uint64, error) {
 	shard, err := s.locateShard(h.DiskID, h.Sid, h.ShardID)
-	if err == nil {
+	if err != nil {
 		return 0, err
 	}
 	if !s.validateFields(item.Fields) {

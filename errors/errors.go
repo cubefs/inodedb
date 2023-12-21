@@ -64,7 +64,7 @@ var (
 	ErrRouteVersionConflict     = errors.New("route version conflict")
 	ErrInvalidSpaceID           = errors.New("invalid space id")
 	ErrSpaceNotExist            = errors.New("space not exist")
-	ErrShardNotExist            = errors.New("space not exist")
+	ErrShardNotExist            = errors.New("shard not exist")
 	ErrInvalidNodeRole          = errors.New("invalid node role")
 	ErrInvalidNodeInfo          = errors.New("invalid node info")
 	ErrInvalidAz                = errors.New("invalid az")

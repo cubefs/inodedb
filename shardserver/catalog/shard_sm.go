@@ -7,6 +7,8 @@ import (
 	"io"
 	"sync/atomic"
 
+	"github.com/cubefs/cubefs/blobstore/util/log"
+
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
 	"github.com/cubefs/inodedb/common/kvstore"
@@ -71,6 +73,7 @@ func (s *shardSM) Apply(cxt context.Context, pd []raft.ProposalData, index uint6
 }
 
 func (s *shardSM) LeaderChange(peerID uint64) error {
+	log.Info("shard receive leader change", peerID)
 	// todo: report leader change to master
 	s.shardMu.Lock()
 	s.shardMu.leader = proto.DiskID(peerID)
@@ -138,11 +141,16 @@ func (s *shardSM) Snapshot() raft.Snapshot {
 }
 
 func (s *shardSM) ApplySnapshot(snap raft.Snapshot) error {
-	// todo: clear all data with shard prefix
-
 	defer snap.Close()
 	kvStore := s.store.KVStore()
 	_, ctx := trace.StartSpanFromContext(context.Background(), "")
+
+	// clear all data with shard prefix
+	batch := kvStore.NewWriteBatch()
+	batch.DeleteRange(dataCF, s.shardKeys.encodeShardPrefix(), s.shardKeys.encodeShardMaxPrefix())
+	if err := kvStore.Write(ctx, batch, nil); err != nil {
+		return err
+	}
 
 	for {
 		batch, err := snap.ReadBatch()

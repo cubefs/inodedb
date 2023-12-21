@@ -102,6 +102,10 @@ type raftIterator struct {
 	lr kvstore.ListReader
 }
 
+func (i raftIterator) SeekTo(key []byte) {
+	i.lr.SeekTo(key)
+}
+
 func (i raftIterator) SeekForPrev(prev []byte) error {
 	return i.lr.SeekForPrev(prev)
 }
