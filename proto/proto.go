@@ -1,8 +1,13 @@
 package proto
 
+import "math"
+
+const ReqIdKey = "req-id"
+
 const (
 	ShardRangeStepSize = uint64(2 << 40)
-	ReqIdKey           = "req-id"
+	MaxShardNum        = math.MaxUint64 / ShardRangeStepSize
+	MaxSpaceNum        = (math.MaxUint64 - MaxShardNum) / MaxShardNum
 )
 
 type (

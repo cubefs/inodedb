@@ -13,6 +13,7 @@ import (
 )
 
 type ShardServerClient interface {
+	ShardDiskID() proto.DiskID
 	ShardInsertItem(ctx context.Context, in *proto.ShardInsertItemRequest, opts ...grpc.CallOption) (*proto.ShardInsertItemResponse, error)
 	ShardUpdateItem(ctx context.Context, in *proto.ShardUpdateItemRequest, opts ...grpc.CallOption) (*proto.ShardUpdateItemResponse, error)
 	ShardDeleteItem(ctx context.Context, in *proto.ShardDeleteItemRequest, opts ...grpc.CallOption) (*proto.ShardDeleteItemResponse, error)
@@ -98,7 +99,7 @@ func (s *transport) GetClient(ctx context.Context, diskID proto.DiskID) (ShardSe
 	if err != nil {
 		return nil, err
 	}
-	return client, nil
+	return &shardClient{diskID: diskID, InodeDBShardServerClient: client}, nil
 }
 
 func (s *transport) Close() {
@@ -106,4 +107,13 @@ func (s *transport) Close() {
 	if s.shardServerClient != nil {
 		s.shardServerClient.Close()
 	}
+}
+
+type shardClient struct {
+	diskID proto.DiskID
+	proto.InodeDBShardServerClient
+}
+
+func (s *shardClient) ShardDiskID() proto.DiskID {
+	return s.diskID
 }

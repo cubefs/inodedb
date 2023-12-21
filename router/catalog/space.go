@@ -66,7 +66,6 @@ func (s *Space) InsertItem(ctx context.Context, item proto.Item) (uint64, error)
 
 	itemRequest := &proto.ShardInsertItemRequest{
 		Header: proto.ShardOpHeader{
-			DiskID:       shard.info.Leader,
 			ShardID:      shard.shardID,
 			Sid:          s.sid,
 			RouteVersion: 0,
@@ -89,7 +88,6 @@ func (s *Space) UpdateItem(ctx context.Context, item proto.Item) error {
 
 	itemRequest := &proto.ShardUpdateItemRequest{
 		Header: proto.ShardOpHeader{
-			DiskID:       shard.info.Leader,
 			ShardID:      shard.shardID,
 			Sid:          s.sid,
 			RouteVersion: 0,
@@ -107,7 +105,6 @@ func (s *Space) DeleteItem(ctx context.Context, ino uint64) error {
 
 	deleteRequest := &proto.ShardDeleteItemRequest{
 		Header: proto.ShardOpHeader{
-			DiskID:       shard.info.Leader,
 			ShardID:      shard.shardID,
 			Sid:          s.sid,
 			RouteVersion: 0,
@@ -125,7 +122,6 @@ func (s *Space) GetItem(ctx context.Context, ino uint64) (proto.Item, error) {
 
 	getItemRequest := &proto.ShardGetItemRequest{
 		Header: proto.ShardOpHeader{
-			DiskID:       shard.info.Leader,
 			ShardID:      shard.shardID,
 			Sid:          s.sid,
 			RouteVersion: 0,
@@ -143,7 +139,6 @@ func (s *Space) Link(ctx context.Context, link proto.Link) error {
 
 	linkRequest := &proto.ShardLinkRequest{
 		Header: proto.ShardOpHeader{
-			DiskID:       shard.info.Leader,
 			ShardID:      shard.shardID,
 			Sid:          s.sid,
 			RouteVersion: 0,
@@ -162,7 +157,6 @@ func (s *Space) Unlink(ctx context.Context, unlink proto.Unlink) error {
 
 	unlinkRequest := &proto.ShardUnlinkRequest{
 		Header: proto.ShardOpHeader{
-			DiskID:       shard.info.Leader,
 			ShardID:      shard.shardID,
 			Sid:          s.sid,
 			RouteVersion: 0,
@@ -181,7 +175,6 @@ func (s *Space) List(ctx context.Context, req *proto.ListRequest) ([]proto.Link,
 
 	return shard.List(ctx, &proto.ShardListRequest{
 		Header: proto.ShardOpHeader{
-			DiskID:       shard.info.Leader,
 			ShardID:      shard.shardID,
 			Sid:          s.sid,
 			RouteVersion: 0,
