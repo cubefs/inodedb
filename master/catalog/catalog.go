@@ -310,7 +310,7 @@ func (c *catalog) GetSpaceByName(ctx context.Context, name string) (*proto.Space
 	space := c.spaces.GetByName(name)
 	if space == nil {
 		span.Errorf("space %s is not exist", name)
-		return nil, apierrors.ErrSpaceDoesNotExist
+		return nil, apierrors.ErrSpaceNotExist
 	}
 	return c.GetSpace(ctx, space.id)
 }
@@ -618,6 +618,7 @@ func (c *catalog) updateSpaceRoute(ctx context.Context, space *space) error {
 
 			if _, err := client.UpdateShard(ctx, &proto.UpdateShardRequest{
 				// SpaceName: space.GetInfo().Name,
+				DiskID:  node.ID,
 				Sid:     space.GetInfo().Sid,
 				ShardID: shardInfo.ShardId,
 				// Epoch:     shardInfo.Epoch,

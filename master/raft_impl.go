@@ -232,7 +232,7 @@ func (r *raftNode) Apply(cxt context.Context, pd []raft.ProposalData, index uint
 		pdi := pd[i]
 		mod := pdi.Module
 		span, _ := trace.StartSpanFromContextWithTraceID(cxt, "apply", string(pdi.Context))
-		span.Infof("recive apply req, module %s, op %d, data %s", string(pdi.Module), pdi.Op, string(pdi.Data))
+		span.Infof("receive apply req, module %s, op %d, data %s", string(pdi.Module), pdi.Op, string(pdi.Data))
 		sm := r.sms[string(mod)]
 		if sm == nil {
 			panic(fmt.Errorf("target mode not exist, mod %s, op %d", mod, pdi.Op))
@@ -491,6 +491,10 @@ func (w *raftStorage) Write(b raft.Batch) error {
 
 type raftIterator struct {
 	lr kvstore.ListReader
+}
+
+func (i raftIterator) SeekTo(key []byte) {
+	i.lr.SeekTo(key)
 }
 
 func (i raftIterator) SeekForPrev(prev []byte) error {

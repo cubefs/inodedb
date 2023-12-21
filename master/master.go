@@ -63,7 +63,7 @@ func NewMaster(cfg *Config) *Master {
 	raftNode.addApplier(cluster.Module, newCluster.GetSM())
 
 	groupCfg := &raft.GroupConfig{
-		ID:      cfg.RaftConfig.RaftConfig.NodeID,
+		ID:      1,
 		SM:      raftNode,
 		Applied: raftNode.AppliedIndex,
 		Members: raftNode.cfg.Members,
@@ -78,6 +78,9 @@ func NewMaster(cfg *Config) *Master {
 	newCluster.SetRaftGroup(raftGroup)
 	newCatalog.SetRaftGroup(raftGroup)
 
+	if len(cfg.RaftConfig.Members) == 1 {
+		raftGroup.Campaign(ctx)
+	}
 	raftNode.waitForRaftStart(ctx)
 	newCatalog.StartTask(ctx)
 
