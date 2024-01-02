@@ -32,56 +32,42 @@ func NewMaster(cfg *Config) *Master {
 		span.Fatalf("new store failed: %s", err)
 	}
 
-	raftNode := newRaftNode(ctx, &cfg.RaftConfig, store)
-	if err != nil {
-		span.Fatalf("new raft node failed, err %s", err.Error())
-	}
-
-	manager, err := raft.NewManager(&cfg.RaftConfig.RaftConfig)
-	if err != nil {
-		span.Fatalf("new manager failed, err %s", err.Error())
-	}
-
 	idGenerator, err := idgenerator.NewIDGenerator(store, nil)
 	if err != nil {
 		span.Fatalf("new id generator failed: %s", err)
 	}
 
-	cfg.CatalogConfig.IdGenerator = idGenerator
-	cfg.CatalogConfig.Store = store
-
 	cfg.ClusterConfig.Store = store
 	cfg.ClusterConfig.IdGenerator = idGenerator
-
 	newCluster := cluster.NewCluster(ctx, &cfg.ClusterConfig)
-	cfg.CatalogConfig.Cluster = newCluster
 
+	cfg.CatalogConfig.IdGenerator = idGenerator
+	cfg.CatalogConfig.Store = store
+	cfg.CatalogConfig.Cluster = newCluster
 	newCatalog := catalog.NewCatalog(ctx, &cfg.CatalogConfig)
 
-	raftNode.addApplier(idgenerator.Module, idGenerator.GetSM())
-	raftNode.addApplier(catalog.Module, newCatalog.GetSM())
-	raftNode.addApplier(cluster.Module, newCluster.GetSM())
+	raftNode := newRaftNode(ctx, &cfg.RaftConfig, store)
+	if err != nil {
+		span.Fatalf("new raft node failed, err %s", err.Error())
+	}
+
+	raftNode.addApplier(string(idgenerator.Module), idGenerator.GetSM())
+	raftNode.addApplier(string(catalog.Module), newCatalog.GetSM())
+	raftNode.addApplier(string(cluster.Module), newCluster.GetSM())
 
 	groupCfg := &raft.GroupConfig{
 		ID:      1,
 		SM:      raftNode,
-		Applied: raftNode.AppliedIndex,
-		Members: raftNode.cfg.Members,
+		Applied: raftNode.getApplyID(),
+		Members: raftNode.getMembers(),
 	}
-	raftGroup, err := manager.CreateRaftGroup(ctx, groupCfg)
-	if err != nil {
-		span.Fatalf("create raft group failed, err %s", err.Error())
-	}
+	raftGroup := raftNode.createRaftGroup(ctx, groupCfg)
 
-	raftNode.raftGroup = raftGroup
 	idGenerator.SetRaftGroup(raftGroup)
 	newCluster.SetRaftGroup(raftGroup)
 	newCatalog.SetRaftGroup(raftGroup)
 
-	if len(cfg.RaftConfig.Members) == 1 {
-		raftGroup.Campaign(ctx)
-	}
-	raftNode.waitForRaftStart(ctx)
+	raftNode.start(ctx)
 	newCatalog.StartTask(ctx)
 
 	return &Master{
@@ -94,5 +80,5 @@ func initConfig(cfg *Config) {
 	cfg.StoreConfig.RaftOption.CreateIfMissing = true
 	cfg.StoreConfig.RaftOption.ColumnFamily = append(cfg.StoreConfig.RaftOption.ColumnFamily, raftWalCF)
 	cfg.StoreConfig.KVOption.CreateIfMissing = true
-	cfg.StoreConfig.KVOption.ColumnFamily = append(cfg.StoreConfig.KVOption.ColumnFamily, catalog.CF, cluster.CF, idgenerator.CF, LocalCF)
+	cfg.StoreConfig.KVOption.ColumnFamily = append(cfg.StoreConfig.KVOption.ColumnFamily, catalog.CF, cluster.CF, idgenerator.CF, localCF)
 }
