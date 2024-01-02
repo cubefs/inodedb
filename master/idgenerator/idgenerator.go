@@ -21,7 +21,6 @@ import (
 
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
-	"github.com/cubefs/inodedb/common/kvstore"
 	"github.com/cubefs/inodedb/master/store"
 	"github.com/cubefs/inodedb/raft"
 )
@@ -79,14 +78,14 @@ func (s *idGenerator) Alloc(ctx context.Context, name string, count int) (base, 
 		count = MaxCount
 	}
 
-	args := &allocArgs{Name: name, Current: new, Count: count}
+	args := &allocArgs{Name: name, Count: count}
 	data, err := json.Marshal(args)
 	if err != nil {
 		return
 	}
 
 	ret, err := s.raftGroup.Propose(ctx, &raft.ProposalData{
-		Module: []byte(Module),
+		Module: Module,
 		Op:     RaftOpAlloc,
 		Data:   data,
 	})
@@ -101,35 +100,7 @@ func (s *idGenerator) Alloc(ctx context.Context, name string, count int) (base, 
 	return
 }
 
-func (s *idGenerator) applyCommit(ctx context.Context, data []byte) (uint64, error) {
-	span := trace.SpanFromContext(ctx)
-	args := &allocArgs{}
-	err := json.Unmarshal(data, args)
-	if err != nil {
-		return 0, errors.Info(err, "json unmarshal failed")
-	}
-
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	current, err := s.storage.Get(ctx, args.Name)
-	if err != nil && err != kvstore.ErrNotFound {
-		return 0, err
-	}
-
-	newCurrent := current + uint64(args.Count)
-	err = s.storage.Put(ctx, args.Name, newCurrent)
-	if err != nil {
-		span.Errorf("put id failed, name %s, err: %v", args.Name, err)
-		return 0, err
-	}
-
-	span.Debugf("alloc id success, name %s, current %d, new current %d", args.Name, current, newCurrent)
-	return newCurrent, nil
-}
-
 type allocArgs struct {
-	Name    string `json:"name"`
-	Count   int    `json:"count"`
-	Current uint64 `json:"current"`
+	Name  string `json:"name"`
+	Count int    `json:"count"`
 }

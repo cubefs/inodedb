@@ -17,9 +17,9 @@ func TestAllocMgr_Alloc(t *testing.T) {
 	numNodes := 5
 	for i := 0; i < numNodes; i++ {
 		n := &node{
-			nodeId: uint32(i),
+			nodeID: proto.NodeID(i),
 			info: &nodeInfo{
-				Id:    uint32(i),
+				ID:    proto.NodeID(i),
 				Addr:  "test_addr" + string(rune(i)),
 				Az:    az,
 				Rack:  rack,
@@ -27,14 +27,14 @@ func TestAllocMgr_Alloc(t *testing.T) {
 			},
 			expires: time.Now().Add(30 * time.Second),
 		}
-		ifo := &diskInfo{
-			disk: &proto.Disk{
-				DiskID: uint32(i),
+		d := &disk{
+			info: &diskInfo{
+				DiskID: proto.DiskID(i),
 				Status: proto.DiskStatus_DiskStatusNormal,
 			},
-			node: n,
+			node: n.info,
 		}
-		mgr.Put(ctx, ifo)
+		mgr.Put(ctx, d)
 	}
 
 	alloc, err := mgr.Alloc(ctx, &AllocArgs{

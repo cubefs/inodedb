@@ -13,8 +13,8 @@ type Config struct {
 }
 
 type Store struct {
-	kvStore      kvstore.Store
-	raftStore    kvstore.Store
+	kvStore   kvstore.Store
+	raftStore kvstore.Store
 
 	cfg *Config
 }
@@ -23,7 +23,7 @@ func NewStore(ctx context.Context, cfg *Config) (*Store, error) {
 	kvStorePath := cfg.Path + "/kv"
 	// disable kv wal to optimized latency
 	cfg.KVOption.DisableWal = true
-	// todo: add blobDB support for vector data
+
 	kvStore, err := kvstore.NewKVStore(ctx, kvStorePath, kvstore.RocksdbLsmKVType, &cfg.KVOption)
 	if err != nil {
 		return nil, err
@@ -36,9 +36,9 @@ func NewStore(ctx context.Context, cfg *Config) (*Store, error) {
 	}
 
 	return &Store{
-		kvStore:      kvStore,
-		raftStore:    raftStore,
-		cfg:          cfg,
+		kvStore:   kvStore,
+		raftStore: raftStore,
+		cfg:       cfg,
 	}, nil
 }
 

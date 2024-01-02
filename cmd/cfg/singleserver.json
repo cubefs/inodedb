@@ -8,11 +8,6 @@
         "raft_port": 10200,
         "set_id": 1
     },
-    "master_raft_cfg": {
-        "raft_port": 10600,
-        "raft_config": {
-        }
-    },
     "disks_config": [
         "/home/project/inodedb/inodedb/cmd/run/store/shardserver/disk1",
         "/home/project/inodedb/inodedb/cmd/run/store/shardserver/disk2",

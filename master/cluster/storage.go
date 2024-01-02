@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 
 	"github.com/cubefs/inodedb/common/kvstore"
-	"github.com/cubefs/inodedb/proto"
 )
 
 const CF = "node"
@@ -48,10 +47,11 @@ func (s *storage) Load(ctx context.Context) ([]*nodeInfo, error) {
 	return res, nil
 }
 
-func (s *storage) LoadDisk(ctx context.Context) ([]*proto.Disk, error) {
+func (s *storage) LoadDisk(ctx context.Context) ([]*diskInfo, error) {
 	lr := s.kvStore.List(ctx, CF, encodeDiskKeyPrefix(), nil, nil)
 	defer lr.Close()
-	res := make([]*proto.Disk, 0)
+
+	res := make([]*diskInfo, 0)
 	for {
 		kg, vg, err := lr.ReadNext()
 		if err != nil {
@@ -60,8 +60,8 @@ func (s *storage) LoadDisk(ctx context.Context) ([]*proto.Disk, error) {
 		if kg == nil || vg == nil {
 			break
 		}
-		newDisk := &proto.Disk{}
-		err = newDisk.Unmarshal(vg.Value())
+		newDisk := &diskInfo{}
+		err = newDisk.decode(vg.Value())
 		if err != nil {
 			kg.Close()
 			vg.Close()
@@ -71,11 +71,12 @@ func (s *storage) LoadDisk(ctx context.Context) ([]*proto.Disk, error) {
 		kg.Close()
 		vg.Close()
 	}
+
 	return res, nil
 }
 
 func (s *storage) Put(ctx context.Context, info *nodeInfo) error {
-	key := encodeNodeKey(info.Id)
+	key := encodeNodeKey(info.ID)
 	marshal, err := info.Marshal()
 	if err != nil {
 		return err
@@ -83,9 +84,9 @@ func (s *storage) Put(ctx context.Context, info *nodeInfo) error {
 	return s.kvStore.SetRaw(ctx, CF, key, marshal, nil)
 }
 
-func (s *storage) PutDisk(ctx context.Context, disk *proto.Disk) error {
+func (s *storage) PutDisk(ctx context.Context, disk *diskInfo) error {
 	key := encodeDiskKey(disk.DiskID)
-	marshal, err := disk.Marshal()
+	marshal, err := disk.encode()
 	if err != nil {
 		return err
 	}
@@ -120,30 +121,30 @@ func (s *storage) DeleteDisk(ctx context.Context, nodeId uint32) error {
 
 func encodeNodeKey(nodeId uint32) []byte {
 	ret := make([]byte, len(nodeKeyPrefix)+len(keyInfix)+4)
-	ret = append(ret, nodeKeyPrefix...)
-	ret = append(ret, keyInfix...)
+	copy(ret, nodeKeyPrefix)
+	copy(ret[len(nodeKeyPrefix):], keyInfix)
 	binary.BigEndian.PutUint32(ret[len(ret)-4:], nodeId)
 	return ret
 }
 
-func encodeDiskKey(diskId uint32) []byte {
+func encodeDiskKey(diskID uint32) []byte {
 	ret := make([]byte, len(diskKeyPrefix)+len(keyInfix)+4)
-	ret = append(ret, diskKeyPrefix...)
-	ret = append(ret, keyInfix...)
-	binary.BigEndian.PutUint32(ret[len(ret)-4:], diskId)
+	copy(ret, diskKeyPrefix)
+	copy(ret[len(diskKeyPrefix):], keyInfix)
+	binary.BigEndian.PutUint32(ret[len(ret)-4:], diskID)
 	return ret
 }
 
 func encodeNodeKeyPrefix() []byte {
 	ret := make([]byte, len(nodeKeyPrefix)+len(keyInfix))
-	ret = append(ret, nodeKeyPrefix...)
-	ret = append(ret, keyInfix...)
+	copy(ret, diskKeyPrefix)
+	copy(ret[len(diskKeyPrefix):], keyInfix)
 	return ret
 }
 
 func encodeDiskKeyPrefix() []byte {
 	ret := make([]byte, len(diskKeyPrefix)+len(keyInfix))
-	ret = append(ret, diskKeyPrefix...)
-	ret = append(ret, keyInfix...)
+	copy(ret, diskKeyPrefix)
+	copy(ret[len(diskKeyPrefix):], keyInfix)
 	return ret
 }

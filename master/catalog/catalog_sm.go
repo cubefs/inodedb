@@ -11,9 +11,7 @@ import (
 	"github.com/cubefs/inodedb/raft"
 )
 
-const (
-	Module = "catalog"
-)
+var Module = []byte("catalog")
 
 const (
 	RaftOpCreateSpace uint32 = iota + 1

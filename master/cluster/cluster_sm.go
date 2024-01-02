@@ -21,9 +21,7 @@ const (
 	RaftOpSetBroken
 )
 
-const (
-	Module = "cluster"
-)
+var Module = []byte("cluster")
 
 func (c *cluster) Apply(cxt context.Context, pd raft.ProposalData, index uint64) (ret interface{}, err error) {
 	data := pd.Data
@@ -57,64 +55,68 @@ func (c *cluster) LeaderChange(peerID uint64) error {
 
 func (c *cluster) applyAddDisk(ctx context.Context, data []byte) error {
 	span := trace.SpanFromContextSafe(ctx)
-	disk := &proto.Disk{}
-	err := json.Unmarshal(data, disk)
+	d := &proto.Disk{}
+	err := json.Unmarshal(data, d)
 	if err != nil {
 		span.Errorf("unmarshal disk failed, err: %v", err)
 		return err
 	}
 
-	ifo := c.disks.get(disk.DiskID)
+	ifo := c.disks.get(d.DiskID)
 	if ifo != nil {
-		span.Errorf("disk %d already exist", disk.DiskID)
-		return fmt.Errorf("disk %d already exist", disk.DiskID)
+		span.Errorf("disk %d already exist", d.DiskID)
+		return fmt.Errorf("disk %d already exist", d.DiskID)
 	}
 
-	node := c.allNodes.Get(disk.NodeID)
+	node := c.allNodes.Get(d.NodeID)
 	if node == nil {
-		span.Errorf("node %d not found", disk.NodeID)
+		span.Errorf("node %d not found", d.NodeID)
 		return apierrors.ErrNodeNotExist
 	}
 
-	err = c.storage.PutDisk(ctx, disk)
+	info := protoDiskToInternalDisk(d)
+	info.Status = proto.DiskStatus_DiskStatusNormal
+	err = c.storage.PutDisk(ctx, info)
 	if err != nil {
-		span.Errorf("put disk to storage failed, disk %v, err: %v", disk, err)
+		span.Errorf("put disk to storage failed, disk %v, err: %v", d, err)
 		return err
 	}
 
-	disk.Status = proto.DiskStatus_DiskStatusNormal
-	diskInfo := &diskInfo{
-		disk: disk,
-		node: node,
+	disk := &disk{
+		info: info,
+		node: node.info,
 	}
-	c.disks.addDisk(disk.DiskID, diskInfo)
-	span.Infof("add disk %v success", disk)
+
+	c.disks.addDisk(d.DiskID, disk)
+	node.dm.addDiskNoLock(d.DiskID, disk)
+
+	span.Infof("add disk %v success", d)
 	return nil
 }
 
 func (c *cluster) applySetDiskBroken(ctx context.Context, data []byte) error {
 	span := trace.SpanFromContextSafe(ctx)
-	diskId := c.decodeDiskId(data)
+	diskID := c.decodeDiskId(data)
 
-	disk := c.disks.get(diskId)
+	disk := c.disks.get(diskID)
 	if disk == nil {
-		span.Errorf("disk %d not found", diskId)
+		span.Errorf("disk %d not found", diskID)
 		return apierrors.ErrDiskNotExist
 	}
 
-	newDisk := disk.Clone()
-	newDisk.disk.Status = proto.DiskStatus_DiskStatusBroken
-
-	err := c.storage.PutDisk(ctx, newDisk.disk)
+	oldStatus := disk.info.Status
+	disk.info.Status = proto.DiskStatus_DiskStatusBroken
+	err := c.storage.PutDisk(ctx, disk.info)
 	if err != nil {
 		span.Errorf("put disk to storage failed, disk %v, err: %v", disk, err)
+		disk.info.Status = oldStatus
 		return err
 	}
 
-	c.disks.addDisk(newDisk.disk.DiskID, newDisk)
-	span.Infof("set disk %v broken success", newDisk.disk)
+	span.Infof("set disk %v broken success", disk.info.DiskID)
 	return nil
 }
+
 func (c *cluster) applyRegister(ctx context.Context, data []byte) error {
 	span := trace.SpanFromContextSafe(ctx)
 
@@ -132,13 +134,8 @@ func (c *cluster) applyRegister(ctx context.Context, data []byte) error {
 		return apierrors.ErrNodeAlreadyExist
 	}
 
-	nodeId := info.Id
 	info.State = proto.NodeState_Alive
-	newNode := &node{
-		nodeId:  nodeId,
-		info:    info,
-		expires: time.Now().Add(time.Duration(c.cfg.HeartbeatTimeoutS) * time.Second),
-	}
+	newNode := newNode(info, nil, c.cfg.HeartbeatTimeoutS)
 	if err = c.storage.Put(ctx, info); err != nil {
 		return err
 	}
@@ -165,21 +162,15 @@ func (c *cluster) applyUpdate(ctx context.Context, data []byte) error {
 		return apierrors.ErrNodeNotExist
 	}
 
-	newIfo := n.GetInfo()
-	newIfo.Roles = info.Roles
+	newInfo := n.GetInfo()
+	newInfo.Roles = info.Roles
 
-	span.Infof("disk info on node, nodeId %d, disk %v", info.Id, n.dm.disks)
-
-	newNode := &node{
-		nodeId:  newIfo.Id,
-		info:    newIfo,
-		dm:      n.dm,
-		expires: time.Now().Add(time.Duration(c.cfg.HeartbeatTimeoutS) * time.Second),
-	}
-	
-	if err = c.storage.Put(ctx, newIfo); err != nil {
+	span.Infof("disk info on node, nodeId %d, disk %v", info.ID, n.dm.disks)
+	if err = c.storage.Put(ctx, newInfo); err != nil {
 		return err
 	}
+
+	newNode := newNode(newInfo, n.dm, c.cfg.HeartbeatTimeoutS)
 	c.allNodes.PutNoLock(newNode)
 	span.Debugf("update node success, node: %+v", newNode.info)
 	return nil

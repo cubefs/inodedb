@@ -16,10 +16,12 @@ package idgenerator
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
+	"github.com/cubefs/inodedb/common/kvstore"
 	"github.com/cubefs/inodedb/raft"
 )
 
@@ -27,9 +29,7 @@ const (
 	RaftOpAlloc = iota + 1
 )
 
-const (
-	Module = "idGenerator"
-)
+var Module = []byte("idGenerator")
 
 func (s *idGenerator) LoadData(ctx context.Context) error {
 	span := trace.SpanFromContextSafe(ctx)
@@ -42,10 +42,6 @@ func (s *idGenerator) LoadData(ctx context.Context) error {
 	return nil
 }
 
-func (s *idGenerator) GetModuleName() string {
-	return Module
-}
-
 func (s *idGenerator) Apply(cxt context.Context, pd raft.ProposalData, index uint64) (rets interface{}, err error) {
 	data := pd.Data
 	span, ctx := trace.StartSpanFromContextWithTraceID(cxt, "", string(pd.Context))
@@ -56,6 +52,33 @@ func (s *idGenerator) Apply(cxt context.Context, pd raft.ProposalData, index uin
 	default:
 		return rets, errors.New(fmt.Sprintf("unsupported operation type: %d", pd.Op))
 	}
+}
+
+func (s *idGenerator) applyCommit(ctx context.Context, data []byte) (uint64, error) {
+	span := trace.SpanFromContext(ctx)
+	args := &allocArgs{}
+	err := json.Unmarshal(data, args)
+	if err != nil {
+		return 0, errors.Info(err, "json unmarshal failed")
+	}
+
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	current, err := s.storage.Get(ctx, args.Name)
+	if err != nil && err != kvstore.ErrNotFound {
+		return 0, err
+	}
+
+	newCurrent := current + uint64(args.Count)
+	err = s.storage.Put(ctx, args.Name, newCurrent)
+	if err != nil {
+		span.Errorf("put id failed, name %s, err: %v", args.Name, err)
+		return 0, err
+	}
+
+	span.Debugf("alloc id success, name %s, current %d, new current %d", args.Name, current, newCurrent)
+	return newCurrent, nil
 }
 
 // TODO:

@@ -9,13 +9,13 @@ import (
 // proto for set encoding/decoding and function return value
 
 const (
-	nodeIdName = "node"
-	diskIdName = "disk"
+	nodeIDName = "node"
+	diskIDName = "disk"
 )
 
 type nodeInfo struct {
-	Id          uint32           `json:"id"`
-	SetId       uint32           `json:"set_id"`
+	ID          proto.NodeID     `json:"id"`
+	SetID       proto.SetID      `json:"set_id"`
 	Addr        string           `json:"addr"`
 	GrpcPort    uint32           `json:"grpc_port"`
 	HttpPort    uint32           `json:"http_port"`
@@ -42,25 +42,25 @@ func (s *nodeInfo) CompareRoles(roles []proto.NodeRole) bool {
 	return true
 }
 
-func (s *nodeInfo) Compare(node *proto.Node) bool {
-	if !s.CompareRoles(node.Roles) {
-		return false
-	}
+// func (s *nodeInfo) Compare(node *proto.Node) bool {
+// 	if !s.CompareRoles(node.Roles) {
+// 		return false
+// 	}
 
-	if node.GrpcPort != s.GrpcPort || node.HttpPort != s.HttpPort || node.RaftPort != s.ReplicaPort {
-		return false
-	}
+// 	if node.GrpcPort != s.GrpcPort || node.HttpPort != s.HttpPort || node.RaftPort != s.ReplicaPort {
+// 		return false
+// 	}
 
-	if node.Az == "" && s.Az != defaultAz || node.Az != s.Az {
-		return false
-	}
+// 	if node.Az == "" && s.Az != defaultAz || node.Az != s.Az {
+// 		return false
+// 	}
 
-	if node.Rack == "" && s.Rack != defaultRack || node.Rack != s.Rack {
-		return false
-	}
+// 	if node.Rack == "" && s.Rack != defaultRack || node.Rack != s.Rack {
+// 		return false
+// 	}
 
-	return true
-}
+// 	return true
+// }
 
 func (s *nodeInfo) UpdateRoles(roles []proto.NodeRole) {
 	s.Roles = roles
@@ -71,8 +71,8 @@ func (s *nodeInfo) ToProtoNode() *proto.Node {
 	copy(roles, s.Roles)
 
 	return &proto.Node{
-		ID:       s.Id,
-		SetID:    s.SetId,
+		ID:       s.ID,
+		SetID:    s.SetID,
 		Addr:     s.Addr,
 		GrpcPort: s.GrpcPort,
 		HttpPort: s.HttpPort,
@@ -87,8 +87,8 @@ func (s *nodeInfo) ToDBNode(node *proto.Node) {
 	roles := make([]proto.NodeRole, len(node.Roles))
 	copy(roles, node.Roles)
 
-	s.Id = node.ID
-	s.SetId = node.SetID
+	s.ID = node.ID
+	s.SetID = node.SetID
 	s.Addr = node.Addr
 	s.GrpcPort = node.GrpcPort
 	s.HttpPort = node.HttpPort
@@ -101,7 +101,7 @@ func (s *nodeInfo) ToDBNode(node *proto.Node) {
 func (s *nodeInfo) Clone() *nodeInfo {
 	info := &nodeInfo{}
 
-	info.Id = s.Id
+	info.ID = s.ID
 	info.Addr = s.Addr
 	info.GrpcPort = s.GrpcPort
 	info.HttpPort = s.HttpPort
@@ -125,12 +125,13 @@ func (s *nodeInfo) Unmarshal(data []byte) error {
 }
 
 type AllocArgs struct {
+	SetID          proto.SetID    `json:"set_id"`
 	Count          int            `json:"count"`
 	AZ             string         `json:"az"`
 	Role           proto.NodeRole `json:"role"`
 	RackWare       bool           `json:"rack_ware"`
 	HostWare       bool           `json:"host_ware"`
-	ExcludeNodeIds []uint32       `json:"exclude_node_ids"`
+	ExcludeDiskIds []proto.DiskID `json:"exclude_node_ids"`
 }
 
 type HeartbeatArgs struct {

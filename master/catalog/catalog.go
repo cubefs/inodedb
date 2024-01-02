@@ -199,9 +199,11 @@ func (c *catalog) CreateSpace(
 	if desiredShards > MaxDesiredShardsNum {
 		return apierrors.ErrExceedMaxDesiredShardNum
 	}
+
 	if c.spaces.GetByName(spaceName) != nil {
-		return nil
+		return apierrors.ErrSpaceDuplicated
 	}
+
 	if _, ok := c.creatingSpaces.Load(spaceName); ok {
 		return apierrors.ErrSpaceCreating
 	}
@@ -227,7 +229,7 @@ func (c *catalog) CreateSpace(
 	}
 
 	if _, err = c.raftGroup.Propose(ctx, &raft.ProposalData{
-		Module: []byte(Module),
+		Module: Module,
 		Op:     RaftOpCreateSpace,
 		Data:   data,
 	}); err != nil {
@@ -256,7 +258,7 @@ func (c *catalog) DeleteSpace(ctx context.Context, sid uint64) error {
 		return errors.Info(err, "marshal delete space argument failed")
 	}
 	if _, err = c.raftGroup.Propose(ctx, &raft.ProposalData{
-		Module: []byte(Module),
+		Module: Module,
 		Op:     RaftOpDeleteSpace,
 		Data:   data,
 	}); err != nil {
@@ -306,11 +308,9 @@ func (c *catalog) GetSpace(ctx context.Context, sid uint64) (*proto.SpaceMeta, e
 }
 
 func (c *catalog) GetSpaceByName(ctx context.Context, name string) (*proto.SpaceMeta, error) {
-	span := trace.SpanFromContext(ctx)
 	space := c.spaces.GetByName(name)
 	if space == nil {
-		span.Errorf("space %s is not exist", name)
-		return nil, apierrors.ErrSpaceNotExist
+		return nil, errors.Info(apierrors.ErrSpaceDoesNotExist, fmt.Sprintf("space %s is not exist", name))
 	}
 	return c.GetSpace(ctx, space.id)
 }
@@ -333,7 +333,7 @@ func (c *catalog) Report(ctx context.Context, nodeId uint32, infos []proto.Shard
 
 	resp := raft.ProposalResponse{}
 	if resp, err = c.raftGroup.Propose(ctx, &raft.ProposalData{
-		Module: []byte(Module),
+		Module: Module,
 		Op:     RaftOpShardReport,
 		Data:   data,
 	}); err != nil {
@@ -586,7 +586,7 @@ func (c *catalog) createSpaceShards(ctx context.Context, space *space, startShar
 	}
 
 	if _, err := c.raftGroup.Propose(ctx, &raft.ProposalData{
-		Module: []byte(Module),
+		Module: Module,
 		Op:     op,
 		Data:   data,
 	}); err != nil {
@@ -642,7 +642,7 @@ func (c *catalog) updateSpaceRoute(ctx context.Context, space *space) error {
 	}
 
 	if _, err := c.raftGroup.Propose(ctx, &raft.ProposalData{
-		Module: []byte(Module),
+		Module: Module,
 		Op:     RaftOpUpdateSpaceRoute,
 		Data:   data,
 	}); err != nil {
@@ -696,7 +696,7 @@ func (c *catalog) expandSpaceUpdateRoute(ctx context.Context, space *space) erro
 	}
 
 	if _, err := c.raftGroup.Propose(ctx, &raft.ProposalData{
-		Module: []byte(Module),
+		Module: Module,
 		Op:     RaftOpExpandSpaceUpdateRoute,
 		Data:   data,
 	}); err != nil {

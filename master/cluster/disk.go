@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"encoding/json"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -8,32 +9,67 @@ import (
 	"github.com/cubefs/inodedb/proto"
 )
 
-type diskNode = proto.Disk
-
 const (
 	defaultFactor          = 10000
 	defaultMaxShardOneDisk = 20000
 )
 
 type diskInfo struct {
-	disk *diskNode
-	node *node
-
-	shardCount int32
-	lock       sync.RWMutex
+	DiskID     proto.DiskID     `json:"disk_id"`
+	NodeID     proto.NodeID     `json:"node_id"`
+	Path       string           `json:"path"`
+	Status     proto.DiskStatus `json:"status"`
+	DropStatus proto.DropStatus `json:"drop_status"`
+	Readonly   bool             `json:"readonly"`
+	CreateAt   uint64           `json:"create_at"`
+	LastUpdate uint64           `json:"last_update"`
+	Used       uint64           `json:"used"`
+	Total      uint64           `json:"total"`
+	ShardCnt   uint64           `json:"shardCnt"`
 }
 
-func (d *diskInfo) getWeight() int32 {
+func (d *diskInfo) encode() ([]byte, error) {
+	return json.Marshal(d)
+}
 
+func (d *diskInfo) decode(data []byte) error {
+	return json.Unmarshal(data, d)
+}
+
+func (d *diskInfo) toProtoDisk() *proto.Disk {
+	return &proto.Disk{
+		DiskID:     d.DiskID,
+		NodeID:     d.NodeID,
+		Path:       d.Path,
+		Status:     d.Status,
+		Readonly:   d.Readonly,
+		CreateAt:   d.CreateAt,
+		LastUpdate: d.LastUpdate,
+		DropStatus: d.DropStatus,
+		Info: proto.DiskReport{
+			ShardCnt: d.ShardCnt,
+			Used:     d.Used,
+			Total:    d.Total,
+		},
+	}
+}
+
+type disk struct {
+	info       *diskInfo
+	node       *nodeInfo
+	shardCount int32
+}
+
+func (d *disk) getWeight() int32 {
 	maxCnt := defaultMaxShardOneDisk
 	var w1, w2 int
 	if d.shardCount < defaultMaxShardOneDisk {
 		w1 = (maxCnt - int(d.shardCount)) * defaultFactor / maxCnt
 	}
 
-	ifo := d.disk.Info
-	if ifo.Used < ifo.Total {
-		w2 = int(ifo.Total-ifo.Used) * defaultFactor / int(ifo.Total)
+	info := d.info
+	if info.Used < info.Total {
+		w2 = int(info.Total-info.Used) * defaultFactor / int(info.Total)
 	}
 
 	if w1+w2 == 0 {
@@ -43,51 +79,34 @@ func (d *diskInfo) getWeight() int32 {
 	return int32(w1 + w2)
 }
 
-func (d *diskInfo) updateReport(report proto.DiskReport) {
-	d.lock.Lock()
-	defer d.lock.Unlock()
-
-	d.shardCount = int32(report.ShardCnt)
-	d.disk.Info = report
+func (d *disk) updateReport(report proto.DiskReport) {
+	d.info.ShardCnt = report.ShardCnt
+	d.info.Used = report.Used
+	d.info.Total = report.Total
 }
 
-func (d *diskInfo) GetDiskId() uint32 {
-	return d.disk.GetDiskID()
+func (d *disk) GetDiskID() proto.DiskID {
+	return d.info.DiskID
 }
 
-func (d *diskInfo) GetNodeId() uint32 {
-	return d.disk.GetNodeID()
-}
-
-func (d *diskInfo) GetRack() string {
-	return d.node.info.Rack
-}
-
-func (d *diskInfo) AddShardCnt(delta int) {
+func (d *disk) AddShardCnt(delta int) {
 	atomic.AddInt32(&d.shardCount, int32(delta))
 }
 
-func (d *diskInfo) CanAlloc() bool {
-	return d.disk.Status == proto.DiskStatus_DiskStatusNormal
+func (d *disk) CanAlloc() bool {
+	return d.info.Status == proto.DiskStatus_DiskStatusNormal
 }
 
-func (d *diskInfo) GetShardCount() int32 {
+func (d *disk) GetShardCount() int32 {
 	return d.shardCount
-}
-
-func (d *diskInfo) Clone() *diskInfo {
-	return &diskInfo{
-		disk: &(*d.disk),
-		node: d.node,
-	}
 }
 
 type diskMgr struct {
 	lock  sync.RWMutex
-	disks map[uint32]*diskInfo
+	disks map[proto.DiskID]*disk
 }
 
-func (dm *diskMgr) get(id uint32) *diskInfo {
+func (dm *diskMgr) get(id uint32) *disk {
 	dm.lock.RLock()
 	defer dm.lock.RUnlock()
 	disk, ok := dm.disks[id]
@@ -97,41 +116,57 @@ func (dm *diskMgr) get(id uint32) *diskInfo {
 	return disk
 }
 
-func (dm *diskMgr) addDisk(id uint32, ifo *diskInfo) {
+func (dm *diskMgr) addDisk(id uint32, d *disk) {
 	dm.lock.Lock()
 	defer dm.lock.Unlock()
-	dm.addDiskNoLock(id, ifo)
+	dm.addDiskNoLock(id, d)
 }
 
-func (dm *diskMgr) addDiskNoLock(id uint32, ifo *diskInfo) {
+func (dm *diskMgr) addDiskNoLock(id uint32, d *disk) {
 	if dm.disks == nil {
-		dm.disks = make(map[uint32]*diskInfo)
+		dm.disks = make(map[uint32]*disk)
 	}
-	dm.disks[id] = ifo
-	ifo.node.dm.disks[id] = ifo
+	dm.disks[id] = d
 }
 
-type Disks []*diskInfo
+type SortedDisks []*disk
 
-func (a Disks) Len() int      { return len(a) }
-func (a Disks) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a Disks) Less(i, j int) bool {
-	return a[i].disk.DiskID < a[j].disk.DiskID
+func (a SortedDisks) Len() int      { return len(a) }
+func (a SortedDisks) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a SortedDisks) Less(i, j int) bool {
+	return a[i].info.DiskID < a[j].info.DiskID
 }
 
-func (dm *diskMgr) getSortedDisks() []*diskInfo {
+func (dm *diskMgr) getSortedDisks() []*disk {
 	if dm == nil {
-		return make([]*diskInfo, 0)
+		return make([]*disk, 0)
 	}
 
 	dm.lock.RLock()
 	defer dm.lock.RUnlock()
-	disks := make([]*diskInfo, 0, len(dm.disks))
+	disks := make([]*disk, 0, len(dm.disks))
 	for _, disk := range dm.disks {
 		disks = append(disks, disk)
 	}
 
 	// sort by diskId
-	sort.Sort(Disks(disks))
+	sort.Sort(SortedDisks(disks))
 	return disks
+}
+
+func protoDiskToInternalDisk(d *proto.Disk) *diskInfo {
+	d1 := &diskInfo{
+		DiskID:     d.DiskID,
+		NodeID:     d.NodeID,
+		Path:       d.Path,
+		Status:     d.Status,
+		DropStatus: d.DropStatus,
+		Readonly:   d.Readonly,
+		CreateAt:   d.CreateAt,
+		LastUpdate: d.LastUpdate,
+		Used:       d.Info.Used,
+		Total:      d.Info.Total,
+		ShardCnt:   d.Info.ShardCnt,
+	}
+	return d1
 }

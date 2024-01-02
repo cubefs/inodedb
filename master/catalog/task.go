@@ -31,7 +31,6 @@ type (
 
 func newTaskMgr(taskPoolNum int) *taskMgr {
 	return &taskMgr{
-		tasks:          make(map[uint64]*task),
 		taskList:       list.New(),
 		taskElementMap: make(map[uint64]*list.Element),
 		taskPool:       taskpool.New(taskPoolNum, taskPoolNum),
@@ -42,7 +41,6 @@ func newTaskMgr(taskPoolNum int) *taskMgr {
 }
 
 type taskMgr struct {
-	tasks          map[uint64]*task
 	taskList       *list.List
 	taskElementMap map[uint64]*list.Element
 	taskPool       taskpool.TaskPool
@@ -62,12 +60,10 @@ func (t *taskMgr) Send(ctx context.Context, task *task) {
 		t.notify()
 	}()
 
-	span.Info(t.tasks)
-	if t.tasks[task.sid] != nil {
+	if t.taskElementMap[task.sid] != nil {
 		return
 	}
 
-	t.tasks[task.sid] = task
 	e := t.taskList.PushBack(task)
 	t.taskElementMap[task.sid] = e
 	span.Infof("send task[%+v] success", task)
@@ -117,8 +113,6 @@ func (t *taskMgr) run() {
 					}
 
 					t.taskList.Remove(e)
-					delete(t.taskElementMap, task.sid)
-
 					return true
 				}()
 
@@ -150,7 +144,7 @@ func (t *taskMgr) execute(task *task) bool {
 		}
 
 		t.lock.Lock()
-		delete(t.tasks, task.sid)
+		delete(t.taskElementMap, task.sid)
 		t.lock.Unlock()
 
 		span.Infof("execute task[%+v] success", task)
