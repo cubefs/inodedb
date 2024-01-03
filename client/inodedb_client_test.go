@@ -2,11 +2,13 @@ package client
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/log"
+	"github.com/cubefs/inodedb/errors"
 	"github.com/cubefs/inodedb/proto"
 )
 
@@ -49,18 +51,28 @@ func TestInodeDBClient(t *testing.T) {
 			DesiredShards: 1,
 			FixedFields:   fieldMetas,
 		})
-		if err != nil {
+		if err != nil && !strings.Contains(err.Error(), errors.ErrSpaceDuplicated.Error()) {
 			span.Fatalf("create space failed: %s", err)
 		}
-		span.Infof("space info: %+v", resp.Info)
-		spaceID = resp.Info.Sid
+
+		if err == nil {
+			span.Infof("space info: %+v", resp.Info)
+			spaceID = resp.Info.Sid
+		}
 	}()
 
 	time.Sleep(5 * time.Second)
-	spaceMeta, err := inodeDBClient.GetSpace(ctx, &proto.GetSpaceRequest{Sid: spaceID})
+	req := &proto.GetSpaceRequest{Sid: spaceID}
+	if spaceID == 0 {
+		req = &proto.GetSpaceRequest{Name: spaceName}
+	}
+	spaceMeta, err := inodeDBClient.GetSpace(ctx, req)
 	if err != nil {
 		span.Fatalf("get space meta failed: %s", err)
 	}
+	spaceID = spaceMeta.Info.Sid
+	span.Infof("get space success: %+v", spaceMeta.Info)
+
 	if len(spaceMeta.Info.Shards) == 0 {
 		span.Fatal("space shard is nil")
 	}
