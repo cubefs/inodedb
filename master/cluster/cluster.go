@@ -10,7 +10,9 @@ import (
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
 	"github.com/cubefs/cubefs/blobstore/util/log"
+	"github.com/cubefs/inodedb/common/kvstore"
 	apierrors "github.com/cubefs/inodedb/errors"
+	"github.com/cubefs/inodedb/master/base"
 	"github.com/cubefs/inodedb/master/cluster/transport"
 	idGenerator "github.com/cubefs/inodedb/master/idgenerator"
 	"github.com/cubefs/inodedb/master/store"
@@ -38,9 +40,11 @@ type Cluster interface {
 	GetDisk(ctx context.Context, id uint32) (proto.Disk, error)
 	SetBroken(ctx context.Context, diskId uint32) error
 	Load(ctx context.Context)
-	GetSM() raft.Applier
-	SetRaftGroup(raftGroup raft.Group)
 	Close()
+
+	GetCF() []kvstore.CF
+	GetModule() string
+	SetRaftGroup(raftGroup base.RaftGroup)
 }
 
 type Config struct {
@@ -54,7 +58,6 @@ type Config struct {
 
 	Store       *store.Store            `json:"-"`
 	IdGenerator idGenerator.IDGenerator `json:"-"`
-	RaftGroup   raft.Group              `json:"-"`
 }
 
 type allocatorFunc func(ctx context.Context) Allocator
@@ -90,7 +93,6 @@ func NewCluster(ctx context.Context, cfg *Config) Cluster {
 		clusterId:        cfg.ClusterId,
 		cfg:              cfg,
 		idGenerator:      cfg.IdGenerator,
-		raftGroup:        cfg.RaftGroup,
 		allNodes:         newConcurrentNodes(defaultSplitMapNum),
 		storage:          &storage{kvStore: cfg.Store.KVStore()},
 		done:             make(chan struct{}),
@@ -108,11 +110,15 @@ func NewCluster(ctx context.Context, cfg *Config) Cluster {
 	return c
 }
 
-func (c *cluster) GetSM() raft.Applier {
-	return c
+func (c *cluster) GetModule() string {
+	return string(Module)
 }
 
-func (c *cluster) SetRaftGroup(raftGroup raft.Group) {
+func (c *cluster) GetCF() []kvstore.CF {
+	return CFs
+}
+
+func (c *cluster) SetRaftGroup(raftGroup base.RaftGroup) {
 	c.raftGroup = raftGroup
 }
 
@@ -234,7 +240,7 @@ func (c *cluster) Register(ctx context.Context, args *proto.Node) (uint32, error
 		if err != nil {
 			return 0, err
 		}
-		_, err = c.raftGroup.Propose(ctx, &raft.ProposalData{
+		ret, err := c.raftGroup.Propose(ctx, &raft.ProposalData{
 			Module: Module,
 			Op:     RaftOpUpdateNode,
 			Data:   data,
@@ -242,6 +248,9 @@ func (c *cluster) Register(ctx context.Context, args *proto.Node) (uint32, error
 		if err != nil {
 			span.Errorf("update node info failed, err %v", err.Error())
 			return 0, err
+		}
+		if ret.Data != nil {
+			return 0, ret.Data.(error)
 		}
 		return info.ID, nil
 	}
@@ -261,15 +270,22 @@ func (c *cluster) Register(ctx context.Context, args *proto.Node) (uint32, error
 		return 0, err
 	}
 
-	_, err = c.raftGroup.Propose(ctx, &raft.ProposalData{
+	ret, err := c.raftGroup.Propose(ctx, &raft.ProposalData{
 		Module: Module,
 		Op:     RaftOpRegisterNode,
 		Data:   data,
 	})
+
 	if err != nil {
-		span.Errorf("register node failed, err %v", err)
+		span.Errorf("register node raft failed, err %v", err)
 		return 0, err
 	}
+
+	if ret.Data != nil {
+		span.Errorf("register node failed, err %v", ret.Data)
+		return 0, ret.Data.(error)
+	}
+
 	return nodeID, nil
 }
 
@@ -284,13 +300,16 @@ func (c *cluster) Unregister(ctx context.Context, nodeId uint32) error {
 	data := c.encodeNodeId(nodeId)
 	// todo 1. raft
 
-	_, err := c.raftGroup.Propose(ctx, &raft.ProposalData{
+	ret, err := c.raftGroup.Propose(ctx, &raft.ProposalData{
 		Module: Module,
 		Op:     RaftOpUnregisterNode,
 		Data:   data,
 	})
 	if err != nil {
 		return err
+	}
+	if ret.Data != nil {
+		return ret.Data.(error)
 	}
 	return nil
 }
@@ -329,13 +348,16 @@ func (c *cluster) HandleHeartbeat(ctx context.Context, args *HeartbeatArgs) erro
 	if err != nil {
 		return err
 	}
-	_, err = c.raftGroup.Propose(ctx, &raft.ProposalData{
+	ret, err := c.raftGroup.Propose(ctx, &raft.ProposalData{
 		Module: Module,
 		Op:     RaftOpHeartbeat,
 		Data:   data,
 	})
 	if err != nil {
 		return err
+	}
+	if ret.Data != nil {
+		return ret.Data.(error)
 	}
 	return nil
 }
@@ -352,13 +374,16 @@ func (c *cluster) AddDisk(ctx context.Context, args *proto.Disk) error {
 	if err != nil {
 		return err
 	}
-	_, err = c.raftGroup.Propose(ctx, &raft.ProposalData{
+	ret, err := c.raftGroup.Propose(ctx, &raft.ProposalData{
 		Module: Module,
 		Op:     RaftOpAddDisk,
 		Data:   data,
 	})
 	if err != nil {
 		return err
+	}
+	if ret.Data != nil {
+		return ret.Data.(error)
 	}
 	return nil
 }

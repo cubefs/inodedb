@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/cubefs/inodedb/common/kvstore"
+	"github.com/cubefs/inodedb/master/base"
 	"github.com/cubefs/inodedb/master/store"
 	"github.com/gogo/protobuf/types"
 
@@ -42,10 +44,12 @@ type Catalog interface {
 	GetSpaceByName(ctx context.Context, name string) (*proto.SpaceMeta, error)
 	Report(ctx context.Context, nodeId uint32, infos []proto.ShardReport) ([]proto.ShardTask, error)
 	GetCatalogChanges(ctx context.Context, routerVersion uint64, nodeId uint32) (uint64, []proto.CatalogChangeItem, error)
-	GetSM() raft.Applier
-	SetRaftGroup(g raft.Group)
 	StartTask(ctx context.Context) error
 	Close()
+
+	SetRaftGroup(g base.RaftGroup)
+	GetCF() []kvstore.CF
+	GetModule() string
 }
 
 type Config struct {
@@ -65,7 +69,7 @@ type (
 		creatingSpaces sync.Map
 
 		idGenerator idgenerator.IDGenerator
-		raftGroup   raft.Group
+		raftGroup   base.RaftGroup
 		storage     *storage
 		taskMgr     *taskMgr
 		routeMgr    *routeMgr
@@ -110,7 +114,6 @@ func NewCatalog(ctx context.Context, cfg *Config) Catalog {
 		idGenerator: cfg.IdGenerator,
 		storage:     newStorage(cfg.Store),
 		cluster:     cfg.Cluster,
-		raftGroup:   cfg.RaftGroup,
 		taskMgr:     newTaskMgr(defaultTaskPoolNum),
 		done:        make(chan struct{}),
 		cfg:         cfg,
@@ -127,8 +130,12 @@ func NewCatalog(ctx context.Context, cfg *Config) Catalog {
 	return c
 }
 
-func (c *catalog) GetSM() raft.Applier {
-	return c
+func (c *catalog) GetModule() string {
+	return string(Module)
+}
+
+func (c *catalog) GetCF() []kvstore.CF {
+	return CFs
 }
 
 func (c *catalog) Load(ctx context.Context) error {
@@ -228,12 +235,16 @@ func (c *catalog) CreateSpace(
 		return errors.Info(err, "marshal create space argument failed")
 	}
 
-	if _, err = c.raftGroup.Propose(ctx, &raft.ProposalData{
+	ret, err := c.raftGroup.Propose(ctx, &raft.ProposalData{
 		Module: Module,
 		Op:     RaftOpCreateSpace,
 		Data:   data,
-	}); err != nil {
+	})
+	if err != nil {
 		return err
+	}
+	if ret.Data != nil {
+		return ret.Data.(error)
 	}
 
 	// start create space progress, like add shard etc.
@@ -257,12 +268,16 @@ func (c *catalog) DeleteSpace(ctx context.Context, sid uint64) error {
 	if err != nil {
 		return errors.Info(err, "marshal delete space argument failed")
 	}
-	if _, err = c.raftGroup.Propose(ctx, &raft.ProposalData{
+	ret, err := c.raftGroup.Propose(ctx, &raft.ProposalData{
 		Module: Module,
 		Op:     RaftOpDeleteSpace,
 		Data:   data,
-	}); err != nil {
+	})
+	if err != nil {
 		return err
+	}
+	if ret.Data != nil {
+		return ret.Data.(error)
 	}
 
 	return nil
@@ -453,7 +468,7 @@ func (c *catalog) GetCatalogChanges(ctx context.Context, fromRouterVersion uint6
 	return
 }
 
-func (c *catalog) SetRaftGroup(g raft.Group) {
+func (c *catalog) SetRaftGroup(g base.RaftGroup) {
 	c.raftGroup = g
 }
 

@@ -1,4 +1,4 @@
-package master
+package base
 
 import (
 	"context"
@@ -11,25 +11,16 @@ import (
 
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/log"
+	"github.com/cubefs/cubefs/blobstore/util/taskpool"
 	"github.com/cubefs/inodedb/common/kvstore"
-	"github.com/cubefs/inodedb/master/catalog"
-	"github.com/cubefs/inodedb/master/cluster"
-	"github.com/cubefs/inodedb/master/idgenerator"
 	"github.com/cubefs/inodedb/master/store"
 	"github.com/cubefs/inodedb/raft"
 )
 
-const (
-	defaultTruncateNumInterval = uint64(50000)
-	defaultTruncTimeInterval   = 5
-	localCF                    = "local_cf"
-)
-
-var (
-	applyIndexKey = []byte("raft_apply_index")
-	raftMemberKey = []byte("#raft_members")
-)
-
+var applyTaskPool = taskpool.New(3, 3)
+type RaftMembers struct {
+	Mbs []raft.Member `json:"members"`
+}
 type RaftNodeCfg struct {
 	Members              []raft.Member `json:"members"`
 	RaftConfig           raft.Config   `json:"raft_config"`
@@ -37,12 +28,8 @@ type RaftNodeCfg struct {
 	TruncateTimeInterval uint64        `json:"truncate_time_interval"`
 }
 
-type RaftMembers struct {
-	Mbs []raft.Member `json:"members"`
-}
-
 type raftNode struct {
-	sms          map[string]raft.Applier
+	sms          map[string]Applier
 	store        *store.Store
 	appliedIndex uint64
 	lastTruncIdx uint64
@@ -51,7 +38,7 @@ type raftNode struct {
 	cfg          *RaftNodeCfg
 }
 
-func newRaftNode(ctx context.Context, cfg *RaftNodeCfg, kv *store.Store) *raftNode {
+func NewRaftNode(ctx context.Context, cfg *RaftNodeCfg, kv *store.Store) *raftNode {
 	span := trace.SpanFromContextSafe(ctx)
 
 	if cfg.RaftConfig.NodeID == 0 {
@@ -74,7 +61,7 @@ func newRaftNode(ctx context.Context, cfg *RaftNodeCfg, kv *store.Store) *raftNo
 	cfg.RaftConfig.Logger = log.DefaultLogger
 
 	r := &raftNode{
-		sms:   make(map[string]raft.Applier),
+		sms:   make(map[string]Applier),
 		store: kv,
 		cfg:   cfg,
 	}
@@ -89,7 +76,7 @@ func newRaftNode(ctx context.Context, cfg *RaftNodeCfg, kv *store.Store) *raftNo
 	return r
 }
 
-func (r *raftNode) createRaftGroup(ctx context.Context, cfg *raft.GroupConfig) raft.Group {
+func (r *raftNode) CreateRaftGroup(ctx context.Context, cfg *raft.GroupConfig) RaftGroup {
 	span := trace.SpanFromContextSafe(ctx)
 
 	manager, err := raft.NewManager(&r.cfg.RaftConfig)
@@ -104,10 +91,13 @@ func (r *raftNode) createRaftGroup(ctx context.Context, cfg *raft.GroupConfig) r
 
 	r.raftGroup = group
 	span.Infof("create raft group success")
-	return group
+	return &raftServer{
+		Group: group,
+		id:    r.cfg.RaftConfig.NodeID,
+	}
 }
 
-func (r *raftNode) start(ctx context.Context) {
+func (r *raftNode) Start(ctx context.Context) {
 	if len(r.nodes.nodes) == 1 {
 		r.raftGroup.Campaign(ctx)
 	}
@@ -131,11 +121,11 @@ func (r *raftNode) initNodeManager(ctx context.Context) {
 	}
 
 	r.nodes = &nodeManager{
-		nodes: map[uint64]string{},
+		nodes: map[uint64]*raft.Member{},
 	}
 
 	for _, m := range members {
-		r.nodes.addNode(m.NodeID, m.Host)
+		r.nodes.addNode(m.NodeID, m)
 	}
 
 	if needWrite {
@@ -212,7 +202,7 @@ func (r *raftNode) truncJob() {
 }
 
 func (r *raftNode) loadApplyIdx(ctx context.Context) error {
-	val, err := r.store.KVStore().GetRaw(ctx, localCF, applyIndexKey, nil)
+	val, err := r.store.KVStore().GetRaw(ctx, LocalCF, applyIndexKey, nil)
 	if err == kvstore.ErrNotFound {
 		return nil
 	}
@@ -236,14 +226,14 @@ func (r *raftNode) loadApplyIdx(ctx context.Context) error {
 func (r *raftNode) persistApplyIdx(ctx context.Context) error {
 	val := make([]byte, 8)
 	binary.BigEndian.PutUint64(val, r.appliedIndex)
-	if err := r.store.KVStore().SetRaw(ctx, localCF, applyIndexKey, val, nil); err != nil {
+	if err := r.store.KVStore().SetRaw(ctx, LocalCF, applyIndexKey, val, nil); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (r *raftNode) loadRaftMembers(ctx context.Context) ([]raft.Member, error) {
-	val, err := r.store.KVStore().GetRaw(ctx, localCF, raftMemberKey, nil)
+	val, err := r.store.KVStore().GetRaw(ctx, LocalCF, raftMemberKey, nil)
 
 	if err == kvstore.ErrNotFound {
 		return []raft.Member{}, nil
@@ -273,52 +263,89 @@ func (r *raftNode) persistMembers(ctx context.Context, members []raft.Member) (e
 	if err != nil {
 		return err
 	}
-	if err = r.store.KVStore().SetRaw(ctx, localCF, raftMemberKey, val, nil); err != nil {
+	if err = r.store.KVStore().SetRaw(ctx, LocalCF, raftMemberKey, val, nil); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (r *raftNode) addApplier(module string, a raft.Applier) {
-	r.sms[module] = a
+func (r *raftNode) RegisterApplier(a interface{}) {
+	applier := a.(Applier)
+	r.sms[applier.GetModule()] = applier
 }
 
-func (r *raftNode) getApplyID() uint64 {
+func (r *raftNode) GetApplyID() uint64 {
 	return r.appliedIndex
 }
 
-func (r *raftNode) getMembers() []raft.Member {
+func (r *raftNode) GetMembers() []raft.Member {
 	return r.nodes.getMembers()
 }
 
-func (r *raftNode) Apply(cxt context.Context, pd []raft.ProposalData, index uint64) (rets []interface{}, err error) {
+func (r *raftNode) Apply(ctx context.Context, pds []raft.ProposalData, index uint64) (rets []interface{}, err error) {
 	// span := trace.SpanFromContext(cxt)
-	rets = make([]interface{}, len(pd))
+	rets = make([]interface{}, 0, len(pds))
+	span, _ := trace.StartSpanFromContext(ctx, "")
+	moduleData := map[string][]raft.ProposalData{}
+	errs := map[string]error{}
+	lk := sync.Mutex{}
 
-	for i := range pd {
-		pdi := pd[i]
-		mod := pdi.Module
-		// span, _ := trace.StartSpanFromContextWithTraceID(cxt, "apply", string(pdi.Context))
-		// span.Debugf("receive apply req, module %s, op %d, data %s", string(pdi.Module), pdi.Op, string(pdi.Data))
-		sm := r.sms[string(mod)]
-		if sm == nil {
-			panic(fmt.Errorf("target mode not exist, mod %s, op %d", mod, pdi.Op))
+	for _, p := range pds {
+		mod := string(p.Module)
+		datas := moduleData[mod]
+		if datas == nil {
+			datas = []raft.ProposalData{p}
+			moduleData[mod] = datas
+		} else {
+			moduleData[mod] = append(datas, p)
 		}
-
-		newRet, err := sm.Apply(cxt, pdi, 0)
-		if err != nil {
-			return nil, err
-		}
-
-		rets[i] = newRet
-		// span.Debugf("finish raft op %d, mod %s", pdi.Op, string(pdi.Module))
 	}
+
+	start := time.Now()
+	wg := sync.WaitGroup{}
+	wg.Add(len(moduleData))
+
+	for m := range moduleData {
+		mod := m
+		applyTaskPool.Run(func() {
+			defer wg.Done()
+
+			sm := r.sms[mod]
+			if sm == nil {
+				panic(fmt.Errorf("target mode not exist, mod %s", m))
+			}
+			datas := moduleData[mod]
+			lRets, err1 := sm.Apply(ctx, datas)
+			if err1 != nil {
+				span.Errorf("apply module %s error: %s", mod, err1.Error())
+				errs[mod] = err1
+				return
+			}
+
+			span.Debugf("apply module %s success, data cnt %d, ret cnt %d", mod, len(datas), len(lRets))
+
+			lk.Lock()
+			defer lk.Unlock()
+			rets = append(rets, lRets...)
+		})
+	}
+
+	wg.Wait()
+
+	for _, err := range errs {
+		return nil, err
+	}
+
+	span.Debugf("apply success, total data: %d, rets (%d), module cnt (%d) apply cost: %dus, applyIdx %d",
+		len(pds), len(rets), len(moduleData), time.Since(start).Microseconds(), index)
 
 	r.appliedIndex = index
 	return rets, nil
 }
 
 func (r *raftNode) LeaderChange(peerID uint64) error {
+	span, _ := trace.StartSpanFromContext(context.Background(), "")
+	span.Infof("leader change signal, local %v, leader %d", r.cfg.RaftConfig.NodeID, peerID)
 	for _, sm := range r.sms {
 		err := sm.LeaderChange(peerID)
 		if err != nil {
@@ -330,12 +357,13 @@ func (r *raftNode) LeaderChange(peerID uint64) error {
 
 func (r *raftNode) ApplyMemberChange(cc *raft.Member, index uint64) error {
 	span, ctx := trace.StartSpanFromContext(context.Background(), "")
+	span.Infof("recive member change: %v, local members: %s", cc, r.nodes.String())
 
 	switch cc.Type {
 	case raft.MemberChangeType_AddMember:
-		oldAddr := r.nodes.getNode(cc.NodeID)
-		if oldAddr == "" {
-			r.nodes.addNode(cc.NodeID, cc.Host)
+		m := r.nodes.getNode(cc.NodeID)
+		if m == nil {
+			r.nodes.addNode(cc.NodeID, *cc)
 		}
 	case raft.MemberChangeType_RemoveMember:
 		r.nodes.removeNode(cc.NodeID)
@@ -347,7 +375,7 @@ func (r *raftNode) ApplyMemberChange(cc *raft.Member, index uint64) error {
 		return err
 	}
 
-	return nil
+	return r.persistApplyIdx(ctx)
 }
 
 func (r *raftNode) Snapshot() raft.Snapshot {
@@ -359,7 +387,12 @@ func (r *raftNode) Snapshot() raft.Snapshot {
 
 	// create cf list reader
 	lrs := make([]kvstore.ListReader, 0)
-	for _, cf := range []kvstore.CF{catalog.CF, idgenerator.CF, cluster.CF} {
+	var cfs []kvstore.CF
+	for _, s := range r.sms {
+		cfs = append(cfs, s.GetCF()...)
+	}
+
+	for _, cf := range cfs {
 		lrs = append(lrs, kvStore.List(context.Background(), cf, nil, nil, readOpt))
 	}
 
@@ -407,191 +440,3 @@ func (r *raftNode) ApplySnapshot(snap raft.Snapshot) error {
 
 	return nil
 }
-
-type nodeManager struct {
-	nodes map[uint64]string
-	nlk   sync.RWMutex
-}
-
-// todo presist after update
-func (n *nodeManager) addNode(nodeId uint64, addr string) {
-	n.nlk.Lock()
-	defer n.nlk.Unlock()
-
-	n.nodes[nodeId] = addr
-}
-
-func (n *nodeManager) removeNode(nodeId uint64) {
-	n.nlk.Lock()
-	defer n.nlk.Unlock()
-
-	delete(n.nodes, nodeId)
-}
-
-func (n *nodeManager) getMembers() []raft.Member {
-	n.nlk.RLock()
-	defer n.nlk.RUnlock()
-
-	mems := make([]raft.Member, 0)
-	for id, m := range n.nodes {
-		mems = append(mems, raft.Member{
-			NodeID: id,
-			Host:   m,
-		})
-	}
-	return mems
-}
-
-func (n *nodeManager) getNode(nodeId uint64) string {
-	n.nlk.RLock()
-	defer n.nlk.RUnlock()
-
-	return n.nodes[nodeId]
-}
-
-func (n *nodeManager) Resolve(ctx context.Context, nodeID uint64) (raft.Addr, error) {
-	addr := n.getNode(nodeID)
-	if addr == "" {
-		return nil, fmt.Errorf("not found target addr, node Id %d", nodeID)
-	}
-
-	return nodeAddr{addr: addr}, nil
-}
-
-type nodeAddr struct {
-	addr string
-}
-
-func (n nodeAddr) String() string {
-	return n.addr
-}
-
-const (
-	raftWalCF = "raft-wal"
-)
-
-type RaftSnapshotTransmitConfig struct {
-	BatchInflightNum  int `json:"batch_inflight_num"`
-	BatchInflightSize int `json:"batch_inflight_size"`
-}
-
-type raftSnapshot struct {
-	*RaftSnapshotTransmitConfig
-
-	appliedIndex uint64
-	iterIndex    int
-	st           kvstore.Snapshot
-	ro           kvstore.ReadOption
-	lrs          []kvstore.ListReader
-	kvStore      kvstore.Store
-}
-
-// ReadBatch read batch data for snapshot transmit
-// An io.EOF error should be return when the read end of snapshot
-// TODO: limit the snapshot transmitting speed
-func (r *raftSnapshot) ReadBatch() (raft.Batch, error) {
-	var (
-		size  = 0
-		batch raft.Batch
-	)
-
-	for i := 0; i < r.BatchInflightNum; i++ {
-		if size >= r.BatchInflightSize {
-			return batch, nil
-		}
-
-		kg, vg, err := r.lrs[r.iterIndex].ReadNext()
-		if err != nil {
-			return nil, err
-		}
-		if kg == nil || vg == nil {
-			if r.iterIndex == len(r.lrs)-1 {
-				return batch, io.EOF
-			}
-			r.iterIndex++
-			return batch, nil
-		}
-
-		if batch == nil {
-			batch = raftBatch{batch: r.kvStore.NewWriteBatch()}
-		}
-		batch.Put(kg.Key(), vg.Value())
-		size += vg.Size()
-	}
-
-	return batch, nil
-}
-
-func (r *raftSnapshot) Index() uint64 {
-	return r.appliedIndex
-}
-
-func (r *raftSnapshot) Close() error {
-	for i := range r.lrs {
-		r.lrs[i].Close()
-	}
-	r.st.Close()
-	r.ro.Close()
-	return nil
-}
-
-type raftStorage struct {
-	kvStore kvstore.Store
-}
-
-func (w *raftStorage) Get(key []byte) (raft.ValGetter, error) {
-	return w.kvStore.Get(context.TODO(), raftWalCF, key, nil)
-}
-
-func (w *raftStorage) Iter(prefix []byte) raft.Iterator {
-	return raftIterator{lr: w.kvStore.List(context.TODO(), raftWalCF, prefix, nil, nil)}
-}
-
-func (w *raftStorage) NewBatch() raft.Batch {
-	return raftBatch{cf: raftWalCF, batch: w.kvStore.NewWriteBatch()}
-}
-
-func (w *raftStorage) Write(b raft.Batch) error {
-	return w.kvStore.Write(context.TODO(), b.(raftBatch).batch, nil)
-}
-
-type raftIterator struct {
-	lr kvstore.ListReader
-}
-
-func (i raftIterator) SeekTo(key []byte) {
-	i.lr.SeekTo(key)
-}
-
-func (i raftIterator) SeekForPrev(prev []byte) error {
-	return i.lr.SeekForPrev(prev)
-}
-
-func (i raftIterator) ReadNext() (key raft.KeyGetter, val raft.ValGetter, err error) {
-	return i.lr.ReadNext()
-}
-
-func (i raftIterator) ReadPrev() (key raft.KeyGetter, val raft.ValGetter, err error) {
-	return i.lr.ReadPrev()
-}
-
-func (i raftIterator) Close() {
-	i.lr.Close()
-}
-
-type raftBatch struct {
-	cf    kvstore.CF
-	batch kvstore.WriteBatch
-}
-
-func (t raftBatch) Put(key, value []byte) { t.batch.Put(t.cf, key, value) }
-
-func (t raftBatch) Delete(key []byte) { t.batch.Delete(t.cf, key) }
-
-func (t raftBatch) DeleteRange(start []byte, end []byte) { t.batch.DeleteRange(t.cf, start, end) }
-
-func (t raftBatch) Data() []byte { return t.batch.Data() }
-
-func (t raftBatch) From(data []byte) { t.batch.From(data) }
-
-func (t raftBatch) Close() { t.batch.Close() }

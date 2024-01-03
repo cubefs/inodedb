@@ -11,6 +11,10 @@ import (
 
 const CF = "catalog"
 
+var CFs = []kvstore.CF{
+	CF,
+}
+
 var (
 	catalogKeyPrefix = []byte("c")
 	routeKeyPrefix   = []byte("r")

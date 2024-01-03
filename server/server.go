@@ -9,6 +9,7 @@ import (
 	"github.com/cubefs/inodedb/client"
 	"github.com/cubefs/inodedb/common/kvstore"
 	"github.com/cubefs/inodedb/master"
+	"github.com/cubefs/inodedb/master/base"
 	"github.com/cubefs/inodedb/master/catalog"
 	"github.com/cubefs/inodedb/master/cluster"
 	masterStore "github.com/cubefs/inodedb/master/store"
@@ -40,9 +41,9 @@ type Config struct {
 	ShardBaseConfig sc.ShardBaseConfig `json:"shard_base_config"`
 
 	// master config
-	CatalogConfig catalog.Config     `json:"catalog_config"`
-	ClusterConfig cluster.Config     `json:"cluster_config"`
-	MasterRaftCfg master.RaftNodeCfg `json:"master_raft_cfg"`
+	CatalogConfig catalog.Config   `json:"catalog_config"`
+	ClusterConfig cluster.Config   `json:"cluster_config"`
+	MasterRaftCfg base.RaftNodeCfg `json:"master_raft_cfg"`
 }
 
 type StoreConfig struct {

@@ -7,7 +7,9 @@ import (
 	"github.com/cubefs/inodedb/common/kvstore"
 )
 
-var CF = kvstore.CF("id")
+const CF = "id"
+
+var CFs = []kvstore.CF{CF}
 
 type storage struct {
 	kvStore kvstore.Store

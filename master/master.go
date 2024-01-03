@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/cubefs/cubefs/blobstore/common/trace"
+	"github.com/cubefs/inodedb/master/base"
 	"github.com/cubefs/inodedb/master/catalog"
 	"github.com/cubefs/inodedb/master/cluster"
 	"github.com/cubefs/inodedb/master/idgenerator"
@@ -12,10 +13,10 @@ import (
 )
 
 type Config struct {
-	StoreConfig   store.Config   `json:"store_config"`
-	CatalogConfig catalog.Config `json:"catalog_config"`
-	ClusterConfig cluster.Config `json:"cluster_config"`
-	RaftConfig    RaftNodeCfg    `json:"raft_config"`
+	StoreConfig   store.Config     `json:"store_config"`
+	CatalogConfig catalog.Config   `json:"catalog_config"`
+	ClusterConfig cluster.Config   `json:"cluster_config"`
+	RaftConfig    base.RaftNodeCfg `json:"raft_config"`
 }
 
 type Master struct {
@@ -46,28 +47,28 @@ func NewMaster(cfg *Config) *Master {
 	cfg.CatalogConfig.Cluster = newCluster
 	newCatalog := catalog.NewCatalog(ctx, &cfg.CatalogConfig)
 
-	raftNode := newRaftNode(ctx, &cfg.RaftConfig, store)
+	raftNode := base.NewRaftNode(ctx, &cfg.RaftConfig, store)
 	if err != nil {
 		span.Fatalf("new raft node failed, err %s", err.Error())
 	}
 
-	raftNode.addApplier(string(idgenerator.Module), idGenerator.GetSM())
-	raftNode.addApplier(string(catalog.Module), newCatalog.GetSM())
-	raftNode.addApplier(string(cluster.Module), newCluster.GetSM())
+	raftNode.RegisterApplier(idGenerator)
+	raftNode.RegisterApplier(newCatalog)
+	raftNode.RegisterApplier(newCluster)
 
 	groupCfg := &raft.GroupConfig{
 		ID:      1,
 		SM:      raftNode,
-		Applied: raftNode.getApplyID(),
-		Members: raftNode.getMembers(),
+		Applied: raftNode.GetApplyID(),
+		Members: raftNode.GetMembers(),
 	}
-	raftGroup := raftNode.createRaftGroup(ctx, groupCfg)
+	raftGroup := raftNode.CreateRaftGroup(ctx, groupCfg)
 
 	idGenerator.SetRaftGroup(raftGroup)
 	newCluster.SetRaftGroup(raftGroup)
 	newCatalog.SetRaftGroup(raftGroup)
 
-	raftNode.start(ctx)
+	raftNode.Start(ctx)
 	newCatalog.StartTask(ctx)
 
 	return &Master{
@@ -78,7 +79,7 @@ func NewMaster(cfg *Config) *Master {
 
 func initConfig(cfg *Config) {
 	cfg.StoreConfig.RaftOption.CreateIfMissing = true
-	cfg.StoreConfig.RaftOption.ColumnFamily = append(cfg.StoreConfig.RaftOption.ColumnFamily, raftWalCF)
+	cfg.StoreConfig.RaftOption.ColumnFamily = append(cfg.StoreConfig.RaftOption.ColumnFamily, base.RaftWalCF)
 	cfg.StoreConfig.KVOption.CreateIfMissing = true
-	cfg.StoreConfig.KVOption.ColumnFamily = append(cfg.StoreConfig.KVOption.ColumnFamily, catalog.CF, cluster.CF, idgenerator.CF, localCF)
+	cfg.StoreConfig.KVOption.ColumnFamily = append(cfg.StoreConfig.KVOption.ColumnFamily, catalog.CF, cluster.CF, idgenerator.CF, base.LocalCF)
 }

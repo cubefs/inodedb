@@ -42,16 +42,27 @@ func (s *idGenerator) LoadData(ctx context.Context) error {
 	return nil
 }
 
-func (s *idGenerator) Apply(cxt context.Context, pd raft.ProposalData, index uint64) (rets interface{}, err error) {
-	data := pd.Data
-	span, ctx := trace.StartSpanFromContextWithTraceID(cxt, "", string(pd.Context))
-	span.Infof("recive raft operation, op %d", pd.Op)
-	switch pd.Op {
-	case RaftOpAlloc:
-		return s.applyCommit(ctx, data)
-	default:
-		return rets, errors.New(fmt.Sprintf("unsupported operation type: %d", pd.Op))
+func (s *idGenerator) Apply(ctx context.Context, pds []raft.ProposalData) (rets []interface{}, err error) {
+	rets = make([]interface{}, 0, len(pds))
+	for _, pd := range pds {
+		data := pd.Data
+		var ret interface{}
+		span, ctx := trace.StartSpanFromContextWithTraceID(ctx, "", string(pd.Context))
+		span.Infof("recive raft operation, op %d", pd.Op)
+		switch pd.Op {
+		case RaftOpAlloc:
+			ret, err = s.applyCommit(ctx, data)
+		default:
+			span.Errorf("unknown op, mod %s, op %d", pd.Module, pd.Op)
+			return rets, errors.New(fmt.Sprintf("unsupported operation type: %d", pd.Op))
+		}
+		if err != nil {
+			return nil, err
+		}
+		rets = append(rets, ret)
 	}
+
+	return
 }
 
 func (s *idGenerator) applyCommit(ctx context.Context, data []byte) (uint64, error) {

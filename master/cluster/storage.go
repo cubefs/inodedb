@@ -13,6 +13,7 @@ var (
 	nodeKeyPrefix = []byte("n")
 	diskKeyPrefix = []byte("d")
 	keyInfix      = []byte("/")
+	CFs           = []kvstore.CF{CF}
 )
 
 type storage struct {

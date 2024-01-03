@@ -21,6 +21,8 @@ import (
 
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
+	"github.com/cubefs/inodedb/common/kvstore"
+	"github.com/cubefs/inodedb/master/base"
 	"github.com/cubefs/inodedb/master/store"
 	"github.com/cubefs/inodedb/raft"
 )
@@ -35,20 +37,21 @@ var (
 
 type IDGenerator interface {
 	Alloc(ctx context.Context, name string, count int) (base, new uint64, err error)
-	GetSM() raft.Applier
-	SetRaftGroup(raftGroup raft.Group)
+
+	SetRaftGroup(raftGroup base.RaftGroup)
+	GetCF() []kvstore.CF
+	GetModule() string
 }
 
 type idGenerator struct {
 	scopeItems map[string]uint64
-	raftGroup  raft.Group
+	raftGroup  base.RaftGroup
 
 	storage *storage
 	lock    sync.RWMutex
-	raft.StateMachine
 }
 
-func NewIDGenerator(store *store.Store, raftGroup raft.Group) (IDGenerator, error) {
+func NewIDGenerator(store *store.Store, raftGroup base.RaftGroup) (IDGenerator, error) {
 	_, ctx := trace.StartSpanFromContext(context.Background(), "NewIDGenerator")
 
 	storage := &storage{kvStore: store.KVStore()}
@@ -60,11 +63,15 @@ func NewIDGenerator(store *store.Store, raftGroup raft.Group) (IDGenerator, erro
 	return s, nil
 }
 
-func (s *idGenerator) GetSM() raft.Applier {
-	return s
+func (s *idGenerator) GetCF() []kvstore.CF {
+	return CFs
 }
 
-func (s *idGenerator) SetRaftGroup(raftGroup raft.Group) {
+func (s *idGenerator) GetModule() string {
+	return string(Module)
+}
+
+func (s *idGenerator) SetRaftGroup(raftGroup base.RaftGroup) {
 	s.raftGroup = raftGroup
 }
 
@@ -104,3 +111,4 @@ type allocArgs struct {
 	Name  string `json:"name"`
 	Count int    `json:"count"`
 }
+

@@ -7,6 +7,7 @@ import (
 
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
+	apierrors "github.com/cubefs/inodedb/errors"
 	"github.com/cubefs/inodedb/proto"
 	"github.com/cubefs/inodedb/raft"
 )
@@ -23,36 +24,38 @@ const (
 	RaftOpDeleteSpace
 )
 
-func (c *catalog) Apply(cxt context.Context, pd raft.ProposalData, index uint64) (ret interface{}, err error) {
-	_, ctx := trace.StartSpanFromContextWithTraceID(context.Background(), "", string(pd.Context))
-	data := pd.Data
-	switch pd.Op {
-	case RaftOpCreateSpace:
-		return nil, c.applyCreateSpace(ctx, data)
-	case RaftOpDeleteSpace:
-		return nil, c.applyDeleteSpace(ctx, data)
-	case RaftOpShardReport:
-		return c.applyShardReport(ctx, data)
-	case RaftOpUpdateSpaceRoute:
-		return nil, c.applyUpdateSpaceRoute(ctx, data)
-	case RaftOpExpandSpaceUpdateRoute:
-		return nil, c.applyExpandSpaceUpdateRoute(ctx, data)
-	case RaftOpInitSpaceShards:
-		return nil, c.applyInitSpaceShards(ctx, data)
-	case RaftOpExpandSpaceCreateShards:
-		return nil, c.applyExpandSpaceShards(ctx, data)
-	default:
-		panic(fmt.Sprintf("unsupported operation type: %d", pd.Op))
+func (c *catalog) Apply(ctx context.Context, pds []raft.ProposalData) (rets []interface{}, err error) {
+	rets = make([]interface{}, 0, len(pds))
+	for _, pd := range pds {
+		_, ctx := trace.StartSpanFromContextWithTraceID(context.Background(), "", string(pd.Context))
+		data := pd.Data
+		var ret interface{}
+		switch pd.Op {
+		case RaftOpCreateSpace:
+			ret, err = c.applyCreateSpace(ctx, data)
+		case RaftOpDeleteSpace:
+			ret, err = c.applyDeleteSpace(ctx, data)
+		case RaftOpShardReport:
+			ret, err = c.applyShardReport(ctx, data)
+		case RaftOpUpdateSpaceRoute:
+			ret, err = nil, c.applyUpdateSpaceRoute(ctx, data)
+		case RaftOpExpandSpaceUpdateRoute:
+			ret, err = nil, c.applyExpandSpaceUpdateRoute(ctx, data)
+		case RaftOpInitSpaceShards:
+			ret, err = nil, c.applyInitSpaceShards(ctx, data)
+		case RaftOpExpandSpaceCreateShards:
+			ret, err = nil, c.applyExpandSpaceShards(ctx, data)
+		default:
+			panic(fmt.Sprintf("unsupported operation type: %d", pd.Op))
+		}
+		rets = append(rets, ret)
 	}
+	return
 }
 
 func (c *catalog) LeaderChange(leader uint64) error {
-	stat, err := c.raftGroup.Stat()
-	if err != nil {
-		panic(fmt.Errorf("raft group stat failed, err %s", err.Error()))
-	}
-
-	if leader != stat.ID {
+	localID := c.raftGroup.GetId()
+	if leader != localID {
 		c.taskMgr.Close()
 		return nil
 	}
@@ -64,12 +67,12 @@ func (c *catalog) LeaderChange(leader uint64) error {
 	return nil
 }
 
-func (c *catalog) applyCreateSpace(ctx context.Context, data []byte) error {
+func (c *catalog) applyCreateSpace(ctx context.Context, data []byte) (ret, err error) {
 	span := trace.SpanFromContext(ctx)
 
 	spaceInfo := &spaceInfo{}
 	if err := spaceInfo.Unmarshal(data); err != nil {
-		return errors.Info(err, "json unmarshal failed")
+		return nil, errors.Info(err, "json unmarshal failed")
 	}
 
 	spaceLock := c.spaces.GetLockByName(spaceInfo.Name)
@@ -78,11 +81,11 @@ func (c *catalog) applyCreateSpace(ctx context.Context, data []byte) error {
 
 	if c.spaces.GetByNameNoLock(spaceInfo.Name) != nil {
 		span.Warnf("space[%s] already created", spaceInfo.Name)
-		return nil
+		return apierrors.ErrSpaceDuplicated, nil
 	}
 
 	if err := c.storage.CreateSpace(ctx, spaceInfo); err != nil {
-		return err
+		return nil, err
 	}
 
 	space := newSpace(spaceInfo)
@@ -90,15 +93,15 @@ func (c *catalog) applyCreateSpace(ctx context.Context, data []byte) error {
 	c.creatingSpaces.Store(spaceInfo.Name, nil)
 
 	span.Infof("create space success, space %+v", spaceInfo)
-	return nil
+	return nil, nil
 }
 
-func (c *catalog) applyDeleteSpace(ctx context.Context, data []byte) error {
+func (c *catalog) applyDeleteSpace(ctx context.Context, data []byte) (ret, err error) {
 	span := trace.SpanFromContext(ctx)
 
 	args := &deleteSpaceArgs{}
 	if err := json.Unmarshal(data, args); err != nil {
-		return errors.Info(err, "json unmarshal data failed")
+		return nil, errors.Info(err, "json unmarshal data failed")
 	}
 
 	spaceLock := c.spaces.GetLock(args.Sid)
@@ -107,7 +110,7 @@ func (c *catalog) applyDeleteSpace(ctx context.Context, data []byte) error {
 
 	if c.spaces.GetNoLock(args.Sid) != nil {
 		span.Warnf("space[%s] already delete", args.Sid)
-		return nil
+		return nil, nil
 	}
 
 	routeItem := &routeItemInfo{
@@ -116,12 +119,12 @@ func (c *catalog) applyDeleteSpace(ctx context.Context, data []byte) error {
 		ItemDetail:   &routeItemSpaceDelete{Sid: args.Sid},
 	}
 	if err := c.storage.DeleteSpace(ctx, args.Sid, routeItem); err != nil {
-		return err
+		return nil, err
 	}
 
 	c.spaces.Delete(args.Sid)
 	c.routeMgr.InsertRouteItems(ctx, []*routeItemInfo{routeItem})
-	return nil
+	return nil, nil
 }
 
 func (c *catalog) applyInitSpaceShards(ctx context.Context, data []byte) error {
