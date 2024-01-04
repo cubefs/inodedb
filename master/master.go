@@ -59,7 +59,7 @@ func NewMaster(cfg *Config) *Master {
 	groupCfg := &raft.GroupConfig{
 		ID:      1,
 		SM:      raftNode,
-		Applied: raftNode.GetApplyID(),
+		Applied: raftNode.GetApplyIndex(),
 		Members: raftNode.GetMembers(),
 	}
 	raftGroup := raftNode.CreateRaftGroup(ctx, groupCfg)

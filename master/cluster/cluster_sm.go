@@ -95,11 +95,7 @@ func (c *cluster) applyAddDisk(ctx context.Context, data []byte) (ret, err error
 		return nil, err
 	}
 
-	disk := &disk{
-		info: info,
-		node: node.info,
-	}
-
+	disk := newDisk(info, node.GetInfo(), 0)
 	c.disks.addDisk(d.DiskID, disk)
 	node.dm.addDiskNoLock(d.DiskID, disk)
 

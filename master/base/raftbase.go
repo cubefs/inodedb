@@ -13,7 +13,7 @@ import (
 
 const (
 	defaultTruncateNumInterval = uint64(50000)
-	defaultTruncTimeInterval   = 5
+	defaultPersistTimeInterval = 5
 	LocalCF                    = "local_cf"
 )
 

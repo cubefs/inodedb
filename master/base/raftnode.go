@@ -18,24 +18,25 @@ import (
 )
 
 var applyTaskPool = taskpool.New(3, 3)
+
 type RaftMembers struct {
 	Mbs []raft.Member `json:"members"`
 }
 type RaftNodeCfg struct {
-	Members              []raft.Member `json:"members"`
-	RaftConfig           raft.Config   `json:"raft_config"`
-	TruncateNumInterval  uint64        `json:"truncate_num_interval"`
-	TruncateTimeInterval uint64        `json:"truncate_time_interval"`
+	Members             []raft.Member `json:"members"`
+	RaftConfig          raft.Config   `json:"raft_config"`
+	TruncateNumInterval uint64        `json:"truncate_num_interval"`
+	PersistTimeInterval uint64        `json:"persit_time_interval"`
 }
 
 type raftNode struct {
-	sms          map[string]Applier
-	store        *store.Store
-	appliedIndex uint64
-	lastTruncIdx uint64
-	nodes        *nodeManager
-	raftGroup    raft.Group
-	cfg          *RaftNodeCfg
+	sms            map[string]Applier
+	store          *store.Store
+	applyIndex     uint64
+	lastTruncIndex uint64
+	nodes          *nodeManager
+	raftGroup      raft.Group
+	cfg            *RaftNodeCfg
 }
 
 func NewRaftNode(ctx context.Context, cfg *RaftNodeCfg, kv *store.Store) *raftNode {
@@ -54,7 +55,7 @@ func NewRaftNode(ctx context.Context, cfg *RaftNodeCfg, kv *store.Store) *raftNo
 	}
 
 	if cfg.TruncateNumInterval == 0 {
-		cfg.TruncateNumInterval = 5 // minutes
+		cfg.TruncateNumInterval = defaultPersistTimeInterval // minutes
 	}
 
 	cfg.RaftConfig.Storage = &raftStorage{kvStore: kv.RaftStore()}
@@ -67,10 +68,10 @@ func NewRaftNode(ctx context.Context, cfg *RaftNodeCfg, kv *store.Store) *raftNo
 	}
 
 	r.initNodeManager(ctx)
-	if err := r.loadApplyIdx(ctx); err != nil {
+	if err := r.loadApplyIndex(ctx); err != nil {
 		span.Fatalf("load apply index failed, err: %v", err)
 	}
-	r.lastTruncIdx = r.appliedIndex
+	r.lastTruncIndex = r.applyIndex
 
 	span.Infof("new raftNode success")
 	return r
@@ -107,175 +108,13 @@ func (r *raftNode) Start(ctx context.Context) {
 	go r.truncJob()
 }
 
-func (r *raftNode) initNodeManager(ctx context.Context) {
-	span := trace.SpanFromContextSafe(ctx)
-	members, err := r.loadRaftMembers(ctx)
-	if err != nil {
-		span.Fatalf("get raft members failed, err: %v", err)
-	}
-
-	needWrite := false
-	if len(members) == 0 {
-		needWrite = true
-		members = r.cfg.Members
-	}
-
-	r.nodes = &nodeManager{
-		nodes: map[uint64]*raft.Member{},
-	}
-
-	for _, m := range members {
-		r.nodes.addNode(m.NodeID, m)
-	}
-
-	if needWrite {
-		err = r.persistMembers(ctx, members)
-		if err != nil {
-			span.Fatalf("persist raft members failed, err: %v", err)
-		}
-	}
-
-	r.cfg.RaftConfig.Resolver = r.nodes
-}
-
-func (r *raftNode) waitForRaftStart(ctx context.Context) {
-	span := trace.SpanFromContextSafe(ctx)
-	start := time.Now()
-	span.Info("wait for raft start")
-	for {
-		err := r.raftGroup.ReadIndex(ctx)
-		if err == nil {
-			break
-		}
-		span.Errorf("raftNode read index failed: err %v, cost %d ms", err, time.Since(start).Milliseconds())
-	}
-	span.Infof("raft start success after %d ms", time.Since(start).Microseconds())
-}
-
-func (r *raftNode) truncJob() {
-	span, ctx := trace.StartSpanFromContext(context.Background(), "")
-	lastTruncTime := time.Now()
-	ticker := time.NewTicker(time.Minute)
-
-	applyIdOk := func() bool {
-		if r.appliedIndex == r.lastTruncIdx || r.appliedIndex == 0 {
-			return false
-		}
-
-		if r.appliedIndex%r.cfg.TruncateNumInterval != 0 {
-			return false
-		}
-		return true
-	}
-
-	timeOk := func() bool {
-		if time.Since(lastTruncTime) > time.Duration(r.cfg.TruncateTimeInterval*uint64(time.Minute)) {
-			return true
-		}
-		return false
-	}
-
-	span.Infof("start execute truncate job")
-
-	for range ticker.C {
-		if !applyIdOk() && !timeOk() {
-			continue
-		}
-
-		err := r.persistApplyIdx(ctx)
-		if err != nil {
-			span.Errorf("perist apply idx failed, err %s", err.Error())
-			continue
-		}
-
-		if r.appliedIndex > r.cfg.TruncateNumInterval {
-			err = r.raftGroup.Truncate(ctx, r.appliedIndex-r.cfg.TruncateNumInterval)
-			if err != nil {
-				span.Errorf("trunc raft log failed, applyId %d, err %s", r.appliedIndex, err.Error())
-				continue
-			}
-		}
-
-		lastTruncTime = time.Now()
-		span.Infof("execute trunc success, applyId %d", r.appliedIndex)
-	}
-}
-
-func (r *raftNode) loadApplyIdx(ctx context.Context) error {
-	val, err := r.store.KVStore().GetRaw(ctx, LocalCF, applyIndexKey, nil)
-	if err == kvstore.ErrNotFound {
-		return nil
-	}
-
-	if err != nil {
-		return err
-	}
-
-	if len(val) == 0 {
-		return nil
-	}
-
-	if len(val) != 8 {
-		return fmt.Errorf("apply idx not write, size %d, data %s", len(val), string(val))
-	}
-
-	r.appliedIndex = binary.BigEndian.Uint64(val[:8])
-	return nil
-}
-
-func (r *raftNode) persistApplyIdx(ctx context.Context) error {
-	val := make([]byte, 8)
-	binary.BigEndian.PutUint64(val, r.appliedIndex)
-	if err := r.store.KVStore().SetRaw(ctx, LocalCF, applyIndexKey, val, nil); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (r *raftNode) loadRaftMembers(ctx context.Context) ([]raft.Member, error) {
-	val, err := r.store.KVStore().GetRaw(ctx, LocalCF, raftMemberKey, nil)
-
-	if err == kvstore.ErrNotFound {
-		return []raft.Member{}, nil
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	if len(val) == 0 {
-		return nil, nil
-	}
-
-	mbrs := &RaftMembers{}
-	err = json.Unmarshal(val, mbrs)
-	if err != nil {
-		return nil, err
-	}
-
-	return mbrs.Mbs, nil
-}
-
-func (r *raftNode) persistMembers(ctx context.Context, members []raft.Member) (err error) {
-	mbrs := &RaftMembers{}
-	mbrs.Mbs = append(mbrs.Mbs, members...)
-	val, err := json.Marshal(mbrs)
-	if err != nil {
-		return err
-	}
-	if err = r.store.KVStore().SetRaw(ctx, LocalCF, raftMemberKey, val, nil); err != nil {
-		return err
-	}
-	return nil
-}
-
 func (r *raftNode) RegisterApplier(a interface{}) {
 	applier := a.(Applier)
 	r.sms[applier.GetModule()] = applier
 }
 
-func (r *raftNode) GetApplyID() uint64 {
-	return r.appliedIndex
+func (r *raftNode) GetApplyIndex() uint64 {
+	return r.applyIndex
 }
 
 func (r *raftNode) GetMembers() []raft.Member {
@@ -339,7 +178,7 @@ func (r *raftNode) Apply(ctx context.Context, pds []raft.ProposalData, index uin
 	span.Debugf("apply success, total data: %d, rets (%d), module cnt (%d) apply cost: %dus, applyIdx %d",
 		len(pds), len(rets), len(moduleData), time.Since(start).Microseconds(), index)
 
-	r.appliedIndex = index
+	r.applyIndex = index
 	return rets, nil
 }
 
@@ -375,12 +214,12 @@ func (r *raftNode) ApplyMemberChange(cc *raft.Member, index uint64) error {
 		return err
 	}
 
-	return r.persistApplyIdx(ctx)
+	return r.persistApplyIndex(ctx)
 }
 
 func (r *raftNode) Snapshot() raft.Snapshot {
 	kvStore := r.store.KVStore()
-	appliedIndex := r.appliedIndex
+	appliedIndex := r.applyIndex
 	kvSnap := kvStore.NewSnapshot()
 	readOpt := kvStore.NewReadOption()
 	readOpt.SetSnapShot(kvSnap)
@@ -431,12 +270,173 @@ func (r *raftNode) ApplySnapshot(snap raft.Snapshot) error {
 		}
 	}
 
-	r.appliedIndex = snap.Index()
-	err := r.persistApplyIdx(ctx)
+	r.applyIndex = snap.Index()
+	err := r.persistApplyIndex(ctx)
 	if err != nil {
-		span.Errorf("persist applied index failed, idx %d, err %s", r.appliedIndex, err.Error())
+		span.Errorf("persist applied index failed, idx %d, err %s", r.applyIndex, err.Error())
 		return err
 	}
 
+	return nil
+}
+
+func (r *raftNode) initNodeManager(ctx context.Context) {
+	span := trace.SpanFromContextSafe(ctx)
+	members, err := r.loadRaftMembers(ctx)
+	if err != nil {
+		span.Fatalf("get raft members failed, err: %v", err)
+	}
+
+	needWrite := false
+	if len(members) == 0 {
+		needWrite = true
+		members = r.cfg.Members
+	}
+
+	r.nodes = &nodeManager{
+		nodes: map[uint64]*raft.Member{},
+	}
+
+	for _, m := range members {
+		r.nodes.addNode(m.NodeID, m)
+	}
+
+	if needWrite {
+		err = r.persistMembers(ctx, members)
+		if err != nil {
+			span.Fatalf("persist raft members failed, err: %v", err)
+		}
+	}
+
+	r.cfg.RaftConfig.Resolver = r.nodes
+}
+
+func (r *raftNode) waitForRaftStart(ctx context.Context) {
+	span := trace.SpanFromContextSafe(ctx)
+	start := time.Now()
+	span.Info("wait for raft start")
+	for {
+		err := r.raftGroup.ReadIndex(ctx)
+		if err == nil {
+			break
+		}
+		span.Errorf("raftNode read index failed: err %v, cost %d ms", err, time.Since(start).Milliseconds())
+	}
+	span.Infof("raft start success after %d ms", time.Since(start).Microseconds())
+}
+
+func (r *raftNode) truncJob() {
+	span, ctx := trace.StartSpanFromContext(context.Background(), "")
+	lastPersistTime := time.Now()
+	ticker := time.NewTicker(time.Minute)
+
+	applyIndexOk := func() bool {
+		if r.applyIndex == r.lastTruncIndex || r.applyIndex == 0 {
+			return false
+		}
+
+		if r.applyIndex%r.cfg.TruncateNumInterval != 0 {
+			return false
+		}
+		return true
+	}
+
+	timeOk := func() bool {
+		if time.Since(lastPersistTime) > time.Duration(r.cfg.PersistTimeInterval*uint64(time.Minute)) {
+			return true
+		}
+		return false
+	}
+
+	span.Infof("start execute truncate job")
+
+	for range ticker.C {
+
+		if timeOk() || applyIndexOk() {
+			err := r.persistApplyIndex(ctx)
+			if err != nil {
+				span.Errorf("perist apply index failed, err %s", err.Error())
+				continue
+			}
+			lastPersistTime = time.Now()
+		}
+
+		if applyIndexOk() {
+			err := r.raftGroup.Truncate(ctx, r.applyIndex-r.cfg.TruncateNumInterval)
+			if err != nil {
+				span.Errorf("trunc raft log failed, applyIndex %d, err %s", r.applyIndex, err.Error())
+				continue
+			}
+		}
+
+		span.Infof("execute trunc success, applyIndex %d", r.applyIndex)
+	}
+}
+
+func (r *raftNode) loadApplyIndex(ctx context.Context) error {
+	val, err := r.store.KVStore().GetRaw(ctx, LocalCF, applyIndexKey, nil)
+	if err == kvstore.ErrNotFound {
+		return nil
+	}
+
+	if err != nil {
+		return err
+	}
+
+	if len(val) == 0 {
+		return nil
+	}
+
+	if len(val) != 8 {
+		return fmt.Errorf("apply index not write, size %d, data %s", len(val), string(val))
+	}
+
+	r.applyIndex = binary.BigEndian.Uint64(val[:8])
+	return nil
+}
+
+func (r *raftNode) persistApplyIndex(ctx context.Context) error {
+	val := make([]byte, 8)
+	binary.BigEndian.PutUint64(val, r.applyIndex)
+	if err := r.store.KVStore().SetRaw(ctx, LocalCF, applyIndexKey, val, nil); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *raftNode) loadRaftMembers(ctx context.Context) ([]raft.Member, error) {
+	val, err := r.store.KVStore().GetRaw(ctx, LocalCF, raftMemberKey, nil)
+
+	if err == kvstore.ErrNotFound {
+		return []raft.Member{}, nil
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(val) == 0 {
+		return nil, nil
+	}
+
+	mbrs := &RaftMembers{}
+	err = json.Unmarshal(val, mbrs)
+	if err != nil {
+		return nil, err
+	}
+
+	return mbrs.Mbs, nil
+}
+
+func (r *raftNode) persistMembers(ctx context.Context, members []raft.Member) (err error) {
+	mbrs := &RaftMembers{}
+	mbrs.Mbs = append(mbrs.Mbs, members...)
+	val, err := json.Marshal(mbrs)
+	if err != nil {
+		return err
+	}
+	if err = r.store.KVStore().SetRaw(ctx, LocalCF, raftMemberKey, val, nil); err != nil {
+		return err
+	}
 	return nil
 }

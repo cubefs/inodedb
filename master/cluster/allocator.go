@@ -33,7 +33,7 @@ func NewShardServerAllocator(ctx context.Context) Allocator {
 }
 
 func (a *allocator) Put(ctx context.Context, n *disk) {
-	setId := n.node.SetID
+	setId := n.GetNode().SetID
 	allocator, ok := a.setAlloctors[setId]
 	if !ok {
 		allocator = &setAlloctor{
@@ -128,7 +128,7 @@ func (s *setAlloctor) addShardCnt(cnt int) {
 
 func (s *setAlloctor) put(d *disk) {
 	// s.nodes
-	az := d.node.Az
+	az := d.GetNode().Az
 	allocator, ok := s.azAllocators[az]
 	if !ok {
 		allocator = &azAllocator{
@@ -139,7 +139,7 @@ func (s *setAlloctor) put(d *disk) {
 	}
 	allocator.put(d)
 
-	info := d.info
+	info := d.GetInfo()
 	s.totalCap += int(info.Total)
 	s.usedCap += int(info.Used)
 	s.allocShardCnt += uint32(info.ShardCnt)
@@ -220,7 +220,7 @@ func (s *setAlloctor) alloc(ctx context.Context, args *AllocArgs) ([]*diskInfo, 
 
 	allocDisks := make([]*diskInfo, 0, len(disks))
 	for _, d := range disks {
-		allocDisks = append(allocDisks, d.info)
+		allocDisks = append(allocDisks, d.GetInfo())
 	}
 
 	return allocDisks, nil
@@ -285,7 +285,7 @@ RackRetry:
 	weightedNodes := make([]*weightedDisk, 0, len(s.disks))
 	totalWeight := int32(0)
 	for _, d := range s.disks {
-		if !d.CanAlloc() || excludeDisks[d.GetDiskID()] || excludeNodes[d.node.ID] {
+		if !d.CanAlloc() || excludeDisks[d.GetDiskID()] || excludeNodes[d.GetInfo().NodeID] {
 			continue
 		}
 		wn := &weightedDisk{
@@ -325,8 +325,9 @@ RETRY:
 
 			d := wn.disk
 			res = append(res, d)
-			nodeID := d.node.ID
-			rack := d.node.Rack
+			node := d.GetNode()
+			nodeID := node.ID
+			rack := node.Rack
 			excludeDisks[d.GetDiskID()] = true
 			excludeNodes[nodeID] = true
 
@@ -335,8 +336,8 @@ RETRY:
 					w1 := weightedNodes[idx]
 					d1 := w1.disk
 
-					sameRack := rackWare && d1.node.Rack == rack
-					sameNode := hostWare && d1.info.NodeID == nodeID
+					sameRack := rackWare && d1.GetNode().Rack == rack
+					sameNode := hostWare && d1.GetInfo().NodeID == nodeID
 					if !sameRack && !sameNode {
 						continue
 					}

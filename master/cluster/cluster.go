@@ -413,7 +413,7 @@ func (c *cluster) ListDisk(ctx context.Context, args *proto.ListDiskRequest) ([]
 	cnt := 0
 
 	match := func(disk *disk) bool {
-		ifo := disk.node
+		ifo := disk.GetNode()
 		if args.Az != "" && ifo.Az != args.Az {
 			return false
 		}
@@ -423,7 +423,7 @@ func (c *cluster) ListDisk(ctx context.Context, args *proto.ListDiskRequest) ([]
 		if args.Rack != "" && ifo.Rack != args.Rack {
 			return false
 		}
-		if args.Status != proto.DiskStatus_DiskStatusUnknown && disk.info.Status != args.Status {
+		if args.Status != proto.DiskStatus_DiskStatusUnknown && disk.GetInfo().Status != args.Status {
 			return false
 		}
 		return true
@@ -431,7 +431,8 @@ func (c *cluster) ListDisk(ctx context.Context, args *proto.ListDiskRequest) ([]
 
 	newMarker := args.Marker
 	for _, d := range disks {
-		if d.info.DiskID <= args.Marker {
+		info := d.GetInfo()
+		if info.DiskID <= args.Marker {
 			continue
 		}
 
@@ -439,9 +440,9 @@ func (c *cluster) ListDisk(ctx context.Context, args *proto.ListDiskRequest) ([]
 			continue
 		}
 
-		rets = append(rets, *d.info.toProtoDisk())
+		rets = append(rets, *info.toProtoDisk())
 		cnt++
-		newMarker = d.info.DiskID
+		newMarker = info.DiskID
 		if cnt >= int(args.Count) {
 			break
 		}
@@ -458,7 +459,7 @@ func (c *cluster) GetDisk(ctx context.Context, id uint32) (proto.Disk, error) {
 	if disk == nil {
 		return proto.Disk{}, apierrors.ErrDiskNotExist
 	}
-	return *disk.info.toProtoDisk(), nil
+	return *disk.GetInfo().toProtoDisk(), nil
 }
 
 func (c *cluster) Load(ctx context.Context) {
@@ -483,13 +484,9 @@ func (c *cluster) Load(ctx context.Context) {
 			span.Fatalf("node[%d] not found, disk %v", d.NodeID, d)
 		}
 
-		ifo := &disk{
-			node:       node.info,
-			info:       d,
-			shardCount: int32(d.ShardCnt),
-		}
-		c.disks.addDiskNoLock(d.DiskID, ifo)
-		node.dm.addDiskNoLock(d.DiskID, ifo)
+		info := newDisk(d, node.GetInfo(), int32(d.ShardCnt))
+		c.disks.addDiskNoLock(d.DiskID, info)
+		node.dm.addDiskNoLock(d.DiskID, info)
 	}
 
 	c.refresh(ctx)
@@ -511,11 +508,11 @@ func (c *cluster) refresh(ctx context.Context) {
 
 	for _, d := range allDisks {
 		if !d.CanAlloc() {
-			span.Infof("disk node can't used to alloc shard, disk %+v", d.info)
+			span.Infof("disk node can't used to alloc shard, disk %+v", d.GetInfo())
 			continue
 		}
 
-		info := d.node
+		info := d.GetNode()
 		for _, role := range info.Roles {
 			if _, ok := c.allocatorFuncMap[role]; ok {
 				mgrs[role].Put(ctx, d)

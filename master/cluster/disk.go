@@ -60,6 +60,22 @@ type disk struct {
 	shardCount int32
 }
 
+func newDisk(info *diskInfo, node *nodeInfo, cnt int32) *disk {
+	return &disk{
+		info:       info,
+		node:       node,
+		shardCount: cnt,
+	}
+}
+
+func (d *disk) GetInfo() *diskInfo {
+	return &(*d.info)
+}
+
+func (d *disk) GetNode() *nodeInfo {
+	return &(*d.node)
+}
+
 func (d *disk) getWeight() int32 {
 	maxCnt := defaultMaxShardOneDisk
 	var w1, w2 int
