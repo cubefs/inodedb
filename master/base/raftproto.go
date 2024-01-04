@@ -16,7 +16,7 @@ type Applier interface {
 
 type RaftGroup interface {
 	raft.Group
-	GetId() uint64
+	GetID() uint64
 }
 
 type raftServer struct {
@@ -24,6 +24,6 @@ type raftServer struct {
 	raft.Group
 }
 
-func (r *raftServer) GetId() uint64 {
+func (r *raftServer) GetID() uint64 {
 	return r.id
 }

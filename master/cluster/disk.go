@@ -165,7 +165,7 @@ func (dm *diskMgr) getSortedDisks() []*disk {
 		disks = append(disks, disk)
 	}
 
-	// sort by diskId
+	// sort by diskID
 	sort.Sort(SortedDisks(disks))
 	return disks
 }

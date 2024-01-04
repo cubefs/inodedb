@@ -15,7 +15,7 @@ type shard struct {
 
 func newShard(shardInfo *shardInfo) *shard {
 	return &shard{
-		id:     shardInfo.ShardId,
+		id:     shardInfo.ShardID,
 		leader: shardInfo.Leader,
 		info:   shardInfo,
 	}

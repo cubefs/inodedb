@@ -39,10 +39,10 @@ func NewMaster(cfg *Config) *Master {
 	}
 
 	cfg.ClusterConfig.Store = store
-	cfg.ClusterConfig.IdGenerator = idGenerator
+	cfg.ClusterConfig.IDGenerator = idGenerator
 	newCluster := cluster.NewCluster(ctx, &cfg.ClusterConfig)
 
-	cfg.CatalogConfig.IdGenerator = idGenerator
+	cfg.CatalogConfig.IDGenerator = idGenerator
 	cfg.CatalogConfig.Store = store
 	cfg.CatalogConfig.Cluster = newCluster
 	newCatalog := catalog.NewCatalog(ctx, &cfg.CatalogConfig)

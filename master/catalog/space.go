@@ -22,7 +22,7 @@ type space struct {
 	info            *spaceInfo
 	shards          *concurrentShards
 	expandingShards []*shard
-	currentShardId  uint32
+	currentShardID  uint32
 
 	lock sync.RWMutex
 }
@@ -43,13 +43,13 @@ func (s *space) GetInfo() *spaceInfo {
 	return &(*s.info)
 }
 
-func (s *space) GetShard(shardId uint32) *shard {
-	return s.shards.Get(shardId)
+func (s *space) GetShard(shardID uint32) *shard {
+	return s.shards.Get(shardID)
 }
 
-func (s *space) GetCurrentShardId() uint32 {
+func (s *space) GetCurrentShardID() uint32 {
 	s.lock.RLock()
-	id := s.currentShardId
+	id := s.currentShardID
 	s.lock.RUnlock()
 
 	return id
@@ -59,8 +59,8 @@ func (s *space) PutShard(shard *shard) {
 	s.shards.Put(shard)
 
 	s.lock.Lock()
-	if shard.id > s.currentShardId {
-		s.currentShardId = shard.id
+	if shard.id > s.currentShardID {
+		s.currentShardID = shard.id
 	}
 	s.lock.Unlock()
 }

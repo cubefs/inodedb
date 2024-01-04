@@ -54,8 +54,8 @@ func NewRaftNode(ctx context.Context, cfg *RaftNodeCfg, kv *store.Store) *raftNo
 		cfg.TruncateNumInterval = defaultTruncateNumInterval
 	}
 
-	if cfg.TruncateNumInterval == 0 {
-		cfg.TruncateNumInterval = defaultPersistTimeInterval // minutes
+	if cfg.PersistTimeInterval == 0 {
+		cfg.PersistTimeInterval = defaultPersistTimeInterval
 	}
 
 	cfg.RaftConfig.Storage = &raftStorage{kvStore: kv.RaftStore()}

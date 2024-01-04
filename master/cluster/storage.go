@@ -94,8 +94,8 @@ func (s *storage) PutDisk(ctx context.Context, disk *diskInfo) error {
 	return s.kvStore.SetRaw(ctx, CF, key, marshal, nil)
 }
 
-func (s *storage) Get(ctx context.Context, nodeId uint32) (*nodeInfo, error) {
-	key := encodeNodeKey(nodeId)
+func (s *storage) Get(ctx context.Context, nodeID uint32) (*nodeInfo, error) {
+	key := encodeNodeKey(nodeID)
 	v, err := s.kvStore.Get(ctx, CF, key, nil)
 	if err != nil {
 		return nil, err
@@ -110,21 +110,21 @@ func (s *storage) Get(ctx context.Context, nodeId uint32) (*nodeInfo, error) {
 	return res, nil
 }
 
-func (s *storage) Delete(ctx context.Context, nodeId uint32) error {
-	key := encodeNodeKey(nodeId)
+func (s *storage) Delete(ctx context.Context, nodeID uint32) error {
+	key := encodeNodeKey(nodeID)
 	return s.kvStore.Delete(ctx, CF, key, nil)
 }
 
-func (s *storage) DeleteDisk(ctx context.Context, nodeId uint32) error {
-	key := encodeDiskKey(nodeId)
+func (s *storage) DeleteDisk(ctx context.Context, nodeID uint32) error {
+	key := encodeDiskKey(nodeID)
 	return s.kvStore.Delete(ctx, CF, key, nil)
 }
 
-func encodeNodeKey(nodeId uint32) []byte {
+func encodeNodeKey(nodeID uint32) []byte {
 	ret := make([]byte, len(nodeKeyPrefix)+len(keyInfix)+4)
 	copy(ret, nodeKeyPrefix)
 	copy(ret[len(nodeKeyPrefix):], keyInfix)
-	binary.BigEndian.PutUint32(ret[len(ret)-4:], nodeId)
+	binary.BigEndian.PutUint32(ret[len(ret)-4:], nodeID)
 	return ret
 }
 

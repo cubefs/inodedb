@@ -54,7 +54,7 @@ func (c *catalog) Apply(ctx context.Context, pds []raft.ProposalData) (rets []in
 }
 
 func (c *catalog) LeaderChange(leader uint64) error {
-	localID := c.raftGroup.GetId()
+	localID := c.raftGroup.GetID()
 	if leader != localID {
 		c.taskMgr.Close()
 		return nil
@@ -231,8 +231,8 @@ func (c *catalog) applyShardReport(ctx context.Context, data []byte) (ret *shard
 		shard.UpdateReportInfoNoLock(reportInfo.Shard)
 		shard.lock.Unlock()
 
-		spaceCurrentShardId := space.GetCurrentShardId()
-		if (shard.id >= spaceCurrentShardId-c.cfg.ExpandShardsNumPerSpace && shard.id <= spaceCurrentShardId) &&
+		spaceCurrentShardID := space.GetCurrentShardID()
+		if (shard.id >= spaceCurrentShardID-c.cfg.ExpandShardsNumPerSpace && shard.id <= spaceCurrentShardID) &&
 			float64(reportInfo.Shard.InoUsed)/float64(reportInfo.Shard.InoLimit) >= defaultInoUsedThreshold {
 			ret.maybeExpandingSpaces = append(ret.maybeExpandingSpaces, space)
 		}
@@ -321,7 +321,7 @@ func (c *catalog) genShardRouteItems(ctx context.Context, sid uint64, shardInfos
 			Type:         proto.CatalogChangeItem_AddShard,
 			ItemDetail: &routeItemShardAdd{
 				Sid:     sid,
-				ShardId: shardInfos[i].ShardId,
+				ShardID: shardInfos[i].ShardID,
 			},
 		}
 	}

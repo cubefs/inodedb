@@ -53,7 +53,7 @@ func (n *node) HandleHeartbeat(ctx context.Context, disks []proto.DiskReport, ti
 	for _, r := range disks {
 		d := n.dm.get(r.DiskID)
 		if d == nil {
-			span.Warnf("disk not found in node disk list, diskId %d, nodeId %d", r.DiskID, n.nodeID)
+			span.Warnf("disk not found in node disk list, diskID %d, nodeID %d", r.DiskID, n.nodeID)
 			continue
 		}
 		d.updateReport(r)
@@ -118,14 +118,14 @@ func newConcurrentNodes(splitMapNum uint32) *concurrentNodes {
 }
 
 // Get space from concurrentNodes
-func (s *concurrentNodes) Get(nodeId uint32) *node {
+func (s *concurrentNodes) Get(nodeID uint32) *node {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
-	return s.idMap[nodeId]
+	return s.idMap[nodeID]
 }
 
-func (s *concurrentNodes) GetNoLock(nodeId uint32) *node {
-	return s.idMap[nodeId]
+func (s *concurrentNodes) GetNoLock(nodeID uint32) *node {
+	return s.idMap[nodeID]
 }
 
 func (s *concurrentNodes) GetByName(addr string) *node {

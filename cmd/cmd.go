@@ -159,7 +159,7 @@ InitRoles:
 			cfg.NodeConfig.Roles = []proto.NodeRole{proto.NodeRole_ShardServer, proto.NodeRole_Router, proto.NodeRole_Master}
 			cfg.CatalogConfig.ShardReplicateNum = 1
 			cfg.MasterRpcConfig.MasterAddresses = cfg.NodeConfig.Addr + ":" + strconv.Itoa(int(cfg.GrpcBindPort))
-			cfg.ClusterConfig.ClusterId = 1
+			cfg.ClusterConfig.ClusterID = 1
 
 			cfg.MasterRaftCfg.RaftConfig.NodeID = 1
 			cfg.MasterRaftCfg.Members = []raft.Member{{NodeID: cfg.MasterRaftCfg.RaftConfig.NodeID, Host: cfg.NodeConfig.Addr}}

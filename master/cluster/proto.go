@@ -131,7 +131,7 @@ type AllocArgs struct {
 	Role           proto.NodeRole `json:"role"`
 	RackWare       bool           `json:"rack_ware"`
 	HostWare       bool           `json:"host_ware"`
-	ExcludeDiskIds []proto.DiskID `json:"exclude_node_ids"`
+	ExcludeDiskIDs []proto.DiskID `json:"exclude_node_ids"`
 }
 
 type HeartbeatArgs struct {

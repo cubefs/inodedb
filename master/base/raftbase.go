@@ -44,18 +44,18 @@ func (n *nodeManager) String() string {
 }
 
 // todo presist after update
-func (n *nodeManager) addNode(nodeId uint64, m raft.Member) {
+func (n *nodeManager) addNode(nodeID uint64, m raft.Member) {
 	n.nlk.Lock()
 	defer n.nlk.Unlock()
 
-	n.nodes[nodeId] = &m
+	n.nodes[nodeID] = &m
 }
 
-func (n *nodeManager) removeNode(nodeId uint64) {
+func (n *nodeManager) removeNode(nodeID uint64) {
 	n.nlk.Lock()
 	defer n.nlk.Unlock()
 
-	delete(n.nodes, nodeId)
+	delete(n.nodes, nodeID)
 }
 
 func (n *nodeManager) getMembers() []raft.Member {
@@ -69,17 +69,17 @@ func (n *nodeManager) getMembers() []raft.Member {
 	return mems
 }
 
-func (n *nodeManager) getNode(nodeId uint64) *raft.Member {
+func (n *nodeManager) getNode(nodeID uint64) *raft.Member {
 	n.nlk.RLock()
 	defer n.nlk.RUnlock()
 
-	return n.nodes[nodeId]
+	return n.nodes[nodeID]
 }
 
 func (n *nodeManager) Resolve(ctx context.Context, nodeID uint64) (raft.Addr, error) {
 	m := n.getNode(nodeID)
 	if m == nil {
-		return nil, fmt.Errorf("not found target addr, node Id %d", nodeID)
+		return nil, fmt.Errorf("not found target addr, node ID %d", nodeID)
 	}
 
 	return nodeAddr{addr: m.Host}, nil

@@ -33,14 +33,14 @@ func NewShardServerAllocator(ctx context.Context) Allocator {
 }
 
 func (a *allocator) Put(ctx context.Context, n *disk) {
-	setId := n.GetNode().SetID
-	allocator, ok := a.setAlloctors[setId]
+	setID := n.GetNode().SetID
+	allocator, ok := a.setAlloctors[setID]
 	if !ok {
 		allocator = &setAlloctor{
-			setID:        setId,
+			setID:        setID,
 			azAllocators: map[string]*azAllocator{},
 		}
-		a.setAlloctors[setId] = allocator
+		a.setAlloctors[setID] = allocator
 	}
 
 	allocator.put(n)
@@ -240,7 +240,7 @@ func (a *azAllocator) alloc(ctx context.Context, args *AllocArgs) ([]*disk, erro
 
 	allocNodes := make([]*disk, 0, args.Count)
 	excludes := make(map[uint32]bool)
-	for _, id := range args.ExcludeDiskIds {
+	for _, id := range args.ExcludeDiskIDs {
 		excludes[id] = true
 	}
 

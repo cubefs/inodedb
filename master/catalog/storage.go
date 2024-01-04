@@ -99,7 +99,7 @@ func (s *storage) UpsertSpaceShardsAndRouteItems(ctx context.Context, info *spac
 		if err != nil {
 			return err
 		}
-		batch.Put(CF, s.keysGenerator.encodeShardKey(info.Sid, shards[i].ShardId), shardData)
+		batch.Put(CF, s.keysGenerator.encodeShardKey(info.Sid, shards[i].ShardID), shardData)
 	}
 
 	for i := range routeItems {
@@ -200,13 +200,13 @@ func (k *keysGenerator) encodeSpaceKey(sid uint64) []byte {
 	return ret
 }
 
-func (k *keysGenerator) encodeShardKey(sid uint64, shardId uint32) []byte {
+func (k *keysGenerator) encodeShardKey(sid uint64, shardID uint32) []byte {
 	ret := make([]byte, len(shardKeyPrefix)+len(keyInfix)+8+len(keyInfix)+4)
 	copy(ret, shardKeyPrefix)
 	copy(ret[len(shardKeyPrefix):], keyInfix)
 	binary.BigEndian.PutUint64(ret[len(shardKeyPrefix)+len(keyInfix):], sid)
 	copy(ret[len(ret)-4-len(keyInfix):], keyInfix)
-	binary.BigEndian.PutUint32(ret[len(ret)-4:], shardId)
+	binary.BigEndian.PutUint32(ret[len(ret)-4:], shardID)
 	return ret
 }
 

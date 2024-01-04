@@ -33,8 +33,6 @@ var (
 	ErrInvalidCount = errors.New("request count is invalid")
 )
 
-// TODO: rename IDGenerator into IdGenerator
-
 type IDGenerator interface {
 	Alloc(ctx context.Context, name string, count int) (base, new uint64, err error)
 
@@ -111,4 +109,3 @@ type allocArgs struct {
 	Name  string `json:"name"`
 	Count int    `json:"count"`
 }
-

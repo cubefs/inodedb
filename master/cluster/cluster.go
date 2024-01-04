@@ -27,9 +27,9 @@ const (
 )
 
 type Cluster interface {
-	GetNode(ctx context.Context, nodeId uint32) (*proto.Node, error)
+	GetNode(ctx context.Context, nodeID proto.NodeID) (*proto.Node, error)
 	Alloc(ctx context.Context, args *AllocArgs) ([]*proto.Disk, error)
-	GetClient(ctx context.Context, nodeId uint32) (transport.ShardServerClient, error)
+	GetClient(ctx context.Context, nodeID proto.NodeID) (transport.ShardServerClient, error)
 	Register(ctx context.Context, args *proto.Node) (uint32, error)
 	Unregister(ctx context.Context, nodeID uint32) error
 	ListNodeInfo(ctx context.Context, roles []proto.NodeRole) ([]proto.Node, error)
@@ -37,8 +37,8 @@ type Cluster interface {
 	AllocDiskID(ctx context.Context) (uint32, error)
 	AddDisk(ctx context.Context, args *proto.Disk) error
 	ListDisk(ctx context.Context, args *proto.ListDiskRequest) ([]proto.Disk, uint32, error)
-	GetDisk(ctx context.Context, id uint32) (proto.Disk, error)
-	SetBroken(ctx context.Context, diskId uint32) error
+	GetDisk(ctx context.Context, id proto.DiskID) (proto.Disk, error)
+	SetBroken(ctx context.Context, diskID proto.DiskID) error
 	Load(ctx context.Context)
 	Close()
 
@@ -48,7 +48,7 @@ type Cluster interface {
 }
 
 type Config struct {
-	ClusterId         uint32            `json:"cluster_id"`
+	ClusterID         uint32            `json:"cluster_id"`
 	Azs               []string          `json:"azs"`
 	GrpcPort          uint32            `json:"grpc_port"`
 	HttpPort          uint32            `json:"http_port"`
@@ -57,13 +57,13 @@ type Config struct {
 	ShardServerConfig *transport.Config `json:"shard_server_config"`
 
 	Store       *store.Store            `json:"-"`
-	IdGenerator idGenerator.IDGenerator `json:"-"`
+	IDGenerator idGenerator.IDGenerator `json:"-"`
 }
 
 type allocatorFunc func(ctx context.Context) Allocator
 
 type cluster struct {
-	clusterId uint32
+	clusterID uint32
 
 	allocators sync.Map
 	allNodes   *concurrentNodes
@@ -90,9 +90,9 @@ func NewCluster(ctx context.Context, cfg *Config) Cluster {
 	}
 
 	c := &cluster{
-		clusterId:        cfg.ClusterId,
+		clusterID:        cfg.ClusterID,
 		cfg:              cfg,
-		idGenerator:      cfg.IdGenerator,
+		idGenerator:      cfg.IDGenerator,
 		allNodes:         newConcurrentNodes(defaultSplitMapNum),
 		storage:          &storage{kvStore: cfg.Store.KVStore()},
 		done:             make(chan struct{}),
@@ -122,8 +122,8 @@ func (c *cluster) SetRaftGroup(raftGroup base.RaftGroup) {
 	c.raftGroup = raftGroup
 }
 
-func (c *cluster) GetNode(ctx context.Context, nodeId uint32) (*proto.Node, error) {
-	n := c.allNodes.Get(nodeId)
+func (c *cluster) GetNode(ctx context.Context, nodeID proto.NodeID) (*proto.Node, error) {
+	n := c.allNodes.Get(nodeID)
 	if n == nil {
 		return nil, apierrors.ErrNotFound
 	}
@@ -193,18 +193,18 @@ func (c *cluster) Alloc(ctx context.Context, args *AllocArgs) ([]*proto.Disk, er
 	return disks, err
 }
 
-func (c *cluster) AllocDiskID(ctx context.Context) (uint32, error) {
+func (c *cluster) AllocDiskID(ctx context.Context) (proto.DiskID, error) {
 	span := trace.SpanFromContext(ctx)
 	span.Debugf("alloc disk id")
 
 	_, id, err := c.idGenerator.Alloc(ctx, diskIDName, 1)
 	if err != nil {
-		span.Errorf("all diskId failed, err: %s", err.Error())
+		span.Errorf("all diskID failed, err: %s", err.Error())
 		return 0, err
 	}
 
 	span.Debugf("alloc disk id success, disk id: %d", id)
-	return uint32(id), nil
+	return proto.DiskID(id), nil
 }
 
 func (c *cluster) Register(ctx context.Context, args *proto.Node) (uint32, error) {
@@ -289,15 +289,15 @@ func (c *cluster) Register(ctx context.Context, args *proto.Node) (uint32, error
 	return nodeID, nil
 }
 
-func (c *cluster) Unregister(ctx context.Context, nodeId uint32) error {
+func (c *cluster) Unregister(ctx context.Context, nodeID uint32) error {
 	span := trace.SpanFromContextSafe(ctx)
 
-	n := c.allNodes.Get(nodeId)
+	n := c.allNodes.Get(nodeID)
 	if n == nil {
-		span.Errorf("node[%d] not found", nodeId)
+		span.Errorf("node[%d] not found", nodeID)
 		return apierrors.ErrNodeDoesNotFound
 	}
-	data := c.encodeNodeId(nodeId)
+	data := c.encodeNodeID(nodeID)
 	// todo 1. raft
 
 	ret, err := c.raftGroup.Propose(ctx, &raft.ProposalData{
@@ -388,10 +388,10 @@ func (c *cluster) AddDisk(ctx context.Context, args *proto.Disk) error {
 	return nil
 }
 
-func (c *cluster) SetBroken(ctx context.Context, diskId uint32) error {
+func (c *cluster) SetBroken(ctx context.Context, diskID uint32) error {
 	span := trace.SpanFromContextSafe(ctx)
-	span.Debugf("receive AddDisk, args: %d", diskId)
-	data := c.encodeDiskId(diskId)
+	span.Debugf("receive AddDisk, args: %d", diskID)
+	data := c.encodeDiskID(diskID)
 	_, err := c.raftGroup.Propose(ctx, &raft.ProposalData{
 		Module: Module,
 		Op:     RaftOpSetBroken,
@@ -400,7 +400,7 @@ func (c *cluster) SetBroken(ctx context.Context, diskId uint32) error {
 	if err != nil {
 		return err
 	}
-	span.Debugf("set disk[%d] broken success", diskId)
+	span.Debugf("set disk[%d] broken success", diskID)
 	return nil
 }
 
@@ -544,23 +544,23 @@ func (c *cluster) loop() {
 	}()
 }
 
-func (c *cluster) encodeNodeId(nodeId uint32) []byte {
+func (c *cluster) encodeNodeID(nodeID uint32) []byte {
 	key := make([]byte, 4)
-	binary.BigEndian.PutUint32(key, nodeId)
+	binary.BigEndian.PutUint32(key, nodeID)
 	return key
 }
 
-func (c *cluster) decodeNodeId(data []byte) uint32 {
+func (c *cluster) decodeNodeID(data []byte) uint32 {
 	return binary.BigEndian.Uint32(data)
 }
 
-func (c *cluster) encodeDiskId(diskId uint32) []byte {
+func (c *cluster) encodeDiskID(diskID uint32) []byte {
 	key := make([]byte, 4)
-	binary.BigEndian.PutUint32(key, diskId)
+	binary.BigEndian.PutUint32(key, diskID)
 	return key
 }
 
-func (c *cluster) decodeDiskId(data []byte) uint32 {
+func (c *cluster) decodeDiskID(data []byte) uint32 {
 	return binary.BigEndian.Uint32(data)
 }
 

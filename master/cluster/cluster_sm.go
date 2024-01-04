@@ -105,7 +105,7 @@ func (c *cluster) applyAddDisk(ctx context.Context, data []byte) (ret, err error
 
 func (c *cluster) applySetDiskBroken(ctx context.Context, data []byte) (ret, err error) {
 	span := trace.SpanFromContextSafe(ctx)
-	diskID := c.decodeDiskId(data)
+	diskID := c.decodeDiskID(data)
 
 	disk := c.disks.get(diskID)
 	if disk == nil {
@@ -174,7 +174,7 @@ func (c *cluster) applyUpdate(ctx context.Context, data []byte) (ret error, err 
 	newInfo := n.GetInfo()
 	newInfo.Roles = info.Roles
 
-	span.Infof("disk info on node, nodeId %d, disk %v", info.ID, n.dm.disks)
+	span.Infof("disk info on node, nodeID %d, disk %v", info.ID, n.dm.disks)
 	if err = c.storage.Put(ctx, newInfo); err != nil {
 		return nil, err
 	}
@@ -186,22 +186,22 @@ func (c *cluster) applyUpdate(ctx context.Context, data []byte) (ret error, err 
 }
 
 func (c *cluster) applyUnregister(ctx context.Context, data []byte) (ret, err error) {
-	nodeId := c.decodeNodeId(data)
+	nodeID := c.decodeNodeID(data)
 
 	c.allNodes.Lock()
 	defer c.allNodes.Unlock()
 
-	get := c.allNodes.GetNoLock(nodeId)
+	get := c.allNodes.GetNoLock(nodeID)
 	if get == nil {
 		return nil, nil
 	}
 
-	err = c.storage.Delete(ctx, nodeId)
+	err = c.storage.Delete(ctx, nodeID)
 	if err != nil {
 		return nil, err
 	}
 
-	c.allNodes.DeleteNoLock(nodeId)
+	c.allNodes.DeleteNoLock(nodeID)
 	return nil, nil
 }
 

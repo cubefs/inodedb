@@ -53,7 +53,7 @@ func (r *routeItemInfo) Unmarshal(data []byte) error {
 
 type routeItemShardAdd struct {
 	Sid     uint64 `json:"sid"`
-	ShardId uint32 `json:"shard_id"`
+	ShardID uint32 `json:"shard_id"`
 }
 
 type routeItemSpaceDelete struct {
@@ -78,7 +78,7 @@ type spaceInfo struct {
 	ExpandStatus    uint8           `json:"expand_status"`
 	Epoch           uint64          `json:"epoch"`
 	DesiredShardNum uint32          `json:"desired_shard_num"`
-	CurrentShardId  uint32          `json:"current_shard_id"`
+	CurrentShardID  uint32          `json:"current_shard_id"`
 	FixedFields     []FieldMeta     `json:"fixed_fields"`
 }
 
@@ -91,7 +91,7 @@ func (s *spaceInfo) Unmarshal(data []byte) error {
 }
 
 type shardInfo struct {
-	ShardId  uint32      `json:"shard_id"`
+	ShardID  uint32      `json:"shard_id"`
 	Epoch    uint64      `json:"epoch"`
 	InoLimit uint64      `json:"ino_limit"`
 	InoUsed  uint64      `json:"ino_used"`
