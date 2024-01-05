@@ -126,7 +126,7 @@ func (r *raftNode) GetMembers() []raft.Member {
 func (r *raftNode) Apply(ctx context.Context, pds []raft.ProposalData, index uint64) (rets []interface{}, err error) {
 	// span := trace.SpanFromContext(cxt)
 	span, _ := trace.StartSpanFromContext(ctx, "")
-	moduleData := make(map[string][]ApplyReq, len(pds))
+	moduleData := make(map[string][]ApplyReq)
 	for i, p := range pds {
 		mod := string(p.Module)
 		_, ok := moduleData[mod]
@@ -174,7 +174,9 @@ func (r *raftNode) Apply(ctx context.Context, pds []raft.ProposalData, index uin
 	wg.Wait()
 
 	for _, err := range errs {
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	sort.Slice(applyRets, func(i, j int) bool {
