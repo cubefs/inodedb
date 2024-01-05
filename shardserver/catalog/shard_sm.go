@@ -112,7 +112,7 @@ func (s *shardSM) ApplyMemberChange(cc *raft.Member, index uint64) error {
 		}
 	}
 
-	return (*shard)(s).SaveShardInfo(ctx, false)
+	return (*shard)(s).SaveShardInfo(ctx, false, true)
 }
 
 func (s *shardSM) Snapshot() raft.Snapshot {

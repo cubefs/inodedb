@@ -19,6 +19,7 @@ type ShardServerClient interface {
 	ShardDeleteItem(ctx context.Context, in *proto.ShardDeleteItemRequest, opts ...grpc.CallOption) (*proto.ShardDeleteItemResponse, error)
 	ShardGetItem(ctx context.Context, in *proto.ShardGetItemRequest, opts ...grpc.CallOption) (*proto.ShardGetItemResponse, error)
 	ShardLink(ctx context.Context, in *proto.ShardLinkRequest, opts ...grpc.CallOption) (*proto.ShardLinkResponse, error)
+	ShardGetLink(ctx context.Context, in *proto.ShardGetLinkRequest, opts ...grpc.CallOption) (*proto.ShardGetLinkResponse, error)
 	ShardUnlink(ctx context.Context, in *proto.ShardUnlinkRequest, opts ...grpc.CallOption) (*proto.ShardUnlinkResponse, error)
 	ShardList(ctx context.Context, in *proto.ShardListRequest, opts ...grpc.CallOption) (*proto.ShardListResponse, error)
 	ShardSearch(ctx context.Context, in *proto.ShardSearchRequest, opts ...grpc.CallOption) (*proto.ShardSearchResponse, error)

@@ -22,18 +22,17 @@ import (
 	"strconv"
 	"syscall"
 
-	"github.com/cubefs/inodedb/proto"
-	"github.com/cubefs/inodedb/raft"
-
-	"github.com/cubefs/inodedb/util"
-
 	"github.com/cubefs/cubefs/blobstore/common/config"
 	"github.com/cubefs/cubefs/blobstore/common/profile"
 	"github.com/cubefs/cubefs/blobstore/common/rpc"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
 	"github.com/cubefs/cubefs/blobstore/util/log"
 	_ "github.com/cubefs/cubefs/blobstore/util/version"
+
+	"github.com/cubefs/inodedb/proto"
+	"github.com/cubefs/inodedb/raft"
 	"github.com/cubefs/inodedb/server"
+	"github.com/cubefs/inodedb/util"
 )
 
 // Config service config

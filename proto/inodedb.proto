@@ -158,6 +158,11 @@ message Link {
 	repeated Field fields = 4 [(gogoproto.nullable) = false];
 }
 
+message GetLink {
+	uint64 parent = 1;
+	string name = 2;
+}
+
 message Unlink {
 	uint64 parent = 1;
 	string name = 2;

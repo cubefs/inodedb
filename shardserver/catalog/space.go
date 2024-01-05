@@ -79,6 +79,15 @@ func (s *Space) Link(ctx context.Context, h proto.ShardOpHeader, link proto.Link
 	return shard.Link(ctx, link)
 }
 
+func (s *Space) GetLink(ctx context.Context, h proto.ShardOpHeader, get proto.GetLink) (proto.Link, error) {
+	shard, err := s.locateShard(h.DiskID, h.Sid, h.ShardID)
+	if err == nil {
+		return proto.Link{}, err
+	}
+
+	return shard.GetLink(ctx, get)
+}
+
 func (s *Space) Unlink(ctx context.Context, h proto.ShardOpHeader, unlink proto.Unlink) error {
 	shard, err := s.locateShard(h.DiskID, h.Sid, h.ShardID)
 	if err == nil {

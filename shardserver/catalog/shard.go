@@ -116,10 +116,11 @@ func newShard(ctx context.Context, cfg shardConfig) (s *shard, err error) {
 }
 
 type shard struct {
-	sid      proto.Sid
-	shardID  proto.ShardID
-	diskID   proto.DiskID
-	startIno uint64
+	sid                proto.Sid
+	shardID            proto.ShardID
+	diskID             proto.DiskID
+	startIno           uint64
+	lastTruncatedIndex uint64
 
 	shardMu struct {
 		sync.RWMutex
@@ -248,6 +249,30 @@ func (s *shard) Link(ctx context.Context, l proto.Link) error {
 	return err
 }
 
+func (s *shard) GetLink(ctx context.Context, get proto.GetLink) (ret proto.Link, err error) {
+	if !s.checkInoMatchRange(get.Parent) {
+		err = apierrors.ErrInoMismatchShardRange
+		return
+	}
+
+	kvStore := s.store.KVStore()
+	data, err := kvStore.GetRaw(ctx, dataCF, s.shardKeys.encodeLinkKey(get.Parent, get.Name), nil)
+	if err != nil {
+		return
+	}
+	l := link{}
+	if err = l.Unmarshal(data); err != nil {
+		return
+	}
+
+	ret.Parent = l.Parent
+	ret.Name = l.Name
+	ret.Child = l.Child
+	// transform into external item
+	ret.Fields = internalFieldsToProtoFields(l.Fields)
+	return
+}
+
 func (s *shard) Unlink(ctx context.Context, unlink proto.Unlink) error {
 	if !s.isLeader() {
 		return apierrors.ErrNotLeader
@@ -322,7 +347,7 @@ func (s *shard) UpdateShard(ctx context.Context, shardInfo *persistent.ShardInfo
 	s.shardMu.Lock()
 	oldEpoch := s.shardMu.Epoch
 	s.shardMu.Epoch = shardInfo.Epoch
-	if err := s.SaveShardInfo(ctx, false); err != nil {
+	if err := s.SaveShardInfo(ctx, false, true); err != nil {
 		s.shardMu.Epoch = oldEpoch
 		return err
 	}
@@ -377,20 +402,23 @@ func (s *shard) Checkpoint(ctx context.Context) error {
 
 	// todo: add vector index dump job
 
-	// do flush job
-	if err := s.SaveShardInfo(ctx, true); err != nil {
+	// save applied index and shard's info
+	if err := s.SaveShardInfo(ctx, true, true); err != nil {
 		return errors.Info(err, "save shard into failed")
 	}
 
 	// truncate raft log finally
-	if appliedIndex > s.cfg.TruncateWalLogInterval {
-		return s.raftGroup.Truncate(ctx, appliedIndex-s.cfg.TruncateWalLogInterval)
+	if appliedIndex > s.lastTruncatedIndex+s.cfg.TruncateWalLogInterval*2 {
+		if err := s.raftGroup.Truncate(ctx, appliedIndex-s.cfg.TruncateWalLogInterval); err != nil {
+			return errors.Info(err, "truncate raft wal log failed")
+		}
+		s.lastTruncatedIndex = appliedIndex - s.cfg.TruncateWalLogInterval
 	}
 
 	return nil
 }
 
-func (s *shard) SaveShardInfo(ctx context.Context, withLock bool) error {
+func (s *shard) SaveShardInfo(ctx context.Context, withLock bool, flush bool) error {
 	if withLock {
 		s.shardMu.Lock()
 		defer s.shardMu.Unlock()
@@ -403,11 +431,17 @@ func (s *shard) SaveShardInfo(ctx context.Context, withLock bool) error {
 		return err
 	}
 
+	if !flush {
+		wo := kvStore.NewWriteOption()
+		defer wo.Close()
+		return kvStore.SetRaw(ctx, dataCF, key, value, wo)
+	}
+
 	if err := kvStore.SetRaw(ctx, dataCF, key, value, nil); err != nil {
 		return err
 	}
-	// flush data column family after save shard kv info
-	// todo: use other solution?
+	// todo: flush data, write and lock column family with atomic flush support.
+	// todo: need cgo support with FlushCFs
 	return kvStore.FlushCF(ctx, dataCF)
 }
 

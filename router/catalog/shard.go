@@ -85,6 +85,18 @@ func (s *shard) Link(ctx context.Context, req *proto.ShardLinkRequest) error {
 	return nil
 }
 
+func (s *shard) GetLink(ctx context.Context, req *proto.ShardGetLinkRequest) (proto.Link, error) {
+	ret, err := s.doShardOperationRetry(ctx, func(sc ShardServerClient) (interface{}, error) {
+		req.Header.DiskID = sc.ShardDiskID()
+		return sc.ShardGetLink(ctx, req)
+	})
+	if err != nil {
+		return proto.Link{}, err
+	}
+
+	return ret.(*proto.ShardGetLinkResponse).Link, nil
+}
+
 func (s *shard) Unlink(ctx context.Context, req *proto.ShardUnlinkRequest) error {
 	_, err := s.doShardOperationRetry(ctx, func(sc ShardServerClient) (interface{}, error) {
 		req.Header.DiskID = sc.ShardDiskID()

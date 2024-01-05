@@ -320,6 +320,20 @@ func (r *RPCServer) ShardLink(ctx context.Context, req *proto.ShardLinkRequest) 
 	return &proto.ShardLinkResponse{}, nil
 }
 
+func (r *RPCServer) ShardGetLink(ctx context.Context, req *proto.ShardGetLinkRequest) (*proto.ShardGetLinkResponse, error) {
+	shardServer := r.shardServer
+	space, err := shardServer.GetSpace(ctx, req.Header.Sid)
+	if err != nil {
+		return nil, err
+	}
+
+	ret, err := space.GetLink(ctx, req.Header, req.Get)
+	if err != nil {
+		return nil, err
+	}
+	return &proto.ShardGetLinkResponse{Link: ret}, nil
+}
+
 func (r *RPCServer) ShardUnlink(ctx context.Context, req *proto.ShardUnlinkRequest) (*proto.ShardUnlinkResponse, error) {
 	shardServer := r.shardServer
 	space, err := shardServer.GetSpace(ctx, req.Header.Sid)
@@ -408,6 +422,19 @@ func (r *RPCServer) Link(ctx context.Context, req *proto.LinkRequest) (*proto.Li
 		return nil, err
 	}
 	return &proto.LinkResponse{}, space.Link(ctx, req.Link)
+}
+
+func (r *RPCServer) GetLink(ctx context.Context, req *proto.GetLinkRequest) (*proto.GetLinkResponse, error) {
+	spaceName := req.SpaceName
+	space, err := r.router.GetSpace(ctx, spaceName)
+	if err != nil {
+		return nil, err
+	}
+	ret, err := space.GetLink(ctx, req.Get)
+	if err != nil {
+		return nil, err
+	}
+	return &proto.GetLinkResponse{Link: ret}, nil
 }
 
 func (r *RPCServer) Unlink(ctx context.Context, req *proto.UnlinkRequest) (*proto.UnlinkResponse, error) {

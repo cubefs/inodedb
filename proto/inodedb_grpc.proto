@@ -34,6 +34,7 @@ service InodeDBRouter {
 	rpc DeleteItem (DeleteItemRequest) returns (DeleteItemResponse) {}
 	rpc GetItem (GetItemRequest) returns (GetItemResponse) {}
 	rpc Link (LinkRequest) returns (LinkResponse) {}
+	rpc GetLink (GetLinkRequest) returns (GetLinkResponse) {}
 	rpc Unlink (UnlinkRequest) returns (UnlinkResponse) {}
 	rpc List (ListRequest) returns (ListResponse) {}
 	rpc Search (SearchRequest) returns (SearchResponse) {}
@@ -48,6 +49,7 @@ service InodeDBShardServer {
 	rpc ShardDeleteItem (ShardDeleteItemRequest) returns (ShardDeleteItemResponse) {}
 	rpc ShardGetItem (ShardGetItemRequest) returns (ShardGetItemResponse) {}
 	rpc ShardLink (ShardLinkRequest) returns (ShardLinkResponse) {}
+	rpc ShardGetLink (ShardGetLinkRequest) returns (ShardGetLinkResponse) {}
 	rpc ShardUnlink (ShardUnlinkRequest) returns (ShardUnlinkResponse) {}
 	rpc ShardList (ShardListRequest) returns (ShardListResponse) {}
 	rpc ShardSearch (ShardSearchRequest) returns (ShardSearchResponse) {}
@@ -233,6 +235,15 @@ message LinkRequest {
 
 message LinkResponse { }
 
+message GetLinkRequest {
+	string space_name = 1;
+	GetLink get = 2 [(gogoproto.nullable) = false];
+}
+
+message GetLinkResponse {
+	Link link = 1 [(gogoproto.nullable) = false];
+}
+
 message UnlinkRequest {
 	string space_name = 1;
 	Unlink unlink = 2 [(gogoproto.nullable) = false];
@@ -316,6 +327,15 @@ message ShardLinkRequest {
 }
 
 message ShardLinkResponse { }
+
+message ShardGetLinkRequest {
+	ShardOpHeader header = 1 [(gogoproto.nullable) = false];
+	GetLink get = 2 [(gogoproto.nullable) = false];
+}
+
+message ShardGetLinkResponse {
+	Link link = 1 [(gogoproto.nullable) = false];
+}
 
 message ShardUnlinkRequest {
 	ShardOpHeader header = 1 [(gogoproto.nullable) = false];

@@ -149,6 +149,24 @@ func (s *Space) Link(ctx context.Context, link proto.Link) error {
 	return shard.Link(ctx, linkRequest)
 }
 
+func (s *Space) GetLink(ctx context.Context, get proto.GetLink) (proto.Link, error) {
+	shard := s.locateShard(ctx, get.Parent)
+	if shard == nil {
+		return proto.Link{}, errors.ErrInoRangeNotFound
+	}
+
+	getLinkRequest := &proto.ShardGetLinkRequest{
+		Header: proto.ShardOpHeader{
+			ShardID:      shard.shardID,
+			Sid:          s.sid,
+			RouteVersion: 0,
+		},
+		Get: get,
+	}
+
+	return shard.GetLink(ctx, getLinkRequest)
+}
+
 func (s *Space) Unlink(ctx context.Context, unlink proto.Unlink) error {
 	shard := s.locateShard(ctx, unlink.Parent)
 	if shard == nil {
