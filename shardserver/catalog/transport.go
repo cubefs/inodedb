@@ -21,6 +21,7 @@ type masterClient interface {
 	ListDisks(ctx context.Context, in *proto.ListDiskRequest, opts ...grpc.CallOption) (*proto.ListDiskResponse, error)
 	AllocDiskID(ctx context.Context, in *proto.AllocDiskIDRequest, opts ...grpc.CallOption) (*proto.AllocDiskIDResponse, error)
 	AddDisk(ctx context.Context, in *proto.AddDiskRequest, opts ...grpc.CallOption) (*proto.AddDiskResponse, error)
+	DiskSetBroken(ctx context.Context, in *proto.SetBrokenRequest, opts ...grpc.CallOption) (*proto.SetBrokenResponse, error)
 }
 
 type transport struct {
@@ -159,6 +160,11 @@ func (t *transport) RegisterDisk(ctx context.Context, disk proto.Disk) error {
 
 func (t *transport) HeartbeatDisks(ctx context.Context, disks []proto.DiskReport) error {
 	_, err := t.masterClient.Heartbeat(ctx, &proto.HeartbeatRequest{NodeID: t.myself.ID, Disks: disks})
+	return err
+}
+
+func (t *transport) SetDiskBroken(ctx context.Context, diskID proto.DiskID) error {
+	_, err := t.masterClient.DiskSetBroken(ctx, &proto.SetBrokenRequest{DiskID: diskID})
 	return err
 }
 

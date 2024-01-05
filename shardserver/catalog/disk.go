@@ -49,7 +49,15 @@ func openDisk(ctx context.Context, cfg diskConfig) *disk {
 		}
 	}
 
+	disk := &disk{}
+
 	cfg.storeConfig.Path = cfg.diskPath
+	cfg.storeConfig.HandleEIO = func(err error) {
+		span.Warnf("handle eio from store layer: %s", err)
+		if err := cfg.transport.SetDiskBroken(ctx, disk.DiskID); err != nil {
+			span.Errorf("set disk[%d] broken failed", disk.DiskID)
+		}
+	}
 	store, err := store.NewStore(ctx, &cfg.storeConfig)
 	if err != nil {
 		span.Fatalf("new store instance failed: %s", err)
@@ -81,12 +89,9 @@ func openDisk(ctx context.Context, cfg diskConfig) *disk {
 		}
 	}
 
-	disk := &disk{
-		DiskInfo:     diskInfo,
-		shardHandler: cfg.shardHandler,
-		// raftManager:  raftManager,
-		store: store,
-	}
+	disk.DiskInfo = diskInfo
+	disk.shardHandler = cfg.shardHandler
+	disk.store = store
 	disk.shardsMu.shards = make(map[uint64]*shard)
 
 	return disk
@@ -205,7 +210,7 @@ func (d *disk) AddShard(ctx context.Context, sid proto.Sid, shardID proto.ShardI
 		return err
 	}
 
-	if err := shard.SaveShardInfo(ctx, false); err != nil {
+	if err := shard.SaveShardInfo(ctx, false, false); err != nil {
 		return err
 	}
 
