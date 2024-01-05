@@ -8,8 +8,8 @@ import (
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
 	apierrors "github.com/cubefs/inodedb/errors"
+	"github.com/cubefs/inodedb/master/base"
 	"github.com/cubefs/inodedb/proto"
-	"github.com/cubefs/inodedb/raft"
 )
 
 var Module = []byte("catalog")
@@ -24,9 +24,10 @@ const (
 	RaftOpDeleteSpace
 )
 
-func (c *catalog) Apply(ctx context.Context, pds []raft.ProposalData) (rets []interface{}, err error) {
-	rets = make([]interface{}, 0, len(pds))
-	for _, pd := range pds {
+func (c *catalog) Apply(ctx context.Context, pds []base.ApplyReq) (rets []base.ApplyRet, err error) {
+	rets = make([]base.ApplyRet, 0, len(pds))
+	for _, pd1 := range pds {
+		pd := pd1.Data
 		_, ctx := trace.StartSpanFromContextWithTraceID(context.Background(), "", string(pd.Context))
 		data := pd.Data
 		var ret interface{}
@@ -48,7 +49,7 @@ func (c *catalog) Apply(ctx context.Context, pds []raft.ProposalData) (rets []in
 		default:
 			panic(fmt.Sprintf("unsupported operation type: %d", pd.Op))
 		}
-		rets = append(rets, ret)
+		rets = append(rets, base.ApplyRet{Ret: ret, Idx: pd1.Idx})
 	}
 	return
 }

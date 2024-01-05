@@ -8,13 +8,13 @@ import (
 )
 
 type Applier interface {
-	Apply(cxt context.Context, pd []raft.ProposalData) (rets []interface{}, err error)
+	Apply(ctx context.Context, pds []ApplyReq) (rets []ApplyRet, err error)
 	LeaderChange(leader uint64) error
 	GetCF() []kvstore.CF
 	GetModule() string
 }
 
-type RaftGroup interface {
+type RaftServer interface {
 	raft.Group
 	GetID() uint64
 }
@@ -26,4 +26,14 @@ type raftServer struct {
 
 func (r *raftServer) GetID() uint64 {
 	return r.id
+}
+
+type ApplyReq struct {
+	Data raft.ProposalData
+	Idx  int
+}
+
+type ApplyRet struct {
+	Ret interface{}
+	Idx int
 }

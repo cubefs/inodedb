@@ -9,8 +9,8 @@ import (
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
 	apierrors "github.com/cubefs/inodedb/errors"
+	"github.com/cubefs/inodedb/master/base"
 	"github.com/cubefs/inodedb/proto"
-	"github.com/cubefs/inodedb/raft"
 )
 
 const (
@@ -24,10 +24,11 @@ const (
 
 var Module = []byte("cluster")
 
-func (c *cluster) Apply(ctx context.Context, pds []raft.ProposalData) (rets []interface{}, err error) {
-	rets = make([]interface{}, 0, len(pds))
+func (c *cluster) Apply(ctx context.Context, pds []base.ApplyReq) (rets []base.ApplyRet, err error) {
+	rets = make([]base.ApplyRet, 0, len(pds))
 
-	for _, pd := range pds {
+	for _, pd1 := range pds {
+		pd := pd1.Data
 		data := pd.Data
 		_, newCtx := trace.StartSpanFromContextWithTraceID(ctx, "", string(pd.Context))
 		op := pd.Op
@@ -52,7 +53,7 @@ func (c *cluster) Apply(ctx context.Context, pds []raft.ProposalData) (rets []in
 		if err != nil {
 			return nil, err
 		}
-		rets = append(rets, ret)
+		rets = append(rets, base.ApplyRet{Ret: ret, Idx: pd1.Idx})
 	}
 
 	return
@@ -97,8 +98,6 @@ func (c *cluster) applyAddDisk(ctx context.Context, data []byte) (ret, err error
 
 	disk := newDisk(info, node.GetInfo(), 0)
 	c.disks.addDisk(d.DiskID, disk)
-	node.dm.addDiskNoLock(d.DiskID, disk)
-
 	span.Infof("add disk %v success", d)
 	return nil, nil
 }
@@ -113,16 +112,17 @@ func (c *cluster) applySetDiskBroken(ctx context.Context, data []byte) (ret, err
 		return apierrors.ErrDiskNotExist, nil
 	}
 
-	oldStatus := disk.info.Status
+	info := disk.GetInfo()
+	oldStatus := info.Status
 	disk.info.Status = proto.DiskStatus_DiskStatusBroken
-	err = c.storage.PutDisk(ctx, disk.info)
+	err = c.storage.PutDisk(ctx, info)
 	if err != nil {
 		span.Errorf("put disk to storage failed, disk %v, err: %v", disk, err)
 		disk.info.Status = oldStatus
 		return nil, err
 	}
 
-	span.Infof("set disk %v broken success", disk.info.DiskID)
+	span.Infof("set disk %v broken success", disk.DiskID)
 	return nil, nil
 }
 
@@ -144,7 +144,7 @@ func (c *cluster) applyRegister(ctx context.Context, data []byte) (applyErr, err
 	}
 
 	info.State = proto.NodeState_Alive
-	newNode := newNode(info, nil, c.cfg.HeartbeatTimeoutS)
+	newNode := newNode(info, c.cfg.HeartbeatTimeoutS)
 	if err = c.storage.Put(ctx, info); err != nil {
 		return nil, err
 	}
@@ -174,12 +174,12 @@ func (c *cluster) applyUpdate(ctx context.Context, data []byte) (ret error, err 
 	newInfo := n.GetInfo()
 	newInfo.Roles = info.Roles
 
-	span.Infof("disk info on node, nodeID %d, disk %v", info.ID, n.dm.disks)
+	span.Infof("disk info on node, nodeID %v", info)
 	if err = c.storage.Put(ctx, newInfo); err != nil {
 		return nil, err
 	}
 
-	newNode := newNode(newInfo, n.dm, c.cfg.HeartbeatTimeoutS)
+	newNode := newNode(newInfo, c.cfg.HeartbeatTimeoutS)
 	c.allNodes.PutNoLock(newNode)
 	span.Debugf("update node success, node: %+v", newNode.info)
 	return nil, nil
@@ -216,7 +216,24 @@ func (c *cluster) applyHeartbeat(ctx context.Context, data []byte) (error, error
 	if n == nil {
 		return apierrors.ErrNodeNotExist, nil
 	}
-	expires := time.Now().Add(time.Duration(c.cfg.HeartbeatTimeoutS) * time.Second)
-	n.HandleHeartbeat(ctx, args.Disks, expires)
+
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
+	span := trace.SpanFromContext(ctx)
+	n.expires = time.Now().Add(time.Duration(c.cfg.HeartbeatTimeoutS) * time.Second)
+	if n.info.State != proto.NodeState_Alive {
+		n.info.State = proto.NodeState_Alive
+	}
+
+	for _, r := range args.Disks {
+		d := c.disks.get(r.DiskID)
+		if d == nil {
+			span.Warnf("disk not found in node disk list, diskID %d, nodeID %d", r.DiskID, n.nodeID)
+			continue
+		}
+		d.updateReport(r)
+	}
+
 	return nil, nil
 }

@@ -6,7 +6,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/inodedb/proto"
 )
 
@@ -22,42 +21,16 @@ type node struct {
 	info       *nodeInfo
 	shardCount int32
 	expires    time.Time
-	dm         *diskMgr
 	lock       sync.RWMutex
 }
 
-func newNode(info *nodeInfo, dm *diskMgr, timeOutS int) *node {
+func newNode(info *nodeInfo, timeOutS int) *node {
 	n := &node{
 		nodeID:  info.ID,
 		info:    info,
 		expires: time.Now().Add(time.Duration(timeOutS)),
-		dm:      dm,
-	}
-	if dm == nil {
-		n.dm = &diskMgr{disks: map[uint32]*disk{}}
 	}
 	return n
-}
-
-func (n *node) HandleHeartbeat(ctx context.Context, disks []proto.DiskReport, time time.Time) {
-	n.lock.Lock()
-	defer n.lock.Unlock()
-
-	span := trace.SpanFromContext(ctx)
-	n.expires = time
-
-	if n.info.State != proto.NodeState_Alive {
-		n.info.State = proto.NodeState_Alive
-	}
-
-	for _, r := range disks {
-		d := n.dm.get(r.DiskID)
-		if d == nil {
-			span.Warnf("disk not found in node disk list, diskID %d, nodeID %d", r.DiskID, n.nodeID)
-			continue
-		}
-		d.updateReport(r)
-	}
 }
 
 func (n *node) IsAvailable() bool {

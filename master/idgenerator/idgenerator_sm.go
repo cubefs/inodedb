@@ -22,7 +22,7 @@ import (
 	"github.com/cubefs/cubefs/blobstore/common/trace"
 	"github.com/cubefs/cubefs/blobstore/util/errors"
 	"github.com/cubefs/inodedb/common/kvstore"
-	"github.com/cubefs/inodedb/raft"
+	"github.com/cubefs/inodedb/master/base"
 )
 
 const (
@@ -42,9 +42,10 @@ func (s *idGenerator) LoadData(ctx context.Context) error {
 	return nil
 }
 
-func (s *idGenerator) Apply(ctx context.Context, pds []raft.ProposalData) (rets []interface{}, err error) {
-	rets = make([]interface{}, 0, len(pds))
-	for _, pd := range pds {
+func (s *idGenerator) Apply(ctx context.Context, pds []base.ApplyReq) (rets []base.ApplyRet, err error) {
+	rets = make([]base.ApplyRet, 0, len(pds))
+	for _, pd1 := range pds {
+		pd := pd1.Data
 		data := pd.Data
 		var ret interface{}
 		span, ctx := trace.StartSpanFromContextWithTraceID(ctx, "", string(pd.Context))
@@ -59,7 +60,7 @@ func (s *idGenerator) Apply(ctx context.Context, pds []raft.ProposalData) (rets 
 		if err != nil {
 			return nil, err
 		}
-		rets = append(rets, ret)
+		rets = append(rets, base.ApplyRet{Ret: ret, Idx: pd1.Idx})
 	}
 
 	return

@@ -35,21 +35,20 @@ var (
 
 type IDGenerator interface {
 	Alloc(ctx context.Context, name string, count int) (base, new uint64, err error)
-
-	SetRaftGroup(raftGroup base.RaftGroup)
+	SetRaftGroup(raftGroup base.RaftServer)
 	GetCF() []kvstore.CF
 	GetModule() string
 }
 
 type idGenerator struct {
 	scopeItems map[string]uint64
-	raftGroup  base.RaftGroup
+	raftGroup  base.RaftServer
 
 	storage *storage
 	lock    sync.RWMutex
 }
 
-func NewIDGenerator(store *store.Store, raftGroup base.RaftGroup) (IDGenerator, error) {
+func NewIDGenerator(store *store.Store, raftGroup base.RaftServer) (IDGenerator, error) {
 	_, ctx := trace.StartSpanFromContext(context.Background(), "NewIDGenerator")
 
 	storage := &storage{kvStore: store.KVStore()}
@@ -69,7 +68,7 @@ func (s *idGenerator) GetModule() string {
 	return string(Module)
 }
 
-func (s *idGenerator) SetRaftGroup(raftGroup base.RaftGroup) {
+func (s *idGenerator) SetRaftGroup(raftGroup base.RaftServer) {
 	s.raftGroup = raftGroup
 }
 

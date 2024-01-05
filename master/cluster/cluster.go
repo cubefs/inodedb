@@ -41,10 +41,9 @@ type Cluster interface {
 	SetBroken(ctx context.Context, diskID proto.DiskID) error
 	Load(ctx context.Context)
 	Close()
-
 	GetCF() []kvstore.CF
 	GetModule() string
-	SetRaftGroup(raftGroup base.RaftGroup)
+	SetRaftGroup(raftGroup base.RaftServer)
 }
 
 type Config struct {
@@ -118,7 +117,7 @@ func (c *cluster) GetCF() []kvstore.CF {
 	return CFs
 }
 
-func (c *cluster) SetRaftGroup(raftGroup base.RaftGroup) {
+func (c *cluster) SetRaftGroup(raftGroup base.RaftServer) {
 	c.raftGroup = raftGroup
 }
 
@@ -275,7 +274,6 @@ func (c *cluster) Register(ctx context.Context, args *proto.Node) (uint32, error
 		Op:     RaftOpRegisterNode,
 		Data:   data,
 	})
-
 	if err != nil {
 		span.Errorf("register node raft failed, err %v", err)
 		return 0, err
@@ -470,7 +468,7 @@ func (c *cluster) Load(ctx context.Context) {
 	}
 
 	for _, info := range infos {
-		c.allNodes.PutNoLock(newNode(info, nil, c.cfg.HeartbeatTimeoutS))
+		c.allNodes.PutNoLock(newNode(info, c.cfg.HeartbeatTimeoutS))
 	}
 
 	disks, err := c.storage.LoadDisk(ctx)
@@ -484,9 +482,8 @@ func (c *cluster) Load(ctx context.Context) {
 			span.Fatalf("node[%d] not found, disk %v", d.NodeID, d)
 		}
 
-		info := newDisk(d, node.GetInfo(), int32(d.ShardCnt))
-		c.disks.addDiskNoLock(d.DiskID, info)
-		node.dm.addDiskNoLock(d.DiskID, info)
+		disk := newDisk(d, node.GetInfo(), int32(d.ShardCnt))
+		c.disks.addDiskNoLock(d.DiskID, disk)
 	}
 
 	c.refresh(ctx)

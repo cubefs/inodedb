@@ -46,8 +46,7 @@ type Catalog interface {
 	GetCatalogChanges(ctx context.Context, routerVersion uint64, nodeID uint32) (uint64, []proto.CatalogChangeItem, error)
 	StartTask(ctx context.Context) error
 	Close()
-
-	SetRaftGroup(g base.RaftGroup)
+	SetRaftGroup(g base.RaftServer)
 	GetCF() []kvstore.CF
 	GetModule() string
 }
@@ -69,7 +68,7 @@ type (
 		creatingSpaces sync.Map
 
 		idGenerator idgenerator.IDGenerator
-		raftGroup   base.RaftGroup
+		raftGroup   base.RaftServer
 		storage     *storage
 		taskMgr     *taskMgr
 		routeMgr    *routeMgr
@@ -468,7 +467,7 @@ func (c *catalog) GetCatalogChanges(ctx context.Context, fromRouterVersion uint6
 	return
 }
 
-func (c *catalog) SetRaftGroup(g base.RaftGroup) {
+func (c *catalog) SetRaftGroup(g base.RaftServer) {
 	c.raftGroup = g
 }
 

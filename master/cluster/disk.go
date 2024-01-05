@@ -55,6 +55,7 @@ func (d *diskInfo) toProtoDisk() *proto.Disk {
 }
 
 type disk struct {
+	DiskID     proto.DiskID
 	info       *diskInfo
 	node       *nodeInfo
 	shardCount int32
@@ -62,6 +63,7 @@ type disk struct {
 
 func newDisk(info *diskInfo, node *nodeInfo, cnt int32) *disk {
 	return &disk{
+		DiskID:     info.DiskID,
 		info:       info,
 		node:       node,
 		shardCount: cnt,
@@ -74,6 +76,22 @@ func (d *disk) GetInfo() *diskInfo {
 
 func (d *disk) GetNode() *nodeInfo {
 	return &(*d.node)
+}
+
+func (d *disk) GetDiskID() proto.DiskID {
+	return d.info.DiskID
+}
+
+func (d *disk) AddShardCnt(delta int) {
+	atomic.AddInt32(&d.shardCount, int32(delta))
+}
+
+func (d *disk) CanAlloc() bool {
+	return d.info.Status == proto.DiskStatus_DiskStatusNormal
+}
+
+func (d *disk) GetShardCount() int32 {
+	return d.shardCount
 }
 
 func (d *disk) getWeight() int32 {
@@ -101,22 +119,6 @@ func (d *disk) updateReport(report proto.DiskReport) {
 	d.info.Total = report.Total
 }
 
-func (d *disk) GetDiskID() proto.DiskID {
-	return d.info.DiskID
-}
-
-func (d *disk) AddShardCnt(delta int) {
-	atomic.AddInt32(&d.shardCount, int32(delta))
-}
-
-func (d *disk) CanAlloc() bool {
-	return d.info.Status == proto.DiskStatus_DiskStatusNormal
-}
-
-func (d *disk) GetShardCount() int32 {
-	return d.shardCount
-}
-
 type diskMgr struct {
 	lock  sync.RWMutex
 	disks map[proto.DiskID]*disk
@@ -139,9 +141,6 @@ func (dm *diskMgr) addDisk(id uint32, d *disk) {
 }
 
 func (dm *diskMgr) addDiskNoLock(id uint32, d *disk) {
-	if dm.disks == nil {
-		dm.disks = make(map[uint32]*disk)
-	}
 	dm.disks[id] = d
 }
 
@@ -150,7 +149,7 @@ type SortedDisks []*disk
 func (a SortedDisks) Len() int      { return len(a) }
 func (a SortedDisks) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a SortedDisks) Less(i, j int) bool {
-	return a[i].info.DiskID < a[j].info.DiskID
+	return a[i].DiskID < a[j].DiskID
 }
 
 func (dm *diskMgr) getSortedDisks() []*disk {

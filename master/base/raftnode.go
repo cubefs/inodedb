@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
 	"sync"
 	"time"
 
@@ -22,6 +23,7 @@ var applyTaskPool = taskpool.New(3, 3)
 type RaftMembers struct {
 	Mbs []raft.Member `json:"members"`
 }
+
 type RaftNodeCfg struct {
 	Members             []raft.Member `json:"members"`
 	RaftConfig          raft.Config   `json:"raft_config"`
@@ -77,7 +79,7 @@ func NewRaftNode(ctx context.Context, cfg *RaftNodeCfg, kv *store.Store) *raftNo
 	return r
 }
 
-func (r *raftNode) CreateRaftGroup(ctx context.Context, cfg *raft.GroupConfig) RaftGroup {
+func (r *raftNode) CreateRaftGroup(ctx context.Context, cfg *raft.GroupConfig) RaftServer {
 	span := trace.SpanFromContextSafe(ctx)
 
 	manager, err := raft.NewManager(&r.cfg.RaftConfig)
@@ -123,29 +125,28 @@ func (r *raftNode) GetMembers() []raft.Member {
 
 func (r *raftNode) Apply(ctx context.Context, pds []raft.ProposalData, index uint64) (rets []interface{}, err error) {
 	// span := trace.SpanFromContext(cxt)
-	rets = make([]interface{}, 0, len(pds))
 	span, _ := trace.StartSpanFromContext(ctx, "")
-	moduleData := map[string][]raft.ProposalData{}
-	errs := map[string]error{}
-	lk := sync.Mutex{}
-
-	for _, p := range pds {
+	moduleData := make(map[string][]ApplyReq, len(pds))
+	for i, p := range pds {
 		mod := string(p.Module)
-		datas := moduleData[mod]
-		if datas == nil {
-			datas = []raft.ProposalData{p}
-			moduleData[mod] = datas
-		} else {
-			moduleData[mod] = append(datas, p)
+		_, ok := moduleData[mod]
+		if !ok {
+			moduleData[mod] = make([]ApplyReq, 0)
 		}
+		moduleData[mod] = append(moduleData[mod], ApplyReq{Data: p, Idx: i})
 	}
 
 	start := time.Now()
+	errs := make([]error, len(moduleData))
+	applyRets := make([]ApplyRet, 0, len(pds))
+	lk := sync.Mutex{}
 	wg := sync.WaitGroup{}
 	wg.Add(len(moduleData))
+	i := 0
 
 	for m := range moduleData {
 		mod := m
+		idx := i
 		applyTaskPool.Run(func() {
 			defer wg.Done()
 
@@ -157,7 +158,7 @@ func (r *raftNode) Apply(ctx context.Context, pds []raft.ProposalData, index uin
 			lRets, err1 := sm.Apply(ctx, datas)
 			if err1 != nil {
 				span.Errorf("apply module %s error: %s", mod, err1.Error())
-				errs[mod] = err1
+				errs[idx] = err1
 				return
 			}
 
@@ -165,14 +166,24 @@ func (r *raftNode) Apply(ctx context.Context, pds []raft.ProposalData, index uin
 
 			lk.Lock()
 			defer lk.Unlock()
-			rets = append(rets, lRets...)
+			applyRets = append(applyRets, lRets...)
 		})
+		i++
 	}
 
 	wg.Wait()
 
 	for _, err := range errs {
 		return nil, err
+	}
+
+	sort.Slice(applyRets, func(i, j int) bool {
+		return applyRets[i].Idx < applyRets[j].Idx
+	})
+
+	rets = make([]interface{}, len(applyRets))
+	for i, ret := range applyRets {
+		rets[i] = ret.Ret
 	}
 
 	span.Debugf("apply success, total data: %d, rets (%d), module cnt (%d) apply cost: %dus, applyIdx %d",
@@ -322,7 +333,7 @@ func (r *raftNode) waitForRaftStart(ctx context.Context) {
 		}
 		span.Errorf("raftNode read index failed: err %v, cost %d ms", err, time.Since(start).Milliseconds())
 	}
-	span.Infof("raft start success after %d ms", time.Since(start).Microseconds())
+	span.Infof("raft start success after %d ms", time.Since(start).Milliseconds())
 }
 
 func (r *raftNode) truncJob() {
@@ -362,11 +373,13 @@ func (r *raftNode) truncJob() {
 		}
 
 		if applyIndexOk() {
-			err := r.raftGroup.Truncate(ctx, r.applyIndex-r.cfg.TruncateNumInterval)
+			applyIndex := r.applyIndex
+			err := r.raftGroup.Truncate(ctx, applyIndex-r.cfg.TruncateNumInterval)
 			if err != nil {
 				span.Errorf("trunc raft log failed, applyIndex %d, err %s", r.applyIndex, err.Error())
 				continue
 			}
+			r.lastTruncIndex = applyIndex
 		}
 
 		span.Infof("execute trunc success, applyIndex %d", r.applyIndex)

@@ -336,8 +336,9 @@ RETRY:
 					w1 := weightedNodes[idx]
 					d1 := w1.disk
 
+					n1 := d1.GetNode()
 					sameRack := rackWare && d1.GetNode().Rack == rack
-					sameNode := hostWare && d1.GetInfo().NodeID == nodeID
+					sameNode := hostWare && n1.ID == nodeID
 					if !sameRack && !sameNode {
 						continue
 					}
